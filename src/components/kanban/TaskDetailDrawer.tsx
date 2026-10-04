@@ -12,12 +12,15 @@ import {
 import { X } from "lucide-react";
 import ConfirmDialog from "@/src/components/ui/ConfirmDialog";
 import AssigneePicField from "@/src/components/tasks/AssigneePicField";
+import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
+import ProgressPairBadges from "@/src/components/schedule/ProgressPairBadges";
 import type { ProjectMemberUser } from "@/src/lib/actions/projects";
 import {
   createComment,
   getTaskComments,
   type TaskCommentWithAuthor,
 } from "@/src/lib/actions/comments";
+import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress";
 import {
   buildProgressStatusPatch,
   isFutureLocalDate,
@@ -34,6 +37,7 @@ import type {
 export type TaskDetailDrawerProps = {
   task: Task | null;
   open: boolean;
+  scheduleMetrics?: TaskScheduleMetrics;
   onClose: () => void;
   /** Live field updates for Planner-style task details. */
   onTaskChange?: (taskId: string, patch: Partial<Task>) => void;
@@ -245,7 +249,7 @@ function AuDateField({
           if (raw === "") {
             setCaption("");
             setError(null);
-            onCommit(null);
+            if (externalValue !== "") onCommit(null);
             return;
           }
           if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
@@ -262,7 +266,30 @@ function AuDateField({
           }
           setError(null);
           setCaption(raw);
-          onCommit(raw);
+          // Skip no-op commits so a remount/blur cannot re-queue the same date.
+          if (raw !== externalValue) onCommit(raw);
+        }}
+        onChange={(event) => {
+          // Native date pickers emit a complete YYYY-MM-DD on change — commit
+          // immediately so picks are not lost if the field never receives blur.
+          const raw = event.target.value;
+          if (raw === "") {
+            setCaption("");
+            setError(null);
+            return;
+          }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            return;
+          }
+          if (disallowFuture && isFutureLocalDate(raw)) {
+            setError("Actual dates cannot be in the future.");
+            setCaption(externalValue);
+            setEpoch((n) => n + 1);
+            return;
+          }
+          setCaption(raw);
+          setError(null);
+          if (raw !== externalValue) onCommit(raw);
         }}
         className={`${fieldClassName} [color-scheme:light] dark:[color-scheme:dark]`}
       />
@@ -281,6 +308,7 @@ function AuDateField({
 export default function TaskDetailDrawer({
   task,
   open,
+  scheduleMetrics,
   onClose,
   onTaskChange,
   onToggleSubtask,
@@ -465,6 +493,10 @@ export default function TaskDetailDrawer({
     setCommentSubmitting(false);
   }
 
+  if (!open && !activeTask) {
+    return null;
+  }
+
   return (
     <div
       className={[
@@ -472,6 +504,7 @@ export default function TaskDetailDrawer({
         isVisible ? "pointer-events-auto" : "pointer-events-none",
       ].join(" ")}
       aria-hidden={!isVisible}
+      inert={!isVisible ? true : undefined}
     >
       {/* Backdrop */}
       <button
@@ -522,6 +555,15 @@ export default function TaskDetailDrawer({
                 >
                   {activeTask.title || "Untitled task"}
                 </h2>
+                {scheduleMetrics ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <StatusFlagBadge flag={scheduleMetrics.statusFlag} />
+                    <ProgressPairBadges
+                      actual={scheduleMetrics.pActual}
+                      target={scheduleMetrics.pTarget}
+                    />
+                  </div>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -559,8 +601,9 @@ export default function TaskDetailDrawer({
                     value={titleDraft}
                     disabled={!canEdit}
                     onChange={(event) => setTitleDraft(event.target.value)}
-                    onBlur={() => {
-                      const trimmed = titleDraft.trim();
+                    onBlur={(event) => {
+                      const trimmed = event.currentTarget.value.trim();
+                      setTitleDraft(trimmed);
                       if (trimmed && trimmed !== activeTask.title) {
                         patchTask({ title: trimmed });
                       }
@@ -582,9 +625,11 @@ export default function TaskDetailDrawer({
                     value={descriptionDraft}
                     disabled={!canEdit}
                     onChange={(event) => setDescriptionDraft(event.target.value)}
-                    onBlur={() => {
-                      if (descriptionDraft !== activeTask.description) {
-                        patchTask({ description: descriptionDraft });
+                    onBlur={(event) => {
+                      const next = event.currentTarget.value;
+                      setDescriptionDraft(next);
+                      if (next !== activeTask.description) {
+                        patchTask({ description: next });
                       }
                     }}
                     rows={4}
@@ -717,11 +762,11 @@ export default function TaskDetailDrawer({
                           if (next.length > 3) return;
                           setProgressDraft(next);
                         }}
-                        onBlur={() => {
+                        onBlur={(event) => {
                           setIsEditingProgress(false);
-                          commitProgressValue(
-                            progressDraft === "" ? 0 : progressDraft,
-                          );
+                          const raw = event.currentTarget.value.trim();
+                          setProgressDraft(raw === "" ? "0" : raw);
+                          commitProgressValue(raw === "" ? 0 : raw);
                         }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
@@ -751,7 +796,7 @@ export default function TaskDetailDrawer({
                 </div>
 
                 <AssigneePicField
-                  key={`${activeTask.id}-${activeTask.assigneeId ?? ""}-${activeTask.assigneeName}`}
+                  key={activeTask.id}
                   task={activeTask}
                   members={memberUsers}
                   disabled={!canEdit}

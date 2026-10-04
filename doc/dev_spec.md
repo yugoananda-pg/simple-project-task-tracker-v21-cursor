@@ -1,19 +1,25 @@
 # Simple Project Task Tracker 2.0 — Technical Specification
 
+> **Deferred refresh (5 Oct 2026):** This document still describes the **Wave 3 / v2.0** baseline by stakeholder decision. Release **2.1** (Waves 4A–4B as-built; Wave 4C pending) is specified in `dev_plan.md`, `dev_req.md`, `dev_ref.md`, `dev_proc.md`, and `dev_uat.md`. A full rewrite of `dev_spec.md` to 2.1 will follow once Wave 4C and programme close-out are complete. Do **not** treat the version banner below as the current as-built stack.
+
 **Document:** `dev_spec.md`  
-**Product:** Simple Project Task Tracker 2.0  
-**Status:** Single source of truth for implementation (aligned with codebase as of Wave 3 UAT close-out)  
+**Product:** Simple Project Task Tracker 2.0 *(baseline; see deferred note above)*  
+**Status:** Wave 3 UAT close-out baseline — **not yet refreshed for 2.1**  
 **Language:** Australian English  
 **Companion documents:**
 | Document | Role |
 |----------|------|
-| [`doc/dev_plan.md`](./dev_plan.md) | North Star product blueprint and roadmap |
+| [`doc/dev_plan.md`](./dev_plan.md) | North Star product blueprint and roadmap (2.1) |
+| [`doc/dev_req.md`](./dev_req.md) | Binding requirements (2.1) |
+| [`doc/dev_ref.md`](./dev_ref.md) | Stakeholder refinement blueprint (2.1) |
+| [`doc/dev_uat.md`](./dev_uat.md) | Executable UAT pack (2.1 wave exits) |
 | [`doc/dev_proc.md`](./dev_proc.md) | Chronological execution journal, prompts, and UAT log |
 | [`doc/supabase-security.md`](./supabase-security.md) | RLS and Supabase advisory remediation |
-| [`doc/dev_spec.md`](./dev_spec.md) | **This file** — technical specification for engineers, PMs, and AI collaborators |
+| [`doc/dev_spec.md`](./dev_spec.md) | **This file** — technical specification (v2.0 baseline until refresh) |
 
-**Repository:** `https://github.com/yugoananda-pg/simple-project-task-tracker-v02.git`  
-**Last updated:** 9 September 2026  
+**Repository (2.1 workspace):** `https://github.com/yugoananda-pg/simple-project-task-tracker-v21-cursor.git`  
+**Historical v2.0 repository:** `https://github.com/yugoananda-pg/simple-project-task-tracker-v02.git`  
+**Last updated:** 9 September 2026 *(content)*; deferred-refresh banner 5 October 2026  
 
 ---
 
@@ -43,7 +49,7 @@ Identity is provided by **Supabase Auth**. Application data lives in **Supabase 
 | **Super PM** (`super_pm`) | Platform administrator. First registered user is auto-promoted. Full CRUD across all projects and tasks; may run database seed. |
 | **PM** (`pm`) | Project manager. Creates projects; **admin** on owned projects; **read-only** on projects where they are a member but not owner. |
 | **Member** (`member`) | Contributor on assigned projects (`ProjectMember`). Create/edit tasks, move Kanban cards, checklists, comments. Cannot create projects. |
-| **Viewer** (`viewer`) | Read-only on permitted projects. Browse List / Kanban / Gantt / Analytics and open the drawer; cannot mutate. |
+| **Viewer** (`viewer`) | Read-only on Active projects granted via `ProjectMember` (Settings → Viewer project visibility, or Edit Project roster). Browse List / Kanban / Gantt / Analytics / Issue Log; cannot mutate. No peer portfolio browser. |
 
 Access is resolved per project into levels: `none` | `read` | `write` | `admin` (see Section 7).
 
@@ -133,6 +139,8 @@ Simple Project Task Tracker 2.0/
 │   ├── globals.css
 │   ├── login/page.tsx
 │   ├── register/page.tsx
+│   ├── auth/callback/route.ts    # Email confirm → queue → sign out
+│   ├── pending-approval/page.tsx # Redirects to login notice
 │   └── projects/[id]/
 │       ├── page.tsx              # Project hub (RSC)
 │       └── loading.tsx
@@ -181,6 +189,18 @@ Simple Project Task Tracker 2.0/
 | `app/page.tsx` | RSC | Loads `listProjects()`; renders `HomePageClient` |
 | `app/login/page.tsx` | RSC | Login page shell; hosts `LoginForm` |
 | `app/register/page.tsx` | RSC | Registration page shell; hosts `RegisterForm` |
+| `app/forgot-password/page.tsx` | RSC | Forgot password; hosts `ForgotPasswordForm` |
+| `app/auth/callback/route.ts` | Route handler | Supabase email-confirm callback (PKCE `code`); sets `emailConfirmedAt`; signs out; redirects to login notice |
+| `app/auth/confirm/page.tsx` | RSC | Explicit Confirm email UI (`token_hash` / `code`); hosts `ConfirmEmailClient` |
+| `app/pending-approval/page.tsx` | RSC | Legacy hold URL → redirects to `/login?notice=awaiting_approval` |
+| `app/settings/page.tsx` | RSC | Settings hub for all approved users (Account; Super PM admin links) |
+| `app/settings/viewer-visibility/page.tsx` | RSC | Super PM Viewer project visibility grants |
+| `app/settings/account/page.tsx` | RSC | Own name + password; email read-only |
+| `app/settings/users/page.tsx` | RSC | Super PM Users & privileges — Approvals, Create account, Privilege matrix, Safe deletion |
+| `app/settings/holidays/page.tsx` | RSC | Global Holiday Calendar |
+| `app/settings/deleted-projects/page.tsx` | RSC | Soft-deleted project recycle bin |
+| `app/settings/purged-projects/page.tsx` | RSC | Purged Project Register |
+| `app/projects/completed/page.tsx` | RSC | Completed Projects workspace |
 | `app/projects/[id]/page.tsx` | RSC | Loads project + tasks + session; renders `ProjectDetailView` |
 | `app/projects/[id]/loading.tsx` | Loading UI | Route-level skeleton while project data resolves |
 | `app/globals.css` | Styles | Global Tailwind entry + view transitions |
@@ -190,7 +210,7 @@ Simple Project Task Tracker 2.0/
 | Path | Exports | Responsibility |
 |------|---------|----------------|
 | `src/middleware.ts` | `middleware`, `config.matcher` | Delegates to Supabase session updater on all non-static routes |
-| `src/lib/supabase/middleware.ts` | `updateSession` | Refreshes cookies; redirects unauthenticated users away from app routes; redirects authenticated users away from `/login` and `/register` |
+| `src/lib/supabase/middleware.ts` | `updateSession` | Refreshes cookies; redirects unauthenticated users away from app routes; **signs out** any non-`APPROVED` session and sends them to `/login` with a notice (approval lookup fails open briefly so transient DB errors do not force logout); redirects approved users away from `/login` and `/register` |
 
 ### 3.4 Layout & providers
 
@@ -205,10 +225,17 @@ Simple Project Task Tracker 2.0/
 
 | Path | Exports | Responsibility |
 |------|---------|----------------|
-| `src/components/auth/LoginForm.tsx` | `LoginForm` | Email/password form → `signInAction` |
-| `src/components/auth/RegisterForm.tsx` | default | Name/email/password → `signUpAction` |
+| `src/components/auth/LoginForm.tsx` | `LoginForm` | Email/password → `signInAction`; Forgot password link; surfaces `notice` query; hard navigation on success |
+| `src/components/auth/RegisterForm.tsx` | default | Name/email/password → `signUpAction`; clear duplicate-email errors |
+| `src/components/auth/ForgotPasswordForm.tsx` | default | Email → `requestPasswordResetAction` (temporary password emailed) |
+| `src/components/auth/ConfirmEmailClient.tsx` | default | Verifies `token_hash` / exchanges `code`; calls `markEmailConfirmedIfNeeded`; signs out; redirects to login notice |
 | `src/components/auth/PasswordInput.tsx` | default | Password field with Eye / EyeOff toggle |
 | `src/components/auth/auth-validation.ts` | `validateEmail`, `validatePassword`, `validateName`, `validateConfirmPassword`, `mapAuthError` | Client-side validation helpers |
+| `src/components/tasks/AssigneePicField.tsx` | default | Assignee combobox: portal droplist on focus (roster + owner + Super PM), type-to-filter, scrollable |
+| `src/components/settings/AccountSettingsClient.tsx` | default | Own display name + password change; email read-only |
+| `src/components/settings/UserGovernanceClient.tsx` | default | Super PM Approvals (instant search, oldest-first) / Create account / Privilege matrix (search, role chips, expand-one editor) / Safe deletion (search both lists, Active role chips, purge-due sort + due-soon cue); reset password reveal |
+| `src/components/settings/ViewerVisibilityClient.tsx` | default | Super PM checklist: select Viewer → grant Active projects via `ProjectMember` |
+| `src/components/settings/SettingsPageHeader.tsx` | default | Shared Settings sub-page header with breadcrumb |
 
 ### 3.6 Project surfaces
 
@@ -228,14 +255,15 @@ Simple Project Task Tracker 2.0/
 | `src/components/kanban/TaskCard.tsx` | default, `TaskCardProps` | Draggable card; priority/process group; PIC; due/overdue; progress cue |
 | `src/components/kanban/TaskDetailDrawer.tsx` | default, `TaskDetailDrawerProps` | Planner drawer: fields, progress, dates, checklist, comments, PIC, delete task |
 | `src/components/tasks/TaskListView.tsx` | default, `TaskListViewProps` | Traditional list rows → open drawer |
-| `src/components/tasks/AssigneePicField.tsx` | default | Searchable member combobox + custom free-text PIC |
+| `src/components/tasks/AssigneePicField.tsx` | default | Portal droplist on focus; type-to-filter; custom free-text PIC |
 | `src/components/tasks/PicLabel.tsx` | default | PIC display + subtle **Custom** badge for unregistered names |
 
-### 3.8 Gantt & analytics
+### 3.8 Gantt, milestones & analytics
 
 | Path | Exports | Responsibility |
 |------|---------|----------------|
 | `src/components/gantt/ProjectGanttView.tsx` | default, `ProjectGanttViewProps`, `GanttGroupMode` | Interactive Gantt: Week/Month, Task list \| Assignee/PIC, triple bars, Today line, freeze-panes, portal tooltips |
+| `src/components/milestones/ProjectMilestonesPanel.tsx` | default | Compact stage-gate strip; Add/Edit modal; View all; wires `createMilestone` / `updateMilestone` / `deleteMilestone` |
 | `src/components/analytics/ProjectAnalyticsView.tsx` | default, `ProjectAnalyticsViewProps` | KPI cards + Recharts; mounts charts only when `chartsVisible` |
 
 ### 3.9 Shared UI primitives
@@ -314,11 +342,24 @@ Canonical persistence: `prisma/schema.prisma`. Application DTOs: `src/lib/types.
 | `id` | `Uuid` | PK | Matches Supabase Auth `auth.users.id` |
 | `email` | `String` | Unique | |
 | `name` | `String` | Required | |
-| `globalRole` | `GlobalRole` | Required | First user → `super_pm`; else default `member` on bootstrap |
+| `globalRole` | `GlobalRole` | Required | First user → `super_pm`; else provisional `member` at bootstrap until Super PM assigns the live role on approval (or set immediately on FR-GOV-07 provision) |
+| `approvalStatus` | `ApprovalStatus` | Default `PENDING` | Workspace access only when `APPROVED` |
+| `emailConfirmedAt` | `DateTime?` | Indexed | Set on Auth email confirm or Super PM provision; Super PM pending queue requires non-null |
+| `approvedAt` / `approvedBy` | `DateTime?` / `Uuid?` | | Set on Super PM approve or provision |
+| `dashboardAccess` | `DashboardScope[]` | Default project + PM portfolio | Privilege Matrix; role defaults on provision |
+| `completedProjectAccess` | `CompletedProjectAccess` | Default `NONE` | Privilege Matrix; Super PM provision forces `ALL` |
+| `deactivatedAt` / `deactivatedBy` | `DateTime?` / `Uuid?` | | Soft-deactivate (FR-GOV-06) |
+| `purgeDueAt` | `DateTime?` | Indexed | Soft-deactivated purge deadline (`deactivatedAt + 30 days`) |
+| `purgeWarningSentAt` | `DateTime?` | | When Super PMs were emailed the 2-day pre-purge warning |
 | `createdAt` | `DateTime` | `@default(now())` | |
+| `createdBy` / `updatedBy` | `Uuid` | NOT NULL | Actor master stamps |
 | `updatedAt` | `DateTime` | `@updatedAt` | |
 
-**Relations:** `ownedProjects`, `projectMembers`, `assignedTasks`, `comments`.
+**Relations:** `ownedProjects`, `projectMembers`, `assignedTasks`, `assignedIssues`, `comments`, `issueComments`.
+
+**Onboarding (self-service):** `signUpAction` → Auth confirm (`/auth/confirm` or `/auth/callback` + `markEmailConfirmedIfNeeded`) → Super PM `approveUser` (role + applicant email) → `signInAction` with registered credentials.
+
+**Onboarding (Super PM provision):** `provisionUserBySuperPm` → Auth `createUser` (`email_confirm: true`) + Prisma `APPROVED` profile → `signInAction` with temporary credentials (no queue).
 
 ### 4.3 `Project`
 
@@ -450,22 +491,66 @@ Helpers: `actionSuccess(data)`, `actionFailure(error)` (maps `ActionError` → e
 
 | Function | Signature | Auth | Behaviour |
 |----------|-----------|------|-----------|
-| `signInAction` | `(prev, FormData) → AuthActionState` | Public | Email/password; bootstrap profile; redirect |
-| `signUpAction` | `(prev, FormData) → AuthActionState` | Public | Validates name/password; first user → Super PM via bootstrap |
-| `signOutAction` | `() → void` | Session | Sign out; redirect `/login` |
+| `signInAction` | `(prev, FormData) → AuthActionState` | Public | Email/password; refuses unconfirmed / PENDING / REJECTED (signs out); only `APPROVED` redirects into the app |
+| `signUpAction` | `(prev, FormData) → AuthActionState` | Public | Creates Auth user + PENDING profile; always signs out; duplicate email → clear error; success asks user to confirm email |
+| `requestPasswordResetAction` | `(prev, FormData) → AuthActionState` | Public | Generates temporary password for approved accounts; emails via app mail; acknowledgement does not reveal existence |
+| `markEmailConfirmedIfNeeded` | `({ userId, confirmedAt }) → boolean` | Internal / callback | Sets `emailConfirmedAt` once; notifies Super PMs when newly queued |
+| `signOutAction` | `() → AuthActionState` | Session | Sign out; client hard-navigates to `/login` |
 | `getCurrentSessionUser` | `() → SessionUser \| null` | Soft | |
 | `ensureAuthenticatedProfile` | `() → void` | Required | Throws `UNAUTHORISED` if missing |
+
+### 5.2A Account self-service — `src/lib/actions/account.ts`
+
+| Function | Signature | Auth | Behaviour |
+|----------|-----------|------|-----------|
+| `getOwnAccount` | `() → ActionResult<OwnAccountDto>` | Approved | Current name + email |
+| `updateOwnName` | `({ name }) → ActionResult<OwnAccountDto>` | Approved | Updates Prisma + Auth metadata; email immutable |
+| `changeOwnPassword` | `({ currentPassword, newPassword, confirmPassword }) → ActionResult<{ ok }>` | Approved | Verifies current password then `auth.updateUser` |
+
+### 5.2B User governance actions — `src/lib/actions/users.ts`
+
+| Function | Signature | Auth | Behaviour |
+|----------|-----------|------|-----------|
+| `listManagedUsers` | `() → ActionResult<ManagedUserDto[]>` | Super PM | Directory for Approvals / Privilege matrix / Safe deletion |
+| `countPendingApprovals` | `() → number` | Super PM | Confirmed PENDING only (badges) |
+| `approveUser` | `({ userId, globalRole }) → ActionResult<ManagedUserWithMailDto>` | Super PM | Approves + assigns role; schedules applicant email |
+| `rejectUser` | `(userId) → ActionResult<ManagedUserDto>` | Super PM | Pending candidates only |
+| `deleteRegistrationApplicant` | `(userId) → ActionResult<{ id }>` | Super PM | Hard-remove PENDING/REJECTED applicants (not Safe deletion) |
+| `provisionUserBySuperPm` | `({ name, email, temporaryPassword, confirmPassword, globalRole }) → ActionResult<ManagedUserDto>` | Super PM | Immediate APPROVED account (FR-GOV-07); requires service role; clear duplicate-email error |
+| `resetUserPasswordBySuperPm` | `(userId) → ActionResult<{ temporaryPassword, … }>` | Super PM | One-time reveal temporary password (FR-GOV-08); not self |
+| `updateManagedUserName` | `({ userId, name }) → ActionResult<ManagedUserDto>` | Super PM | Edit another user’s display name; email immutable |
+| `updateUserPrivileges` | `(…) → ActionResult<ManagedUserDto>` | Super PM | Role, dashboard scopes, Completed visibility |
+| `deactivateUser` / `reactivateUser` / `hardDeleteUser` | various | Super PM | Safe deletion lifecycle (FR-GOV-06) |
+| `runUserRetentionPass` | `(now?) → { usersWarned, usersPurged }` | Job | 2-day warning then hard purge |
+
+### 5.2C Viewer visibility actions — `src/lib/actions/viewer-visibility.ts`
+
+| Function | Signature | Auth | Behaviour |
+|----------|-----------|------|-----------|
+| `listViewerVisibilityDirectory` | `() → ActionResult<ViewerDirectoryRow[]>` | Super PM | Approved active Viewers + Active-project grant counts |
+| `listViewerProjectGrants` | `(viewerUserId) → ActionResult<ViewerGrantProjectRow[]>` | Super PM | All Active projects with granted flag for that Viewer |
+| `syncViewerProjectGrants` | `({ viewerUserId, projectIds }) → ActionResult<{…}>` | Super PM | Replaces that Viewer’s Active `ProjectMember` rows only; rejects non-Viewer / non-Active targets; audit stamps on create |
 
 ### 5.3 Project actions — `src/lib/actions/projects.ts`
 
 | Function | Signature | Permission | Returns |
 |----------|-----------|------------|---------|
-| `listProjects` | `() → ActionResult<ProjectListItem[]>` | Session; visibility filter | Projects with `access` + `taskCount` |
-| `getProjectById` | `(projectId) → ActionResult<{ project, access, canManage, canWriteTasks, memberUsers }>` | Read+ | Detail + roster |
+| `listProjects` | `(scope?) → ActionResult<ProjectListItem[]>` | Session; visibility filter | Active landing; PM peer browse via `browseOwnerId` |
+| `listBrowsableProjectOwners` | `() → ActionResult<BrowsableProjectOwner[]>` | PM / Super PM | Owners for home-page portfolio filter |
+| `getProjectById` | `(projectId) → ActionResult<{ project, access, canManage, canWriteTasks, canRaiseIssues, memberUsers }>` | Read+ | Detail + roster + capability flags |
 | `createProject` | `(input: { name; description? }) → ActionResult<Project>` | Super PM or PM | Creates project + owner membership |
 | `deleteProject` | `(projectId) → ActionResult<{ id }>` | Admin (Super PM or owning PM) | Cascade delete |
 
 **Validation:** name required ≤100; description ≤500.
+
+### 5.3A Milestone actions — `src/lib/actions/milestones.ts`
+
+| Function | Signature | Permission | Notes |
+|----------|-----------|------------|-------|
+| `listMilestones` | `(projectId) → ActionResult<Milestone[]>` | Read+ | Ordered by `updatedTarget` ascending |
+| `createMilestone` | `({ projectId, name, description?, initialTarget }) → ActionResult<Milestone>` | Admin | Sets `updatedTarget = initialTarget` |
+| `updateMilestone` | `({ id, name?, description?, updatedTarget?, actualAchieved? }) → ActionResult<Milestone>` | Admin | Edit modal; `actualAchieved` null clears achieved |
+| `deleteMilestone` | `(id) → ActionResult<{ id }>` | Admin | Confirmed from Edit modal |
 
 ### 5.4 Task actions — `src/lib/actions/tasks.ts`
 
@@ -473,7 +558,7 @@ Helpers: `actionSuccess(data)`, `actionFailure(error)` (maps `ActionError` → e
 |----------|-----------|------------|-------|
 | `listTasksByProject` | `(projectId) → ActionResult<Task[]>` | Read+ | Includes subtasks + comments; order status, sortOrder |
 | `createTask` | `(input: { projectId; title; description?; status? }) → ActionResult<Task>` | Write/Admin | Defaults dates/progress; top `sortOrder` |
-| `updateTaskFields` | `(taskId, patch: Partial<Task>) → ActionResult<Task>` | Write/Admin | Progress↔status side effects; PIC membership check; actual dates not future; auto top `sortOrder` on status change unless `sortOrder` provided |
+| `updateTaskFields` | `(taskId, patch: Partial<Task>) → ActionResult<Task>` | Write/Admin | Progress↔status side effects; PIC must be roster member, owning PM, or Super PM; actual dates not future; auto top `sortOrder` on status change unless `sortOrder` provided |
 | `updateTaskStatus` | `(taskId, status) → ActionResult<Task>` | Write/Admin | Delegates to `updateTaskFields` |
 | `reorderTasks` | `(input: { projectId; orderedTaskIds; status }) → ActionResult<{ ok: true }>` | Write/Admin | Sets `sortOrder` = index; applies status side effects when column changes |
 | `toggleSubtask` | `(taskId, subtaskId, isCompleted) → ActionResult<Task>` | Write/Admin | |
@@ -481,7 +566,7 @@ Helpers: `actionSuccess(data)`, `actionFailure(error)` (maps `ActionError` → e
 | `deleteTask` | `(taskId) → ActionResult<{ id }>` | Admin **or** assigned PIC (`assigneeId === user.id`) | Cascades subtasks/comments |
 
 **PIC rules on update:**
-- Registered: `assigneeId` must be a `ProjectMember`; `assigneeName` defaults to user name.
+- Registered: `assigneeId` must be a `ProjectMember`, the project owner, or a Super PM; `assigneeName` defaults to user name.
 - Custom: `assigneeId` null; `assigneeName` free text ≤120 chars (may be `""`).
 
 ### 5.5 Comment actions — `src/lib/actions/comments.ts`
@@ -504,13 +589,17 @@ CLI equivalent: `npx prisma db seed` (does not require Super PM session; uses DB
 
 | Helper | Role |
 |--------|------|
-| `requireSessionUser` | Throws `UNAUTHORISED` |
+| `requireSessionUser` / `requireApprovedPageUser` | Session; approved page gate |
 | `assertProjectRead` / `Write` / `Admin` | Throws `FORBIDDEN` |
 | `requireReadableProject` / `Writable` / `Admin` | Load + assert |
-| `getProjectAccess` | Resolve `none\|read\|write\|admin` |
-| `canCreateProject` / `canDeleteTask` / `canManageProject` | Boolean gates |
+| `getProjectAccess` | Resolve `none\|read\|write\|admin` (PM peers → `read`; Members → `read` on roster) |
+| `canMutateTask` / `canManageProjectTasks` | Task assignee vs owning-PM/Super PM create rights |
+| `canCreateProject` / `canDeleteTask` / `canManageProject` / `canBrowsePeerPmPortfolios` | Boolean gates |
+| `activeApprovedUserWhere` | Prisma filter: APPROVED, not deactivated, not System |
+| `requireActiveApprovedAssignee` | Validates registered PIC / owner / member targets |
 | `bootstrapUserProfile` | First user → `super_pm` |
-| `projectsVisibilityFilter` | Prisma `where` for list |
+| `projectsVisibilityFilter(user, scope?)` | Active landing: PM/Super PM owned∪tasked (default), `owner=all`, or peer `ownerId`; Member/Viewer roster |
+| `completedProjectsVisibilityFilter` | Prisma `where` for Completed Projects |
 
 ---
 
@@ -521,11 +610,11 @@ CLI equivalent: `npx prisma db seed` (does not require Super PM session; uses DB
 `ProjectDetailView` owns:
 
 - Local `tasks` state seeded from RSC props (optimistic merges on mutation).
-- `viewMode`: `"list" | "kanban" | "gantt" | "analytics"`.
-- Selected task id → `TaskDetailDrawer`.
+- `viewMode`: `"list" | "kanban" | "gantt" | "analytics" | "issues"`.
+- Selected task id → `TaskDetailDrawer`; selected issue → `IssueDetailDrawer`.
 - Flags: `canWriteTasks`, `canManageProject`, `access`, `memberUsers`, `currentUserId`.
 
-Tab labels: **List View** | **Kanban Board** | **Gantt Chart** | **Analytics**.  
+Tab labels: **List View** | **Kanban Board** | **Gantt Chart** | **Analytics** | **Issue Log**.  
 Analytics stays in DOM but charts mount only when `chartsVisible` is true (avoids Recharts 0×0 measure).
 
 ### 6.2 Kanban Board
@@ -549,7 +638,7 @@ Analytics stays in DOM but charts mount only when `chartsVisible` is true (avoid
 | Progress | Range 0–100 + numeric draft; bidirectional sync with status (0→To Do; 1–99→Doing; 100→Done) |
 | Dates | Six fields: Initial Start/Due, Updated Start/Due, Actual Start/Completion; native `type="date"`; blur-sync; AU captions `DD/MM/YYYY` |
 | Actual date validation | Future dates blocked (client + server) |
-| PIC | `AssigneePicField`: pick member or type custom (e.g. “Mr X”); Custom badge via `PicLabel` |
+| PIC | `AssigneePicField`: focus opens portal droplist (roster + owner + Super PM); type filters instantly; custom free-text PIC still allowed; Custom badge via `PicLabel` |
 | Checklist | Toggle + add; progress bar “X of Y” |
 | Comments | Live list via `getTaskComments` / `createComment` / `deleteComment`; AU timestamps |
 | Delete task | Confirm dialog; permission via `canDeleteTaskUi` |
@@ -561,17 +650,21 @@ Analytics stays in DOM but charts mount only when `chartsVisible` is true (avoid
 |---------|---------------|
 | Scales | **Week** / **Month** column toggles |
 | Grouping | **Task list** (rows grouped by Process Group) \| **Assignee / PIC** |
+| Left rail | Sticky **Task** + **Progress** freeze-panes beside the timeline |
+| Task column | Title wraps (multi-line, readable); task **Status Flag**; Kanban status; PIC name **without** Custom badge |
+| Progress column | Stacked **Actual** and **Target** badges per task (target capped at $100\%$) |
 | Bars | Stacked per row: **Initial** (zinc), **Updated** (sky), **Actual** (emerald) |
 | Actual open tasks | End exclusive at start of today — never past Today line |
 | Done Actual node | Circular checkmark at **right end** of Actual bar (`right-0` + half-width translate) |
 | Today | Red full-height `w-px` line under sticky header; **no** top circular node; hover tip “We're here — DD/MM/YYYY” follows cursor |
-| Freeze-panes | Sticky date header, sticky task rail, sticky corner cell |
-| Geometry | Day-proportional column widths; shared pixel offsets for bars and Today |
+| Freeze-panes | Sticky date header (`z-30`, opaque), sticky Task + Progress rail (`z-40+`), sticky corner cells; date header stays above timeline bars while scrolling; left rail stays above date headers horizontally |
+| Geometry | Day-proportional column widths; shared pixel offsets for bars and Today; Task/Progress/timeline row heights aligned |
 | Tooltips | Portal, instant (0 ms), Initial/Updated/Actual date summaries |
 | Interaction | Click row/bar → opens `TaskDetailDrawer` |
 | Defensive | Missing/inverted dates clamped; corrupt strings skipped |
+| Project summary | Project Status Flag / Actual / Target live under the project description — not duplicated above the Gantt toolbar |
 
-Core math: `src/lib/gantt/date-utils.ts` (`parseTaskDate`, `getActualDateRange`, `getBarPositionPx`, `buildTimelineColumns`, …).
+Core math: `src/lib/gantt/date-utils.ts` (`parseTaskDate`, `getActualDateRange`, `getBarPositionPx`, `buildTimelineColumns`, …). Schedule metrics: `src/lib/analytics/weighted-progress.ts`.
 
 ### 6.5 Analytics Dashboard
 
@@ -593,29 +686,28 @@ Empty projects show Australian English empty states. Chart wrappers use `minWidt
 
 ### 7.1 Role permission matrix
 
-| Action | Super PM | PM (owner) | PM (member, not owner) | Member (assigned) | Viewer (permitted) |
+| Action | Super PM | PM (owner) | PM (peer browse) | Member (roster) | Viewer (granted) |
 |--------|----------|------------|------------------------|-------------------|--------------------|
-| View List / Kanban / Gantt / Analytics | ✓ | ✓ | Read | ✓ | ✓ |
+| View List / Kanban / Gantt / Analytics / Issue Log | ✓ | ✓ | Read | ✓ | ✓ |
 | Create project | ✓ | ✓ | ✗ | ✗ | ✗ |
 | Delete / manage project | ✓ | ✓ | ✗ | ✗ | ✗ |
-| Create / edit tasks | ✓ | ✓ | ✗ | ✓ | ✗ |
-| Kanban move / reorder | ✓ | ✓ | ✗ | ✓ | ✗ |
-| Checklist / comments | ✓ | ✓ | ✗ | ✓ | ✗ |
-| Delete task | ✓ | ✓ | ✗ | Assigned PIC only† | ✗ |
-| Delete comment | ✓ / author / owner | ✓ / author / owner | Author only* | Author | ✗ |
+| Create tasks / Kanban reorder | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Edit assigned task (PIC) | ✓ | ✓ | ✓ if PIC | ✓ if PIC | ✗ |
+| Comments on editable task | ✓ | ✓ | ✓ if PIC | ✓ if PIC | ✗ |
+| Raise issue | ✓ | ✓ | ✗ | ✓ | ✗ |
+| Delete task | ✓ | ✓ | ✓ if PIC | ✓ if PIC | ✗ |
 | Run DB seed action | ✓ | ✗ | ✗ | ✗ | ✗ |
 
-\* Non-owning PM with read access cannot post; if somehow author on another project context, author delete still applies when access ≠ `none`.  
-† `canDeleteTask`: project `admin` **or** `task.assigneeId === user.id`.
+Task mutations use `canMutateTask` (project `admin`, or registered assignee on a readable Active project).
 
 ### 7.2 Access level resolution
 
 | Level | Who |
 |-------|-----|
 | `admin` | Super PM; PM who owns the project |
-| `write` | Member on `ProjectMember` |
-| `read` | Viewer on membership; PM who is member but not owner |
-| `none` | Everyone else (hidden from list) |
+| `write` | Reserved (legacy); Members no longer receive project-level write |
+| `read` | PM on non-owned Active projects; Member / Viewer on `ProjectMember` |
+| `none` | No membership / not Super PM / deleted |
 
 ### 7.3 Transport & data-plane security
 
@@ -632,7 +724,7 @@ Empty projects show Australian English empty states. Chart wrappers use `minWidt
 | **Backward status → To Do** | `progress = 0`; clear `actualStartDate` and `actualCompletionDate` |
 | **Backward status → Doing** | Progress 1% if was 0/100 (else keep mid); set start if null; **clear completion** |
 | **Forward → Done** | Progress 100; set completion (and start if null) to local today |
-| **Future actual dates** | Rejected (`VALIDATION`: “cannot be in the future”) |
+| **Future actual / achieved dates** | Rejected on server (`VALIDATION`: “{label} cannot be in the future”) for task `actualStartDate` / `actualCompletionDate`, milestone `actualAchieved`, and issue `actualStartDate` / `actualResolutionDate`. Client date inputs use `max=today`. Planned targets (`initial*` / `updated*`) may still be future. Projects have no independent actual span — Gantt Actual uses task actuals. Shared helper: `assertActualDateNotFuture` in `src/lib/actions/date-validation.ts`. |
 | **Effective due / overdue** | `updatedDueDate ?? initialDueDate`; done tasks not overdue |
 | **Registered PIC** | Must be project member |
 | **Cascade cleanup** | Deleting project/task removes dependent rows (no orphan tasks) |

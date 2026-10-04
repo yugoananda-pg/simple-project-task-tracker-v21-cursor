@@ -1,4 +1,6 @@
+import { resolveActorDisplayName } from "@/src/lib/audit-display";
 import type {
+  ApprovalStatus,
   GlobalRole,
   Project,
   Subtask,
@@ -33,6 +35,7 @@ export function mapUser(user: PrismaUser): User {
     email: user.email,
     name: user.name,
     globalRole: user.globalRole as GlobalRole,
+    approvalStatus: user.approvalStatus as ApprovalStatus,
     createdAt: toIso(user.createdAt),
     updatedAt: toIso(user.updatedAt),
   };
@@ -47,6 +50,19 @@ export function mapProject(
     description: project.description,
     ownerId: project.ownerId,
     permittedUserIds: project.members?.map((member) => member.userId) ?? [],
+    lifecycleStatus: project.lifecycleStatus,
+    progressReached100At: project.progressReached100At
+      ? toIso(project.progressReached100At)
+      : null,
+    completedAt: project.completedAt ? toIso(project.completedAt) : null,
+    completedBy: project.completedBy,
+    completionMethod: project.completionMethod,
+    completedPurgeDueAt: project.completedPurgeDueAt
+      ? toIso(project.completedPurgeDueAt)
+      : null,
+    deletedAt: project.deletedAt ? toIso(project.deletedAt) : null,
+    deletedBy: project.deletedBy,
+    purgeDueAt: project.purgeDueAt ? toIso(project.purgeDueAt) : null,
     createdAt: toIso(project.createdAt),
     updatedAt: toIso(project.updatedAt),
   };
@@ -79,6 +95,7 @@ export function mapTask(
     subtasks?: PrismaSubtask[];
     comments?: PrismaTaskComment[];
   },
+  actorNamesById?: ReadonlyMap<string, string>,
 ): Task {
   return {
     id: task.id,
@@ -99,7 +116,17 @@ export function mapTask(
     progress: task.progress,
     sortOrder: task.sortOrder,
     createdAt: toIso(task.createdAt),
+    createdBy: task.createdBy,
+    createdByName: resolveActorDisplayName(
+      task.createdBy,
+      actorNamesById?.get(task.createdBy),
+    ),
     updatedAt: toIso(task.updatedAt),
+    updatedBy: task.updatedBy,
+    updatedByName: resolveActorDisplayName(
+      task.updatedBy,
+      actorNamesById?.get(task.updatedBy),
+    ),
     subtasks: task.subtasks?.map(mapSubtask),
     comments: task.comments?.map(mapComment),
   };

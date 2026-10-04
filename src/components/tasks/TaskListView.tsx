@@ -1,12 +1,19 @@
 "use client";
 
+import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
+import {
+  formatPercent1,
+  type TaskScheduleMetrics,
+} from "@/src/lib/analytics/weighted-progress";
 import { getEffectiveDueDate } from "@/src/lib/task-defaults";
 import type { Task, TaskPriority, TaskStatus } from "@/src/lib/types";
 
 export type TaskListViewProps = {
   tasks: Task[];
+  metricsById?: ReadonlyMap<string, TaskScheduleMetrics>;
   onTaskClick: (task: Task) => void;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
+  canChangeStatus?: (task: Task) => boolean;
 };
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -37,24 +44,12 @@ function formatAuDate(value: string | null): string {
   return `${day}/${month}/${year}`;
 }
 
-function todayISODate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isOverdue(task: Task): boolean {
-  const due = getEffectiveDueDate(task);
-  if (!due || task.status === "done") return false;
-  return due.slice(0, 10) < todayISODate();
-}
-
 export default function TaskListView({
   tasks,
+  metricsById,
   onTaskClick,
   onStatusChange,
+  canChangeStatus,
 }: TaskListViewProps) {
   if (tasks.length === 0) {
     return (
@@ -72,7 +67,7 @@ export default function TaskListView({
   return (
     <ul className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-700 dark:bg-zinc-950">
       {tasks.map((task) => {
-        const overdue = isOverdue(task);
+        const metrics = metricsById?.get(task.id);
         return (
           <li key={task.id}>
             <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -85,15 +80,30 @@ export default function TaskListView({
                   <h3 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
                     {task.title}
                   </h3>
-                  {overdue ? (
-                    <span className="rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                      Overdue
-                    </span>
+                  {metrics ? (
+                    <StatusFlagBadge flag={metrics.statusFlag} />
                   ) : null}
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   Due {formatAuDate(getEffectiveDueDate(task))} ·{" "}
                   {PRIORITY_LABELS[task.priority]} · {task.progress}%
+                  {metrics ? (
+                    <>
+                      {" "}
+                      · {metrics.dPlanned} working day
+                      {metrics.dPlanned === 1 ? "" : "s"} · Weight{" "}
+                      {formatPercent1(metrics.weightPercent)} · Target{" "}
+                      {formatPercent1(metrics.pTarget)} · PS{" "}
+                      {formatPercent1(metrics.ps)}
+                    </>
+                  ) : null}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Created by {task.createdByName} ·{" "}
+                  {task.createdAt.slice(0, 19).replace("T", " ")}
+                  {" · "}
+                  Updated by {task.updatedByName} ·{" "}
+                  {task.updatedAt.slice(0, 19).replace("T", " ")}
                 </p>
               </button>
 
@@ -103,7 +113,10 @@ export default function TaskListView({
               <select
                 id={`status-${task.id}`}
                 value={task.status}
-                disabled={!onStatusChange}
+                disabled={
+                  !onStatusChange ||
+                  (canChangeStatus ? !canChangeStatus(task) : false)
+                }
                 onChange={(event) =>
                   onStatusChange?.(task.id, event.target.value as TaskStatus)
                 }

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import PasswordInput from "@/src/components/auth/PasswordInput";
 import {
+  resendSignupConfirmationAction,
   signUpAction,
   type AuthActionState,
 } from "@/src/lib/actions/auth";
@@ -16,8 +17,22 @@ export default function RegisterForm() {
     signUpAction,
     INITIAL_STATE,
   );
-  const isSuccessNotice =
-    state.error?.includes("Account created. Please check your email");
+  const [resendState, resendAction, isResendPending] = useActionState(
+    resendSignupConfirmationAction,
+    INITIAL_STATE,
+  );
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    if (state.emailHint) setEmail(state.emailHint);
+  }, [state.emailHint]);
+
+  useEffect(() => {
+    if (resendState.emailHint) setEmail(resendState.emailHint);
+  }, [resendState.emailHint]);
+
+  const statusSuccess = resendState.success ?? state.success;
+  const statusError = resendState.error ?? state.error;
 
   return (
     <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-12 sm:px-6">
@@ -27,7 +42,8 @@ export default function RegisterForm() {
             Create account
           </h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Join your team&apos;s project workspace.
+            Confirm your email, then wait for a Super PM to approve you before
+            signing in.
           </p>
         </div>
 
@@ -44,7 +60,7 @@ export default function RegisterForm() {
               name="name"
               type="text"
               autoComplete="name"
-              disabled={isPending}
+              disabled={isPending || isResendPending}
               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-slate-400"
               placeholder="Your name"
             />
@@ -62,7 +78,9 @@ export default function RegisterForm() {
               name="email"
               type="email"
               autoComplete="email"
-              disabled={isPending}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              disabled={isPending || isResendPending}
               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-slate-400"
               placeholder="you@example.com"
             />
@@ -79,7 +97,7 @@ export default function RegisterForm() {
               id="password"
               name="password"
               autoComplete="new-password"
-              disabled={isPending}
+              disabled={isPending || isResendPending}
               placeholder="At least 6 characters"
             />
           </div>
@@ -95,31 +113,48 @@ export default function RegisterForm() {
               id="confirmPassword"
               name="confirmPassword"
               autoComplete="new-password"
-              disabled={isPending}
+              disabled={isPending || isResendPending}
               placeholder="Re-enter your password"
             />
           </div>
 
-          {state.error ? (
+          {statusSuccess ? (
             <p
-              className={[
-                "rounded-lg border px-3 py-2 text-sm",
-                isSuccessNotice
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300"
-                  : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300",
-              ].join(" ")}
-              role={isSuccessNotice ? "status" : "alert"}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+              role="status"
             >
-              {state.error}
+              {statusSuccess}
+            </p>
+          ) : null}
+
+          {statusError ? (
+            <p
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+              role="alert"
+            >
+              {statusError}
             </p>
           ) : null}
 
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || isResendPending}
             className="w-full rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
           >
             {isPending ? "Creating your account…" : "Create account"}
+          </button>
+        </form>
+
+        <form action={resendAction} className="mt-4">
+          <input type="hidden" name="email" value={email} />
+          <button
+            type="submit"
+            disabled={isPending || isResendPending || !email.trim()}
+            className="w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            {isResendPending
+              ? "Sending confirmation…"
+              : "Resend confirmation email"}
           </button>
         </form>
 

@@ -1,5 +1,5 @@
-// Simple Project Task Tracker 2.0 — Prisma schema
-// Canonical persistence layer aligned with doc/dev_plan.md Section 3.
+// Simple Project Task Tracker 2.1 — Prisma schema
+// Canonical persistence layer aligned with doc/dev_req.md Section 6.
 
 generator client {
   provider = "prisma-client-js"
@@ -18,6 +18,40 @@ enum GlobalRole {
   pm
   member
   viewer
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DashboardScope {
+  PROJECT
+  PM_PORTFOLIO
+  TOTAL_COMPANY
+}
+
+enum ProjectLifecycleStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum CompletionMethod {
+  MANUAL
+  AUTO_RETENTION
+}
+
+enum CompletedProjectAccess {
+  NONE
+  ASSIGNED
+  ALL
+}
+
+enum PurgeTrigger {
+  SUPER_PM_MANUAL
+  SOFT_DELETE_RETENTION_EXPIRED
+  COMPLETED_RETENTION_EXPIRED
 }
 
 enum TaskStatus {
@@ -41,52 +75,181 @@ enum TaskBucket {
   closing
 }
 
+enum IssueCategory {
+  scope
+  schedule
+  cost
+  quality
+  technical
+  resource
+  stakeholder
+  safety
+  commercial
+  other
+}
+
+enum IssueSeverity {
+  critical
+  high
+  medium
+  low
+}
+
+enum IssueStatus {
+  open
+  in_progress
+  blocked
+  resolved
+  closed
+  cancelled
+}
+
+enum IssueActivityType {
+  RAISED
+  STATUS_CHANGED
+  PROGRESS_CHANGED
+  PIC_CHANGED
+  DATES_CHANGED
+  CLASSIFICATION_CHANGED
+  COMMENTED
+  CLOSED
+  CANCELLED
+}
+
 // ---------------------------------------------------------------------------
-// Models
+// Core Models with Full Audit Trails
 // ---------------------------------------------------------------------------
 
-/// Profile row keyed by Supabase Auth user id (`auth.users.id`).
+model Holiday {
+  id          String   @id @default(uuid()) @db.Uuid
+  date        DateTime @unique @db.Date
+  description String
+  isNational  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+
+  @@index([date])
+}
+
 model User {
-  id         String     @id @db.Uuid
-  email      String     @unique
-  name       String
-  globalRole GlobalRole
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  /// Actor master for createdBy / updatedBy on all tables (FR-AUD-08). Soft UUID refs; no blocking FK from stamps.
+  id                     String                 @id @db.Uuid
+  /// Canonical lower-case address. Unique at DB level; also guarded by User_email_lower_uidx.
+  email                  String                 @unique
+  name                   String
+  globalRole             GlobalRole             @default(member)
+  approvalStatus         ApprovalStatus         @default(PENDING)
+  approvedAt             DateTime?
+  approvedBy             String?                @db.Uuid
+  dashboardAccess        DashboardScope[]       @default([PROJECT, PM_PORTFOLIO])
+  completedProjectAccess CompletedProjectAccess @default(NONE)
+
+  /// Set when the registrant confirms their Auth email. Pending Super PM queue only includes confirmed rows.
+  emailConfirmedAt DateTime?
+
+  /// Soft-deactivate for Safe User Deletion (FR-GOV-06 / FR-AUD-06). Row retained for JOIN name resolution until purge.
+  deactivatedAt DateTime?
+  deactivatedBy String?   @db.Uuid
+  /// When the soft-deactivated account will be physically removed (deactivatedAt + 30 days).
+  purgeDueAt DateTime?
+  /// When Super PMs were emailed the 2-day pre-purge warning for this account.
+  purgeWarningSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 
   ownedProjects  Project[]       @relation("ProjectOwner")
   projectMembers ProjectMember[]
   assignedTasks  Task[]          @relation("TaskAssignee")
+  assignedIssues Issue[]         @relation("IssuePic")
   comments       TaskComment[]
+  issueComments  IssueComment[]
+
+  @@index([email])
+  @@index([approvalStatus])
+  @@index([emailConfirmedAt])
+  @@index([deactivatedAt])
+  @@index([purgeDueAt])
 }
 
 model Project {
-  id          String   @id @default(uuid()) @db.Uuid
+  id          String @id @default(uuid()) @db.Uuid
   name        String
-  description String   @default("")
-  ownerId     String   @db.Uuid
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description String @default("")
+  ownerId     String @db.Uuid
 
-  owner   User            @relation("ProjectOwner", fields: [ownerId], references: [id])
-  members ProjectMember[]
-  tasks   Task[]
+  lifecycleStatus      ProjectLifecycleStatus @default(ACTIVE)
+  progressReached100At DateTime?
+  completedAt          DateTime?
+  completedBy          String?                @db.Uuid
+  completionMethod     CompletionMethod?
+  completedPurgeDueAt  DateTime?
+  deletedAt            DateTime?
+  deletedBy            String?                @db.Uuid
+  purgeDueAt           DateTime?
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+
+  owner           User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members         ProjectMember[]
+  tasks           Task[]
+  milestones      Milestone[]
+  issues          Issue[]
+  issueActivities IssueActivity[]
 
   @@index([ownerId])
+  @@index([lifecycleStatus, deletedAt])
+  @@index([progressReached100At])
+  @@index([completedPurgeDueAt])
+  @@index([purgeDueAt])
 }
 
-/// Join table for project membership (`permittedUserIds` in the application layer).
 model ProjectMember {
-  id        String   @id @default(uuid()) @db.Uuid
-  projectId String   @db.Uuid
-  userId    String   @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
+  projectId String  @db.Uuid
+  userId    String  @db.Uuid
+  canEdit   Boolean @default(true)
+
   createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@index([userId])
+  @@index([projectId])
+}
+
+model Milestone {
+  id             String    @id @default(uuid()) @db.Uuid
+  projectId      String    @db.Uuid
+  name           String
+  description    String?   @default("")
+  initialTarget  DateTime  @db.Date
+  updatedTarget  DateTime  @db.Date
+  actualAchieved DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  relatedIssues Issue[] @relation("IssueRelatedMilestone")
+
+  @@index([projectId])
+  @@index([updatedTarget])
 }
 
 model Task {
@@ -107,26 +270,34 @@ model Task {
   actualCompletionDate DateTime?    @db.Date
   progress             Int          @default(0)
   sortOrder            Int          @default(0)
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  weightOverride       Float?
 
-  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  subtasks Subtask[]
-  comments TaskComment[]
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee      User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  subtasks      Subtask[]
+  comments      TaskComment[]
+  relatedIssues Issue[]       @relation("IssueRelatedTask")
 
   @@index([projectId])
   @@index([projectId, status, sortOrder])
 }
 
 model Subtask {
-  id          String   @id @default(uuid()) @db.Uuid
-  taskId      String   @db.Uuid
+  id          String  @id @default(uuid()) @db.Uuid
+  taskId      String  @db.Uuid
   title       String
-  isCompleted Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isCompleted Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -134,15 +305,150 @@ model Subtask {
 }
 
 model TaskComment {
-  id        String   @id @default(uuid()) @db.Uuid
-  taskId    String   @db.Uuid
-  userId    String   @db.Uuid
-  content   String
+  id      String @id @default(uuid()) @db.Uuid
+  taskId  String @db.Uuid
+  userId  String @db.Uuid
+  content String
+
   createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
   @@index([userId])
+}
+
+model Issue {
+  id                   String        @id @default(uuid()) @db.Uuid
+  projectId            String        @db.Uuid
+  issueNumber          Int
+  title                String
+  description          String        @default("")
+  category             IssueCategory @default(technical)
+  severity             IssueSeverity @default(medium)
+  status               IssueStatus   @default(open)
+  picId                String?       @db.Uuid
+  picName              String        @default("")
+  raisedBy             String        @db.Uuid
+  raisedAt             DateTime      @default(now())
+  initialStartDate     DateTime?     @db.Date
+  initialDueDate       DateTime?     @db.Date
+  updatedStartDate     DateTime?     @db.Date
+  updatedDueDate       DateTime?     @db.Date
+  actualStartDate      DateTime?     @db.Date
+  actualResolutionDate DateTime?     @db.Date
+  progress             Int           @default(0)
+  impactSummary        String        @default("")
+  resolutionSummary    String        @default("")
+  relatedTaskId        String?       @db.Uuid
+  relatedMilestoneId   String?       @db.Uuid
+  sortOrder            Int           @default(0)
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pic              User?           @relation("IssuePic", fields: [picId], references: [id], onDelete: SetNull)
+  relatedTask      Task?           @relation("IssueRelatedTask", fields: [relatedTaskId], references: [id], onDelete: SetNull)
+  relatedMilestone Milestone?      @relation("IssueRelatedMilestone", fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+  comments         IssueComment[]
+  activities       IssueActivity[]
+
+  @@unique([projectId, issueNumber])
+  @@index([projectId, status, severity])
+  @@index([picId])
+  @@index([updatedDueDate])
+}
+
+model IssueComment {
+  id      String @id @default(uuid()) @db.Uuid
+  issueId String @db.Uuid
+  userId  String @db.Uuid
+  content String
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([userId])
+}
+
+/// Append-only Issue Log event. Mutation after insert is forbidden.
+model IssueActivity {
+  id          String            @id @default(uuid()) @db.Uuid
+  projectId   String            @db.Uuid
+  issueId     String            @db.Uuid
+  eventType   IssueActivityType
+  summary     String
+  payloadJson Json
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([issueId, createdAt])
+}
+
+/// Immutable tombstone written BEFORE the operational Project row is physically deleted.
+model PurgedProject {
+  id                      String                  @id @default(uuid()) @db.Uuid
+  originalProjectId       String                  @db.Uuid
+  name                    String
+  description             String
+  ownerId                 String?                 @db.Uuid
+  ownerEmail              String
+  ownerName               String
+  lifecycleStatusAtPurge  ProjectLifecycleStatus
+  createdAtOriginal       DateTime
+  createdByOriginal       String?
+  createdByEmailOriginal  String?
+  updatedAtOriginal       DateTime
+  updatedByOriginal       String?
+  updatedByEmailOriginal  String?
+  completedAt             DateTime?
+  completedBy             String?
+  completedByEmail        String?
+  completionMethod        CompletionMethod?
+  completedPurgeDueAt     DateTime?
+  deletedAt               DateTime?
+  deletedBy               String?
+  deletedByEmail          String?
+  memberCount             Int
+  taskCount               Int
+  subtaskCount            Int
+  commentCount            Int
+  milestoneCount          Int
+  issueCount              Int
+  issueCommentCount       Int
+  issueActivityCount      Int
+  lastKnownActualProgress Float?
+  lastKnownTargetProgress Float?
+  snapshotJson            Json
+  purgedAt                DateTime                @default(now())
+  purgedBy                String                  @db.Uuid
+  purgedByEmail           String
+  purgedByName            String
+  purgeTrigger            PurgeTrigger
+  purgeReason             String?
+  createdAt               DateTime                @default(now())
+  createdBy               String                  @db.Uuid
+
+  @@index([originalProjectId])
+  @@index([purgedAt])
+  @@index([purgeTrigger])
+  @@index([ownerEmail])
 }

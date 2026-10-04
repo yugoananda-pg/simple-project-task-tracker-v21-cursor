@@ -20,9 +20,9 @@ export default function ReadOnlyAccessNotice({
         Read-only access
       </p>
       <p className={compact ? "mt-1 leading-relaxed" : "mt-1.5 leading-relaxed"}>
-        You can browse tasks, timelines, and analytics, but you cannot edit task
-        details, move Kanban cards, post comments, or create new tasks on this
-        project.
+        You can browse tasks, timelines, and analytics. Creating tasks and
+        editing the project are limited to the owning PM or Super PM. If a task
+        is assigned to you, you can still update that task (and comment on it).
       </p>
     </div>
   );

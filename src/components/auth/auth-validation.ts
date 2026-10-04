@@ -52,7 +52,7 @@ export function mapAuthError(message: string): string {
     return "Incorrect email or password. Please try again.";
   }
   if (normalised.includes("user already registered")) {
-    return "An account with this email already exists. Try signing in instead.";
+    return "This email address is already registered. Sign in if this is your account, or use Forgot password if you need a temporary password.";
   }
   if (normalised.includes("password")) {
     return "Please check your password and try again.";

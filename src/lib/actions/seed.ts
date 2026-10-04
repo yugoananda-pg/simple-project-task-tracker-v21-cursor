@@ -13,11 +13,11 @@ import {
   resetAndSeedDatabase,
   type SeedSummary,
 } from "@/src/lib/seed/database-seed";
-import { requireSessionUser } from "@/src/lib/rbac";
+import { requireApprovedSessionUser } from "@/src/lib/rbac";
 
 export async function runDatabaseSeedAction(): Promise<ActionResult<SeedSummary>> {
   try {
-    const user = await requireSessionUser();
+    const user = await requireApprovedSessionUser();
     if (user.globalRole !== "super_pm") {
       throw new ActionError(
         "Only a Super PM can reset and seed the database.",

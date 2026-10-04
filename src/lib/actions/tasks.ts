@@ -8,20 +8,23 @@ import {
   ActionError,
   type ActionResult,
 } from "@/src/lib/actions/errors";
+import { assertActualDateNotFuture } from "@/src/lib/actions/date-validation";
+import { auditCreate, auditUpdate } from "@/src/lib/audit";
+import { syncProjectProgressClock } from "@/src/lib/actions/project-lifecycle";
 import { mapTask } from "@/src/lib/mappers";
 import { prisma } from "@/src/lib/prisma";
 import {
-  getProjectAccess,
   canDeleteTask,
+  canMutateTask,
+  requireActiveApprovedAssignee,
+  requireAdminProject,
   requireReadableProject,
-  requireSessionUser,
-  requireWritableProject,
+  requireApprovedSessionUser,
 } from "@/src/lib/rbac";
 import {
   addDaysToLocalDateString,
   clampProgress,
   defaultProgressForStatus,
-  isFutureLocalDate,
   localDateStringToDbDate,
   progressFromStatusChange,
   statusFromProgress,
@@ -34,6 +37,34 @@ const TASK_INCLUDE = {
   subtasks: { orderBy: { sortOrder: "asc" as const } },
   comments: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.TaskInclude;
+
+async function loadActorNamesById(
+  actorIds: Iterable<string>,
+): Promise<Map<string, string>> {
+  const ids = [...new Set(actorIds)].filter(Boolean);
+  if (ids.length === 0) return new Map();
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  });
+  return new Map(users.map((user) => [user.id, user.name]));
+}
+
+async function mapTaskWithAuditNames(
+  task: Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>,
+): Promise<Task> {
+  const names = await loadActorNamesById([task.createdBy, task.updatedBy]);
+  return mapTask(task, names);
+}
+
+async function mapTasksWithAuditNames(
+  tasks: Array<Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>>,
+): Promise<Task[]> {
+  const names = await loadActorNamesById(
+    tasks.flatMap((task) => [task.createdBy, task.updatedBy]),
+  );
+  return tasks.map((task) => mapTask(task, names));
+}
 
 function validateTaskTitle(title: string): string {
   const trimmed = title.trim();
@@ -68,7 +99,7 @@ function todayDbDate(): Date {
 }
 
 async function requireWritableTask(taskId: string) {
-  const user = await requireSessionUser();
+  const user = await requireApprovedSessionUser();
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     include: {
@@ -85,9 +116,11 @@ async function requireWritableTask(taskId: string) {
     throw new ActionError("Task not found.", "NOT_FOUND");
   }
 
-  const access = getProjectAccess(user, task.project);
-  if (access !== "write" && access !== "admin") {
-    throw new ActionError("You do not have permission to change this task.", "FORBIDDEN");
+  if (!canMutateTask(user, task.project, task)) {
+    throw new ActionError(
+      "You do not have permission to change this task.",
+      "FORBIDDEN",
+    );
   }
 
   return { user, task };
@@ -137,15 +170,6 @@ function applyStatusSideEffects(
   };
 }
 
-function assertActualDateNotFuture(value: string | null | undefined, label: string) {
-  if (isFutureLocalDate(value)) {
-    throw new ActionError(
-      `${label} cannot be in the future.`,
-      "VALIDATION",
-    );
-  }
-}
-
 export async function listTasksByProject(
   projectId: string,
 ): Promise<ActionResult<Task[]>> {
@@ -156,7 +180,7 @@ export async function listTasksByProject(
       include: TASK_INCLUDE,
       orderBy: [{ status: "asc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
     });
-    return actionSuccess(tasks.map(mapTask));
+    return actionSuccess(await mapTasksWithAuditNames(tasks));
   } catch (error) {
     return actionFailure(error);
   }
@@ -169,7 +193,7 @@ export async function createTask(input: {
   status?: TaskStatus;
 }): Promise<ActionResult<Task>> {
   try {
-    await requireWritableProject(input.projectId);
+    const { user } = await requireAdminProject(input.projectId);
     const title = validateTaskTitle(input.title);
     const description = (input.description ?? "").trim();
     const status: TaskStatus = input.status ?? "todo";
@@ -179,6 +203,8 @@ export async function createTask(input: {
     const initialStartDate = parseLocalDateString(initialStart);
     const initialDueDate = parseLocalDateString(initialDue);
     const progress = defaultProgressForStatus(status);
+    const createStamps = auditCreate(user.id);
+    const touch = auditUpdate(user.id);
 
     const task = await prisma.$transaction(async (tx) => {
       const minSort = await tx.task.aggregate({
@@ -200,13 +226,15 @@ export async function createTask(input: {
           initialDueDate,
           updatedStartDate: initialStartDate,
           updatedDueDate: initialDueDate,
+          ...createStamps,
           ...(status === "in_progress"
             ? { actualStartDate: initialStartDate }
             : {}),
           ...(status === "done"
             ? {
+                // Actuals are historical — never invent a future completion from planned due.
                 actualStartDate: initialStartDate,
-                actualCompletionDate: initialDueDate,
+                actualCompletionDate: initialStartDate,
               }
             : {}),
         },
@@ -214,14 +242,15 @@ export async function createTask(input: {
       });
       await tx.project.update({
         where: { id: input.projectId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
       return created;
     });
 
     revalidatePath(`/projects/${input.projectId}`);
     revalidatePath("/");
-    return actionSuccess(mapTask(task));
+    await syncProjectProgressClock(input.projectId);
+    return actionSuccess(await mapTaskWithAuditNames(task));
   } catch (error) {
     return actionFailure(error);
   }
@@ -232,9 +261,11 @@ export async function updateTaskFields(
   patch: Partial<Task>,
 ): Promise<ActionResult<Task>> {
   try {
-    const { task } = await requireWritableTask(taskId);
+    const { user, task } = await requireWritableTask(taskId);
 
-    const data: Prisma.TaskUpdateInput = {};
+    const data: Prisma.TaskUpdateInput = {
+      ...auditUpdate(user.id),
+    };
     if (patch.title !== undefined) data.title = validateTaskTitle(patch.title);
     if (patch.description !== undefined) data.description = patch.description.trim();
 
@@ -300,22 +331,21 @@ export async function updateTaskFields(
     if (patch.bucket !== undefined) data.bucket = patch.bucket;
     if (patch.assigneeId !== undefined || patch.assigneeName !== undefined) {
       if (patch.assigneeId) {
-        const assigneeUser = await prisma.user.findUnique({
-          where: { id: patch.assigneeId },
-          select: { id: true, name: true },
-        });
-        if (!assigneeUser) {
-          throw new ActionError("Selected assignee was not found.", "VALIDATION");
-        }
+        const assigneeUser = await requireActiveApprovedAssignee(
+          patch.assigneeId,
+        );
         const isProjectMember = await prisma.projectMember.findFirst({
           where: {
             projectId: task.projectId,
             userId: patch.assigneeId,
           },
+          select: { id: true },
         });
-        if (!isProjectMember) {
+        const isOwner = task.project.ownerId === patch.assigneeId;
+        const isSuperPm = assigneeUser.globalRole === "super_pm";
+        if (!isProjectMember && !isOwner && !isSuperPm) {
           throw new ActionError(
-            "Assignee must be a member of this project.",
+            "Assignee must be on the project roster, the owning PM, or a Super PM.",
             "VALIDATION",
           );
         }
@@ -366,14 +396,15 @@ export async function updateTaskFields(
       });
       await tx.project.update({
         where: { id: task.projectId },
-        data: { updatedAt: new Date() },
+        data: auditUpdate(user.id),
       });
       return nextTask;
     });
 
     revalidatePath(`/projects/${task.projectId}`);
     revalidatePath("/");
-    return actionSuccess(mapTask(updated));
+    await syncProjectProgressClock(task.projectId);
+    return actionSuccess(await mapTaskWithAuditNames(updated));
   } catch (error) {
     return actionFailure(error);
   }
@@ -393,7 +424,7 @@ export async function reorderTasks(input: {
   status: TaskStatus;
 }): Promise<ActionResult<{ ok: true }>> {
   try {
-    await requireWritableProject(input.projectId);
+    const { user } = await requireAdminProject(input.projectId);
 
     if (input.orderedTaskIds.length === 0) {
       return actionSuccess({ ok: true });
@@ -418,6 +449,7 @@ export async function reorderTasks(input: {
     }
 
     const byId = new Map(existing.map((task) => [task.id, task]));
+    const touch = auditUpdate(user.id);
 
     await prisma.$transaction(async (tx) => {
       for (let index = 0; index < input.orderedTaskIds.length; index += 1) {
@@ -437,6 +469,7 @@ export async function reorderTasks(input: {
           data: {
             status: input.status,
             sortOrder: index,
+            ...touch,
             ...(effects ?? {}),
             progress: statusChanged
               ? progressFromStatusChange(input.status, current.progress)
@@ -447,7 +480,7 @@ export async function reorderTasks(input: {
 
       await tx.project.update({
         where: { id: input.projectId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
     });
 
@@ -464,31 +497,32 @@ export async function toggleSubtask(
   isCompleted: boolean,
 ): Promise<ActionResult<Task>> {
   try {
-    const { task } = await requireWritableTask(taskId);
+    const { user, task } = await requireWritableTask(taskId);
     const subtask = task.subtasks.find((item) => item.id === subtaskId);
     if (!subtask) {
       throw new ActionError("Checklist item not found.", "NOT_FOUND");
     }
 
+    const touch = auditUpdate(user.id);
     const updated = await prisma.$transaction(async (tx) => {
       await tx.subtask.update({
         where: { id: subtaskId },
-        data: { isCompleted },
+        data: { isCompleted, ...touch },
       });
       const nextTask = await tx.task.update({
         where: { id: taskId },
-        data: { updatedAt: new Date() },
+        data: touch,
         include: TASK_INCLUDE,
       });
       await tx.project.update({
         where: { id: task.projectId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
       return nextTask;
     });
 
     revalidatePath(`/projects/${task.projectId}`);
-    return actionSuccess(mapTask(updated));
+    return actionSuccess(await mapTaskWithAuditNames(updated));
   } catch (error) {
     return actionFailure(error);
   }
@@ -499,35 +533,37 @@ export async function addSubtask(
   title: string,
 ): Promise<ActionResult<Task>> {
   try {
-    const { task } = await requireWritableTask(taskId);
+    const { user, task } = await requireWritableTask(taskId);
     const trimmed = title.trim();
     if (!trimmed) {
       throw new ActionError("Please enter a checklist item name first.", "VALIDATION");
     }
 
     const sortOrder = task.subtasks.length;
+    const touch = auditUpdate(user.id);
     const updated = await prisma.$transaction(async (tx) => {
       await tx.subtask.create({
         data: {
           taskId,
           title: trimmed,
           sortOrder,
+          ...auditCreate(user.id),
         },
       });
       const nextTask = await tx.task.update({
         where: { id: taskId },
-        data: { updatedAt: new Date() },
+        data: touch,
         include: TASK_INCLUDE,
       });
       await tx.project.update({
         where: { id: task.projectId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
       return nextTask;
     });
 
     revalidatePath(`/projects/${task.projectId}`);
-    return actionSuccess(mapTask(updated));
+    return actionSuccess(await mapTaskWithAuditNames(updated));
   } catch (error) {
     return actionFailure(error);
   }
@@ -537,7 +573,7 @@ export async function deleteTask(
   taskId: string,
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await requireSessionUser();
+    const user = await requireApprovedSessionUser();
     const task = await prisma.task.findUnique({
       where: { id: taskId },
       include: {
@@ -561,12 +597,13 @@ export async function deleteTask(
       await tx.task.delete({ where: { id: taskId } });
       await tx.project.update({
         where: { id: task.projectId },
-        data: { updatedAt: new Date() },
+        data: auditUpdate(user.id),
       });
     });
 
     revalidatePath(`/projects/${task.projectId}`);
     revalidatePath("/");
+    await syncProjectProgressClock(task.projectId);
     return actionSuccess({ id: taskId });
   } catch (error) {
     return actionFailure(error);

@@ -6,11 +6,13 @@ import {
   type DropResult,
 } from "@hello-pangea/dnd";
 import type { Task, TaskStatus } from "@/src/lib/types";
+import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress";
 import { defaultProgressForStatus } from "@/src/lib/task-defaults";
 import KanbanColumn from "./KanbanColumn";
 
 export type KanbanBoardProps = {
   tasks: Task[];
+  metricsById?: ReadonlyMap<string, TaskScheduleMetrics>;
   onStatusChange?: (
     taskId: string,
     newStatus: TaskStatus,
@@ -56,6 +58,7 @@ function sortColumnTasks(tasks: Task[]): Task[] {
  */
 export default function KanbanBoard({
   tasks,
+  metricsById,
   onStatusChange,
   onReorder,
   onTaskClick,
@@ -150,6 +153,7 @@ export default function KanbanBoard({
             id={column.id}
             title={column.title}
             tasks={tasksByStatus[column.id]}
+            metricsById={metricsById}
             onTaskClick={onTaskClick}
             onAddTask={
               onAddTask

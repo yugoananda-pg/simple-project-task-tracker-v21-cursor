@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { Droppable } from "@hello-pangea/dnd";
 import { ArrowUp, Plus } from "lucide-react";
 import type { Task, TaskStatus } from "@/src/lib/types";
+import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress";
 import TaskCard from "./TaskCard";
 
 export type KanbanColumnProps = {
   id: TaskStatus;
   title: string;
   tasks: Task[];
+  metricsById?: ReadonlyMap<string, TaskScheduleMetrics>;
   onTaskClick?: (task: Task) => void;
   onAddTask?: () => void;
   addTaskHint?: string;
@@ -20,6 +22,7 @@ export default function KanbanColumn({
   id,
   title,
   tasks,
+  metricsById,
   onTaskClick,
   onAddTask,
   addTaskHint,
@@ -103,6 +106,7 @@ export default function KanbanColumn({
                   key={task.id}
                   task={task}
                   index={index}
+                  metrics={metricsById?.get(task.id)}
                   onClick={onTaskClick}
                   isDragDisabled={readOnly}
                 />

@@ -73,6 +73,15 @@ function createSeedStore(): AppStore {
         "Refresh the marketing site layout, copy, and call-to-action flow.",
       ownerId,
       permittedUserIds: [ownerId],
+      lifecycleStatus: "ACTIVE",
+      progressReached100At: null,
+      completedAt: null,
+      completedBy: null,
+      completionMethod: null,
+      completedPurgeDueAt: null,
+      deletedAt: null,
+      deletedBy: null,
+      purgeDueAt: null,
       createdAt: lastWeek,
       updatedAt: now,
     },
@@ -98,7 +107,11 @@ function createSeedStore(): AppStore {
       progress: 0,
       sortOrder: 0,
       createdAt: lastWeek,
+      createdBy: ownerId,
+      createdByName: "Demo Owner",
       updatedAt: yesterday,
+      updatedBy: ownerId,
+      updatedByName: "Demo Owner",
       subtasks: [
         {
           id: crypto.randomUUID(),
@@ -144,7 +157,11 @@ function createSeedStore(): AppStore {
       progress: 0,
       sortOrder: 0,
       createdAt: yesterday,
+      createdBy: ownerId,
+      createdByName: "Demo Owner",
       updatedAt: now,
+      updatedBy: ownerId,
+      updatedByName: "Demo Owner",
       subtasks: [
         {
           id: crypto.randomUUID(),
@@ -189,7 +206,11 @@ function createSeedStore(): AppStore {
       progress: 0,
       sortOrder: 0,
       createdAt: now,
+      createdBy: ownerId,
+      createdByName: "Demo Owner",
       updatedAt: now,
+      updatedBy: ownerId,
+      updatedByName: "Demo Owner",
       subtasks: [],
       comments: [],
     },
@@ -212,7 +233,11 @@ function createSeedStore(): AppStore {
       progress: 0,
       sortOrder: 0,
       createdAt: yesterday,
+      createdBy: ownerId,
+      createdByName: "Demo Owner",
       updatedAt: yesterday,
+      updatedBy: ownerId,
+      updatedByName: "Demo Owner",
       subtasks: [],
       comments: [],
     },
@@ -315,7 +340,11 @@ function isValidTask(value: unknown): value is Task {
     typeof task.progress === "number" &&
     typeof task.sortOrder === "number" &&
     typeof task.createdAt === "string" &&
+    typeof task.createdBy === "string" &&
+    typeof task.createdByName === "string" &&
     typeof task.updatedAt === "string" &&
+    typeof task.updatedBy === "string" &&
+    typeof task.updatedByName === "string" &&
     subtasksOk &&
     commentsOk
   );
@@ -621,7 +650,11 @@ export function createTask(input: {
     progress: 0,
     sortOrder: 0,
     createdAt: now,
+    createdBy: project.ownerId,
+    createdByName: "Demo Owner",
     updatedAt: now,
+    updatedBy: project.ownerId,
+    updatedByName: "Demo Owner",
     subtasks: [],
     comments: [],
   };

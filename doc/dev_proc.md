@@ -1,1460 +1,562 @@
-# Simple Project Task Tracker 2.0 — Development Process & Execution Log
+# Simple Project Task Tracker 2.1 — Development Process & Execution Log
 
 **Document:** `dev_proc.md`  
-**Product:** Simple Project Task Tracker 2.0  
-**Language:** Australian English  
-**Companion blueprint:** [`./doc/dev_plan.md`](./dev_plan.md)  
-**Repository:** `https://github.com/yugoananda-pg/simple-project-task-tracker-v02.git`  
-**Last updated:** 9 September 2026  
+**Product:** Simple Project Task Tracker **2.1**  
+**Language:** Professional Australian English (`en-AU`)  
+**IDE / workspace:** Cursor (Agent + IDE browser automation for UAT)  
+**Companion documents:** [`dev_plan.md`](./dev_plan.md) · [`dev_req.md`](./dev_req.md) · [`dev_ref.md`](./dev_ref.md) · [`dev_uat.md`](./dev_uat.md) · [`dev_spec.md`](./dev_spec.md) · [`supabase-security.md`](./supabase-security.md)  
+**Repository:** `https://github.com/yugoananda-pg/simple-project-task-tracker-v21-cursor.git`  
+**Edition scope:** Project bootstrap through **Wave 4B UAT PASSED** (Governed programme office); Wave **4C** not started  
+**Last updated:** 5 October 2026  
+
+### Programme delivery status (as-built)
+
+| Wave | Build | UAT | Evidence |
+|------|-------|-----|----------|
+| **4A — Live schedule health** | Shipped | **Accepted** (5 Oct 2026) | §5 + `doc/dev_uat.md` |
+| **4B — Governed programme office** | Shipped | **Accepted** (4–5 Oct 2026) | §11–§12 + `doc/dev_uat.md` |
+| **4C — Executive visualisation** | **Not in current build** | Deferred | Do not start until 4C development completes |
+
+**Note on `dev_spec.md`:** Still reflects the Wave 3 / v2.0 baseline by stakeholder decision. Refresh after Wave 4C closes; do not treat its version banner as the as-built 2.1 stack.
 
 ---
 
-## 1. Executive Summary & Process Intent
+## 1. Purpose of this document
 
-This document is the **living engineering journal** and **step-by-step replication manual** for Simple Project Task Tracker 2.0. It records everything required to recreate the product state achieved at the end of each Wave — not only *what* was built, but *how* it was built.
+This file is the **replication manual and engineering journal** for Release 2.1 through the end of Wave 4B. A reader who follows it—with the companion blueprints—should be able to recreate a product of **equal structure and quality**.
 
-`dev_proc.md` captures:
+It records:
 
-- Environment preparation and Terminal commands (including steps run manually on macOS before or outside AI sessions)
-- AI prompts (or prompt intent) used to drive implementation
-- Files created or modified, and the architectural outcome of each step
-- User Acceptance Testing (UAT) scenarios, results, feedback, and post-UAT refinements
-- A concise replication recipe so any human engineer or future AI collaborator can rebuild the same product state
-
-**Scope of this edition:** Waves 1, 2, and 3 are **100% complete and UAT-verified** against the live Supabase PostgreSQL database. Wave 3 delivered cloud task comments (F-202), the interactive Gantt chart (F-204), the analytics dashboard (F-205), multi-view tab navigation, flexible PIC assignment, seed/RLS hardening, and the full iterative UAT fix series documented in Sections 13–16.
-
-**Living document rule:** After every Wave completes UAT, append a new section (or sub-section) to this file. Do not rewrite completed Wave history unless correcting factual errors.
+1. **Why** each change was requested (stakeholder intent)  
+2. **What** was decided (architecture / product choices)  
+3. **How** it was built (files, migrations, patterns)  
+4. **Prompts** actually used (verbatim where material)  
+5. **UAT** scenarios, defects found, and fixes  
 
 | Document | Role |
 |----------|------|
-| `doc/dev_plan.md` | North Star blueprint — scope, data models, RBAC, phased roadmap |
-| `doc/dev_proc.md` | Execution log — what was actually built, tested, and verified |
+| `dev_plan.md` | North Star — features, models, wave roadmap |
+| `dev_req.md` | Binding functional & non-functional requirements |
+| `dev_ref.md` | Product reference / glossary for stakeholders |
+| `dev_uat.md` | Executable UAT pack and acceptance evidence |
+| `dev_spec.md` | Technical specification (Wave 3 baseline; deferred 2.1 refresh) |
+| `dev_proc.md` | **This file** — what was actually executed |
+
+**Living-document rule:** After each wave’s UAT is accepted, append a new major section. Do not erase earlier wave history except to correct factual errors.
 
 ---
 
-## 2. Environment Preparation & Terminal Setup (macOS)
+## 2. Baseline inherited from Version 2.0
 
-The following operations were executed on macOS. Some occurred **outside AI awareness** (manual Terminal work). They are recorded here so the full setup can be reproduced.
+Release 2.1 did **not** rebuild the tracker from scratch. Work started from the completed **v2.0** codebase (Waves 1–3 already UAT-verified on live Supabase):
 
-### 2.1 Navigation and project folder
+| Inherited capability | Notes |
+|----------------------|--------|
+| Next.js App Router + TypeScript + Tailwind | Package name historically `temp-v2` from scaffolding |
+| Supabase Auth SSR (`@supabase/ssr`) | Cookie sessions; middleware refresh |
+| Prisma 7 + PostgreSQL (Supabase) | Server Actions only; RLS locks PostgREST |
+| Projects, Tasks, Subtasks, TaskComments | Multi-date fields; PIC via `assigneeId` / `assigneeName` |
+| Kanban (`@hello-pangea/dnd`), List, Gantt, Analytics tab shell | Client UI with Server Action mutations |
+| Roles: Super PM / PM / Member / Viewer | Project membership via `ProjectMember` |
+| Seed script + holiday/progress gaps | 2.1 fills schedule-health & governance |
+
+**Prerequisite for replication:** clone or copy a working v2.0 tree (auth env vars, migrated schema through Wave 3), then apply every 2.1 step below in order.
+
+---
+
+## 3. Environment & repository bootstrap (2.1)
+
+### 3.1 Stakeholder prompts
+
+**Prompt A — start 2.1 and clone**
+
+> Now I advance to Simple Project Task Tracker 2.1.  
+> Clone project from simple-project-task-tracket-v02 to this new repository. Then create new github repository, then connect this project 2.1 to the new github repo. Ensure the web app run exactly the same with previous version.
+
+**Prompt B — connect remote**
+
+> I have created new github repo. Continue to connect our workspace to https://github.com/yugoananda-pg/simple-project-task-tracker-v21-cursor.git
+
+### 3.2 What was done
+
+1. Copied the v2.0 working tree into  
+   `/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.1/`  
+   (excluding `node_modules` / `.next`).
+2. Preserved `.env.local` so the app continued to hit the same Supabase project (identical runtime behaviour).
+3. Linked Git remote: `simple-project-task-tracker-v21-cursor`.
+4. Verified `npm install` + `npm run dev` served the prior UI unchanged.
+
+### 3.3 Replication commands (illustrative)
 
 ```bash
-cd "/Users/yugoananda/Library/CloudStorage/OneDrive-Personal/Documents/01. Yugo's/Cursor Project"
-mkdir "Simple Project Task Tracker 2.0"
-cd "Simple Project Task Tracker 2.0"
+# From a clean macOS shell — adjust paths
+mkdir -p "/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.1"
+# Copy v2.0 sources (or: git clone <v02> then retarget remote)
+cd "/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.1"
+npm install
+# Ensure .env.local has DATABASE_URL, DIRECT_URL, NEXT_PUBLIC_SUPABASE_*
+npm run dev
 ```
 
-> **Note:** The workspace was later migrated off OneDrive to  
-> `/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.0/`  
-> because OneDrive caused git sync timeouts and unreliable `.git` operations.  
-> The replication recipe in Section 6 uses the local path.
-
-### 2.2 Next.js scaffolding (NPM directory naming workaround)
-
-`create-next-app` can reject folder names with spaces. The workaround used a temporary folder name, then copied files into the target directory:
-
 ```bash
-npx create-next-app@latest temp-v2
-ditto temp-v2/ .
-rm -rf temp-v2
-```
-
-**Stack chosen:** Next.js 16 (App Router), TypeScript, Tailwind CSS, ESLint.
-
-### 2.3 Git initialisation and GitHub remote
-
-```bash
-git init
-git add .
-git commit -m "docs & feat: initial setup v2.0 with Next.js scaffolding and dev_plan.md"
-git branch -M main
-git remote add origin https://github.com/yugoananda-pg/simple-project-task-tracker-v02.git
+git remote add origin https://github.com/yugoananda-pg/simple-project-task-tracker-v21-cursor.git
 git push -u origin main
 ```
 
-### 2.4 Local domain setup (F-206 — Wave 1 prep)
+---
 
-```bash
-sudo sh -c 'echo "127.0.0.1 tracker.local" >> /etc/hosts'
-```
+## 4. Requirements & blueprint iteration (pre–Wave 4A)
 
-This prepares the machine for future local development under `http://tracker.local`. Full Next.js hostname binding is deferred to Wave 2 integration notes in `dev_plan.md`.
+Before coding Wave 4A features, the stakeholder expanded the 2.1 brief. Documents were rewritten in **professional Australian English**.
 
-### 2.5 UI and drag-and-drop dependencies
+### 4.1 Universal audit + project lifecycle + completed visibility
 
-```bash
-npm install @hello-pangea/dnd lucide-react
-```
+**Prompt C (Bahasa Indonesia — intent summarised in English below)**
 
-**Security note:** npm may emit a benign `install-scripts` warning (e.g. for `unrs-resolver` postinstall). This was reviewed and accepted for Wave 1; no suspicious scripts were approved beyond standard package installs.
+> Act as BA / Technical Lead / Solution Architect / System Analyst / PM.  
+> Analyse `dev_plan.md`, `dev_ref.md`, `dev_req.md`.  
+> Ensure every data change records **when and by whom** it was created and last edited.  
+> Add: Completed Projects (prefer that name over “Archive”); auto-complete after 30 days at 100%; soft-delete with Super PM restore; hard delete + 30-day purge; 5-year completed retention purge; `PurgedProject` tombstone table; Super PM controls who may see Completed projects.  
+> Update all three docs in detail.
 
-### 2.6 Verify the dev server
+**Decisions locked into the docs:**
 
-```bash
-npm run dev
-# Open http://localhost:3000
-```
+| Topic | Decision |
+|-------|----------|
+| Nomenclature | **Completed Projects** (not Archive) |
+| Audit | Four stamps: `createdAt` / `createdBy` / `updatedAt` / `updatedBy` (NOT NULL) |
+| Soft-delete | `deletedAt` flag; Super PM restore; 30-day physical purge |
+| Tombstone | `PurgedProject` before physical delete |
+| Completed visibility | `User.completedProjectAccess` = `NONE` \| `ASSIGNED` \| `ALL` |
+| Injection | `withAuditSession` on Server Actions; `SYSTEM_ACTOR_ID` for jobs |
+
+### 4.2 Mermaid roadmap rendering
+
+**Prompts D–E:** Chapter 8 Mermaid Gantt failed in the Markdown preview (“Mermaid Syntax Error”). Replaced with a **flowchart + master schedule table + ASCII calendar** that renders reliably while remaining equally detailed (`dev_plan.md` §8).
+
+### 4.3 Issue Log + Issue Intelligence
+
+**Prompt F**
+
+> Forgot Issue Log inside each project — fix progress, multi-dates, PIC, etc. Elaborate and incorporate into markdown docs (AU English).
+
+**Prompt G** (stated twice)
+
+> Ensure all Issue Log activity/progress is reflected on the per-project Analytics dashboard. Document thoroughly.
+
+**Decisions:**
+
+- Fifth hub tab: **Issue Log** (not a Task; excluded from $W_i$ / Project PS / Schedule S-Curve).  
+- Append-only `IssueActivity`; Analytics **Issue Intelligence** pane (Wave 4C charts; Wave 4B register).  
+- Feature ID **F-2119** added (catalogue is F-2101–F-2118 **plus** F-2119).
+
+### 4.4 Agile waves with per-wave UAT
+
+**Prompt H**
+
+> You split implementation into Wave 4A / 4B / 4C. Every wave must produce usable deliverables. Prefer UAT per wave (agile), not one mega-UAT at the end.
+
+**Locked wave model (`dev_plan.md`):**
+
+| Wave | Theme | Exit |
+|------|--------|------|
+| **4A** | Live schedule health | UAT-401–404, UAT-411 |
+| **4B** | Governed programme office | UAT-405, UAT-405A–C, UAT-406–407, UAT-412–422 |
+| **4C** | Executive visualisation | UAT-408–410, UAT-423–425 + UAT-R |
 
 ---
 
-## 3. Blueprint Setup (The North Star)
+## 5. Wave 4A — Live schedule health
 
-Before feature code, the architectural blueprint was generated and saved as **`./doc/dev_plan.md`**.
+### 5.1 Kick-off prompts
 
-### 3.1 Purpose
+**Prompt I**
 
-`dev_plan.md` is the fixed North Star for Version 2.0. It defines scope, data models, API intent, RBAC, edge cases, and the three-Wave roadmap.
+> Okay, let's start the first Wave. Let's do it step by step as per our plan written in `dev_plan.md`.
 
-### 3.2 Seven core sections (summary)
+**Prompt J** (×2)
 
-| Section | Contents |
-|---------|----------|
-| **1. Project Overview** | Transition from v1 LocalStorage MVP to multi-user enterprise tracker |
-| **2. Feature List** | F-201 Kanban · F-202 Planner details · F-203 RBAC · F-204 Gantt · F-205 Analytics · F-206 `tracker.local` |
-| **3. Data Models** | `User`, `Project`, `Task`, `Subtask`, `TaskComment`; enums for role, status, priority, bucket |
-| **4. API Surface** | Auth, project/task CRUD, checklist/comment mutations, analytics aggregates |
-| **5. Auth & RBAC** | Super PM / PM / Member / Viewer privilege matrix |
-| **6. Edge Cases** | Out-of-scope items, error states, integrity rules |
-| **7. Phased Roadmap** | Wave 1 UI · Wave 2 cloud/RBAC · Wave 3 Gantt/analytics/comments |
+> let's continue to the next step. Let me know when it comes to UAT time.
 
-### 3.3 AI prompt (summary)
-
-> *"Please create `./doc/dev_plan.md` as the North Star blueprint for Version 2.0, structured in seven sections, in Australian English, inheriting and expanding v1 capabilities."*
-
-**Outcome:** `doc/dev_plan.md` committed as the canonical scope document for all subsequent Waves.
+Stages executed: **W4A-1 → W4A-2 → W4A-3 → W4A-U**.
 
 ---
 
-## 4. Wave 1 Implementation Journal (Step-by-Step Execution)
+### 5.2 W4A-1 — Schema, migrations, audit injection
 
-Wave 1 delivers **F-201** (Kanban) and **F-202** (Planner-style task details) with client-first LocalStorage persistence. Cloud auth and RBAC are intentionally deferred to Wave 2.
+**Objective:** Full 2.1 Prisma baseline (including Issue/lifecycle tables unused until later waves) and mandatory audit stamps on writes.
 
----
+**Primary outputs:**
 
-### Step 1 — Data Model Expansion
+| Artefact | Purpose |
+|----------|---------|
+| `prisma/schema.prisma` | `Holiday`, `Milestone`, `Issue*`, `PurgedProject`, lifecycle columns on `Project`, four stamps on operational models |
+| Migration `20260912120000_wave4a1_schema_audit_lifecycle_issues` | Apply schema to Supabase |
+| `src/lib/audit.ts` | `auditCreate` / `auditUpdate` / `withAuditSession` / `withSystemAuditSession` |
+| `SYSTEM_ACTOR_ID` | `00000000-0000-4000-8000-000000000001` |
 
-| | |
-|--|--|
-| **Feature** | Foundation for F-201 / F-202 (and later waves) |
-| **Prompt (summary)** | Update `src/lib/types.ts` per Section 3 of `dev_plan.md`. Export union types `GlobalRole`, `TaskStatus`, `TaskPriority`, `TaskBucket` and interfaces `User`, `Project`, `Subtask`, `TaskComment`, `Task` (with optional nested `subtasks` / `comments`). |
-| **Files** | `src/lib/types.ts` *(created)* |
-| **Outcome** | Strict TypeScript domain layer aligned to the North Star schema. Date fields as `string \| null`; planner enums as string unions. Typecheck passed. |
+**Engineering rules taught here:**
 
----
+- Actor columns are UUIDs **without blocking FKs** (Safe User Deletion later).  
+- Inserts set all four stamps; updates never touch `created*`.  
+- Later waves must not re-baseline the database casually.
 
-### Step 2 — Drag-and-Drop Kanban Board UI (F-201)
-
-| | |
-|--|--|
-| **Feature ID** | F-201 |
-| **Prompt (summary)** | Create client components under `src/components/kanban/`: `TaskCard.tsx` (`Draggable`), `KanbanColumn.tsx` (`Droppable`), `KanbanBoard.tsx` (`DragDropContext`) for To Do / Doing / Completed columns. Australian English labels; overdue cues; DD/MM/YYYY date layout; `onStatusChange` / `onTaskClick`; SSR-safe client gating for `@hello-pangea/dnd`. |
-| **Files** | `src/components/kanban/TaskCard.tsx`, `KanbanColumn.tsx`, `KanbanBoard.tsx` *(created)* |
-| **Dependencies** | `@hello-pangea/dnd`, `@/src/lib/types` |
-| **Outcome** | Interactive three-column Kanban with priority/bucket badges, PIC placeholder, overdue styling, empty drop targets, and `useSyncExternalStore` client readiness gate to prevent hydration mismatches. |
+**Quality gate:** `npx prisma migrate deploy` · `npx tsc --noEmit`.
 
 ---
 
-### Step 3 — MS Planner–Style Task Details Drawer (F-202)
+### 5.3 W4A-2 — Holiday engine and Super PM UI
 
-| | |
-|--|--|
-| **Feature ID** | F-202 |
-| **Prompt (summary)** | Create `TaskDetailDrawer.tsx`: right slide-over with backdrop; Escape/backdrop close; editable title/description; bucket, priority, status; PIC placeholder; six-date grid (planned/updated/actual); checklist with progress bar; comments UI as Wave 3 placeholder. |
-| **Files** | `src/components/kanban/TaskDetailDrawer.tsx` *(created)* |
-| **Dependencies** | `lucide-react` (close icon), `@/src/lib/types` |
-| **Outcome** | Planner-style drawer wired to parent callbacks: `onTaskChange`, `onToggleSubtask`, `onAddSubtask`, `onPostComment`. Dark-mode-friendly Tailwind styling; Australian English copy throughout. |
+**Objective:** Working-day maths + Super PM CRUD at `/settings/holidays`.
 
----
+**Primary outputs:**
 
-### Step 4 — Integration & View Switcher
+| Artefact | Purpose |
+|----------|---------|
+| `src/lib/analytics/working-days.ts` | Mon–Fri minus holiday set; duration / elapsed helpers |
+| `src/lib/actions/holidays.ts` | `listHolidays`, `createHoliday`, `updateHoliday`, `deleteHoliday` |
+| `app/settings/holidays/page.tsx` | Server page (Super PM only) |
+| `src/components/settings/HolidayCalendarClient.tsx` | Client CRUD UI |
+| Settings hub entry | `app/settings/page.tsx` |
 
-| | |
-|--|--|
-| **Feature IDs** | F-201 & F-202 integration |
-| **Prompt (summary)** | Wire project detail view with List View \| Kanban View toggle; synchronise status and drawer mutations via local store; keep hydration-safe rendering; add routes and home project list. |
-| **Files created/modified** | `src/lib/store.ts`, `src/components/projects/ProjectDetailView.tsx`, `src/components/tasks/TaskListView.tsx`, `app/page.tsx`, `app/layout.tsx`, `app/projects/[id]/page.tsx`, `app/globals.css` |
-| **Outcome** | End-to-end Wave 1 product: home project list → project hub with view switcher → Kanban or list → task detail drawer. LocalStorage seed data; view fade transition; drawer slide animation. `npm run build` and lint verified. |
-
-#### Supporting store design (`src/lib/store.ts`)
-
-| Mechanism | Purpose |
-|-----------|---------|
-| `STORAGE_KEY = "sptt_v2_wave1"` | Versioned LocalStorage blob |
-| `SERVER_SNAPSHOT` | Stable empty store for SSR (`useSyncExternalStore`) |
-| `subscribeStore` / `getStoreSnapshot` | Reactive client updates without hydration loops |
-| Seed project + tasks | Demo data on first visit |
+**UAT hook:** UAT-401 — Tuesday holiday turns Mon–Wed task from 3 → **2** working days on the List row.
 
 ---
 
-## 5. User Acceptance Testing (UAT) Log & Refinement Iterations
+### 5.4 W4A-3 — Weights, PS, flags on live surfaces
 
-Wave 1 UAT was executed against the integrated product. Five checks were defined; all **passed** after post-UAT refinements.
+**Objective:** Wire schedule health into **existing** List / Kanban / Gantt / drawer / landing cards (not a library-only deliverable).
 
-### 5.1 UAT matrix
+**Primary outputs:**
 
-| Check | Scenario | Expected behaviour | Result |
-|-------|----------|--------------------|--------|
-| **1** | **View Switcher** | Smooth transition between List View and Kanban View (To Do, Doing, Completed) | **PASS** |
-| **2** | **Drag-and-Drop Kanban** | Cards slide across columns; status updates instantly and persists in store | **PASS** |
-| **3** | **Detail Drawer** | Clicking a task card opens the right-aligned slide-over drawer | **PASS** |
-| **4** | **Planner Fields & Hover Tooltips** | Live field updates; checklist progress; disabled buttons show **instant** tooltips (no browser delay) | **PASS** *(after iteration)* |
-| **5** | **Multi-Date Tracking & Input Fix** | Native HTML5 date pickers; smooth keyboard entry for DD/MM/YYYY; no focus loss when typing 4-digit years | **PASS** *(after iteration)* |
+| Artefact | Purpose |
+|----------|---------|
+| `src/lib/analytics/weighted-progress.ts` | $W_i$, $P_{\text{target}}$ (capped), $P_{\text{actual}}$, Project PS, 11 Status Flags |
+| `src/lib/analytics/weighted-progress.test.ts` | Unit tests (engineering gate) |
+| `ProgressPairBadges.tsx` | Shared Actual / Target presentation |
+| `StatusFlagBadge.tsx` | Shared 11-state pill with contrast-safe tokens |
+| Surfaces updated | `TaskListView`, `TaskCard`, `TaskDetailDrawer`, `ProjectGanttView`, `ProjectDetailView`, `HomePageClient` |
 
-### 5.2 UAT Check 4 — iteration detail
+**Formula reminders (as implemented):**
 
-**User feedback:** Disabled primary buttons (e.g. “Add checklist item”, “Post comment”) showed no helpful guidance, or only after a long native tooltip delay.
+$$
+W_i = \frac{D_{\text{planned}_i}}{\sum_k D_{\text{planned}_k}}
+$$
 
-**Resolution:**
+$$
+P_{\text{target}} = \min\left(100\%,\ \frac{E_{\text{elapsed}}}{D_{\text{planned}}}\times 100\%\right)
+$$
 
-- Replaced HTML `title` attributes with instant Tailwind `group-hover` tooltips (`transition-none duration-0`)
-- Wrapped disabled buttons so hover works despite `pointer-events` on `<button disabled>`
-- Australian English copy:
-  - Checklist: *“Please enter a checklist item name first”*
-  - Comment: *“Please enter comment text first”*
-  - Add task (project page): *“Please enter a task title first”*
-
-**Files:** `TaskDetailDrawer.tsx`, `ProjectDetailView.tsx`
-
-### 5.3 UAT Check 5 — iteration detail
-
-**User feedback:** Manual keyboard entry in date fields lost focus or truncated digits (e.g. typing `2026` corrupted the year).
-
-**Resolution:**
-
-- Date inputs use **uncontrolled** `type="date"` with `defaultValue`
-- Parent store syncs **only on `onBlur`**, not on every keystroke
-- Prevents React re-render cycles from resetting the native date control mid-edit
-- DD/MM/YYYY captions shown below each field (Australian English)
-
-**Files:** `TaskDetailDrawer.tsx` (`AuDateField` component)
-
-### 5.4 Additional refinements (post-UAT)
-
-| Issue | Resolution | Files |
-|-------|------------|-------|
-| `getServerSnapshot should be cached` React warning | Module-level `SERVER_SNAPSHOT` constant returned by `getServerServerSnapshot()` | `src/lib/store.ts` |
-| Top banner / project card contrast | Slate header (`bg-slate-800`) on zinc canvas; white project cards with subtle shadow | `app/layout.tsx`, `app/page.tsx` |
-| Redundant secondary page title | Removed duplicate “Simple Project Task Tracker 2.0” label below header; page opens with **Projects** heading only | `app/page.tsx` |
-| Drawer horizontal overflow | `overflow-x-hidden overflow-y-auto max-w-full min-w-0` on scroll container; checklist form `flex-col sm:flex-row w-full min-w-0`; input `flex-1 min-w-0`, button `shrink-0` | `TaskDetailDrawer.tsx` |
-| Workspace reliability | Migrated repo from OneDrive to `/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.0/`; re-cloned from GitHub and overlaid Wave 1 files | — |
-
-### 5.5 UAT conclusion
-
-**All five Wave 1 verification scenarios passed.** Wave 1 is closed and ready for Wave 2 kick-off per `dev_plan.md` Section 7.
+Completed-task PS uses schedule-span / planned duration so late completions classify as **Completed Late / Severely Late**, not Ahead.
 
 ---
 
-## 6. Step-by-Step Replication Manual (How to Recreate Wave 1)
+### 5.5 Pre-UAT UI refinements (stakeholder prompts)
 
-Follow this recipe from a clean macOS environment to reproduce the exact Wave 1 product state.
+These ran **before** formal UAT acceptance and are part of the 4A quality bar.
 
-### Phase A — Scaffold and blueprint
-
-1. Create the project folder and scaffold Next.js (Section 2.2).
-2. Initialise git and push to GitHub (Section 2.3).
-3. Generate or copy `doc/dev_plan.md` (Section 3).
-4. Install dependencies (Section 2.5):
-   ```bash
-   npm install @hello-pangea/dnd lucide-react
-   ```
-
-### Phase B — Domain and UI (AI-assisted or manual)
-
-5. Create `src/lib/types.ts` with all Wave 1 domain types (Step 1).
-6. Create Kanban components (Step 2):
-   - `src/components/kanban/TaskCard.tsx`
-   - `src/components/kanban/KanbanColumn.tsx`
-   - `src/components/kanban/KanbanBoard.tsx`
-7. Create `src/components/kanban/TaskDetailDrawer.tsx` (Step 3).
-8. Create Wave 1 store and integration layer (Step 4):
-   - `src/lib/store.ts`
-   - `src/components/tasks/TaskListView.tsx`
-   - `src/components/projects/ProjectDetailView.tsx`
-   - `app/page.tsx`, `app/layout.tsx`, `app/projects/[id]/page.tsx`
-   - `app/globals.css` (view fade animation)
-
-### Phase C — Verify
-
-9. Run quality checks:
-   ```bash
-   npx tsc --noEmit
-   npm run lint
-   npm run build
-   npm run dev
-   ```
-10. Manual smoke test:
-    - Home page lists seed project **Website Redesign**
-    - Open project → toggle List / Kanban
-    - Drag task between columns
-    - Click task → drawer opens; edit fields, checklist, comment placeholder
-    - Confirm disabled-button tooltips appear instantly
-    - Confirm date fields accept keyboard entry without focus loss
-
-### Phase D — UAT refinements (include in replication)
-
-11. Apply post-UAT fixes documented in Section 5 (tooltips, date blur-sync, layout overflow, contrast, `SERVER_SNAPSHOT`).
-12. Re-run build and repeat UAT matrix (Section 5.1).
-
-### Phase E — Optional local domain
-
-13. Add hosts entry (Section 2.4) when ready to test under `tracker.local`.
+| # | Prompt intent | Fix |
+|---|---------------|-----|
+| 1 | Landing / project hub / Kanban / drawer must show **Actual + Target**, not PS-first clutter; explain 150% target | Introduced Progress pair badges; investigated uncapped target |
+| 2 | Cap target at **100%** task & project; declutter Kanban (hide priority, process group, CUSTOM PIC) | Cap in engine; Kanban card chrome reduced |
+| 3 | Remove Gantt project status strip under tabs | Removed; rely on header under description |
+| 4 | Gantt: Status Flag in Task column; Progress column with stacked Actual/Target; no CUSTOM | `ProjectGanttView` columns + docs touch-up |
+| 5 | Date header covers Progress; late completed flagged Ahead | z-index / sticky header; completed PS uses schedule span |
+| 6 | Hide Overdue pill; fix flag contrast (esp. Completed Severely Late); bars over date header | CSS tokens; hide Overdue beside Status Flags |
 
 ---
 
-## Appendix A — Wave 1 file inventory
+### 5.6 W4A-U — UAT pack and defect closure
 
-| Path | Role |
-|------|------|
-| `doc/dev_plan.md` | North Star blueprint |
-| `doc/dev_proc.md` | This execution log |
-| `src/lib/types.ts` | Domain types |
-| `src/lib/store.ts` | Wave 1 LocalStorage store + `SERVER_SNAPSHOT` |
-| `src/components/kanban/TaskCard.tsx` | Draggable task card |
-| `src/components/kanban/KanbanColumn.tsx` | Droppable column |
-| `src/components/kanban/KanbanBoard.tsx` | Drag-and-drop board |
-| `src/components/kanban/TaskDetailDrawer.tsx` | Planner-style drawer |
-| `src/components/tasks/TaskListView.tsx` | Traditional list view |
-| `src/components/projects/ProjectDetailView.tsx` | Project hub + view switcher |
-| `app/page.tsx` | Home — project list |
-| `app/layout.tsx` | Root layout + header |
-| `app/projects/[id]/page.tsx` | Project detail route |
-| `app/globals.css` | Global styles + view fade |
+**Prompt K — UAT execution help**
 
----
+> Running UAT-401–404, UAT-411. For UAT-403 give a 20/09/2026 example with max target 100%. For UAT-411 show login **names**, not UUIDs. Update docs if needed.
 
-## Appendix B — Wave completion tracker
+**Prompt L — date race + drawer**
 
-| Wave | Focus | Status |
-|------|-------|--------|
-| **Wave 1** | F-201 Kanban + F-202 Planner drawer (client UI) | **Complete — UAT verified** |
-| **Wave 2** | Supabase Auth, PostgreSQL/Prisma, RBAC (F-203) | **Complete — UAT verified** |
-| **Wave 3** | Gantt, analytics, cloud comments (F-204, F-205, F-202 comments) | **Complete — UAT verified** |
+> Dates sometimes revert after edit; hide audit stamps in the task drawer. Update docs if needed.
 
----
+#### Official Wave 4A pack (accepted)
 
-## 7. Wave 2 Overview & Architectural Shift
+| ID | Check | Result |
+|----|-------|--------|
+| UAT-401 | Tuesday holiday → Mon–Wed = 2 WD on List | Pass |
+| UAT-402 | 10 WD / 2 WD → weights 83.3% / 16.7% on List | Pass |
+| UAT-403 | As-of 20/09/2026 example: Updated Start `07/09/2026`, Due `18/09/2026` (10 WD), 50% actual → Target **100%** (capped), PS **50%**, **Critically Delayed** | Pass (pack text corrected from old 150% wording) |
+| UAT-404 | Unstarted next week → **Due to Commence** | Pass |
+| UAT-411 | User A creates / User B edits → List shows **names** for Created by / Updated by | Pass after name resolution |
 
-Wave 2 transitions Simple Project Task Tracker 2.0 from the Wave 1 **LocalStorage MVP** to a **full-stack cloud architecture**. All project, task, and user profile data now persists in **Supabase PostgreSQL**; authentication is handled by **Supabase Auth**; and the application layer uses **Next.js App Router** Server Actions with **Prisma 7 ORM** and a PostgreSQL driver adapter.
+#### Defects fixed during UAT
 
-### 7.1 Before and after
+1. **Audit display:** Persist UUID; resolve `User.name` in mappers (`createdByName` / `updatedByName` are **DTO fields**, not DB columns).  
+2. **Date save races:** Mutation queue + `mergeTasksPreferNewer` in `ProjectDetailView` so older responses cannot clobber newer edits.  
+3. **Drawer:** Audit stamps removed from `TaskDetailDrawer` (List remains the inspection surface).
 
-| Aspect | Wave 1 | Wave 2 |
-|--------|--------|--------|
-| **Persistence** | Browser `LocalStorage` (`src/lib/store.ts`) | Supabase PostgreSQL via Prisma 7 |
-| **Authentication** | None (open client UI) | Supabase Auth (email/password) |
-| **Authorisation** | None | RBAC engine (`super_pm`, `pm`, `member`, `viewer`) |
-| **Data access** | Client-side store mutations | Server Actions + middleware route protection |
-| **Session** | N/A | Cookie-based SSR session via `@supabase/ssr` |
-
-### 7.2 Architectural layers
-
-```
-Browser (React client components)
-    ↓ Server Actions / server components
-Next.js App Router (app/, src/lib/actions/)
-    ↓ RBAC checks (src/lib/rbac.ts)
-Prisma 7 Client + @prisma/adapter-pg (src/lib/prisma.ts)
-    ↓ DATABASE_URL (Supabase transaction pooler, port 6543)
-Supabase PostgreSQL
-
-Supabase Auth ←→ @supabase/ssr (client, server, middleware)
-    ↓ Session cookies refreshed in src/middleware.ts
-Protected routes: /, /projects, /projects/*
-```
-
-### 7.3 Key design decisions
-
-- **Prisma 7 configuration:** Database URLs live in `prisma.config.ts` (not in `schema.prisma`). Migrations use `DIRECT_URL` (session pooler, port 5432); runtime queries use `DATABASE_URL` (transaction pooler, port 6543).
-- **Supabase IPv4 pooler:** Direct connection to `db.*.supabase.co` failed on macOS (IPv6-only host). All connections were routed through **`aws-0-ap-northeast-1.pooler.supabase.com`**.
-- **Profile bootstrap:** On first sign-in/sign-up, a `User` row is created in PostgreSQL keyed by Supabase Auth UUID. The **first registered user** is auto-promoted to **`super_pm`**; all subsequent users default to **`member`**.
-- **Wave 1 UI preserved:** Kanban, List View, and Task Detail Drawer components were retained and rewired to Server Actions rather than LocalStorage.
-
-### 7.4 Wave 2 feature coverage
-
-| Feature ID | Capability | Status |
-|------------|------------|--------|
-| **F-203** | RBAC — Super PM / PM / Member / Viewer | **Delivered** |
-| **F-201** | Kanban drag-and-drop (cloud-backed) | **Delivered** |
-| **F-202** | Planner-style task details (cloud-backed) | **Delivered** |
-| **F-204–F-206** | Gantt, analytics, `tracker.local` | Deferred to Wave 3 |
+**Gate decision:** **Wave 4A UAT = PASSED.**
 
 ---
 
-## 8. Wave 2 — Terminal Commands & Environment Setup Log (macOS / Cursor Terminal)
+### 5.7 Post-UAT audit actor-master clarification
 
-The following operations were executed on macOS in the Cursor Terminal. Steps marked **(manual)** occurred outside AI awareness and are recorded here for exact replication.
+**Prompt M**
 
-### 8.1 Package installation
+> Confirm create/update audit recording. Prefer a master table of actor id+name and JOINs in Supabase (no name columns on every table). Follow DB best practices; update docs if needed.
 
-```bash
-cd "/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.0"
+**Best-practice outcome (FR-AUD-08):**
 
-# Supabase Auth + Prisma ORM
-npm install @supabase/supabase-js @supabase/ssr @prisma/client
+- **`User` is the actor master** — do **not** invent a second `Actor` table.  
+- Do **not** denormalise `createdByName` on every operational table.  
+- Seed durable **System** row (`system@internal`) so JOINs resolve job actors.  
+- Soft UUID references (no blocking FK) for Safe User Deletion; prefer soft-deactivate in 4B.  
+- Migration path: temporary denormalised-name migration was applied then **dropped** via `20260920110000_wave4a_actor_master_join`; System user upserted.
 
-# Prisma CLI (dev dependency)
-npm install -D prisma
+**Supabase inspection pattern:**
 
-# Prisma 7 PostgreSQL driver adapter (required at runtime)
-npm install @prisma/adapter-pg pg
-npm install -D @types/pg   # if TypeScript types are needed separately
-```
-
-### 8.2 Environment configuration (`.env.local`)
-
-Create or update `.env.local` in the project root with Supabase project credentials. **Do not commit this file.**
-
-**Password URL encoding:** If the database password contains special characters (e.g. `@`), encode them for the connection string. Example: `NewMoon@2026` → `NewMoon%402026`.
-
-**Supabase pooler endpoints (ap-northeast-1):**
-
-| Variable | Purpose | Host / port |
-|----------|---------|-------------|
-| `DIRECT_URL` | Prisma migrations & CLI (`prisma migrate dev`) | `aws-0-ap-northeast-1.pooler.supabase.com:5432` (Session pooler) |
-| `DATABASE_URL` | Application runtime queries | `aws-0-ap-northeast-1.pooler.supabase.com:6543` (Transaction pooler) |
-
-Example structure (replace placeholders with your Supabase project values):
-
-```env
-# Supabase Auth (Project Settings → API)
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
-
-# PostgreSQL — Session pooler (migrations / DIRECT_URL)
-DIRECT_URL=postgresql://postgres.<project-ref>:NewMoon%402026@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres
-
-# PostgreSQL — Transaction pooler (runtime / DATABASE_URL)
-DATABASE_URL=postgresql://postgres.<project-ref>:NewMoon%402026@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
-```
-
-> **Connectivity note:** Attempting to connect via `db.<project-ref>.supabase.co` returned **P1001** (host unreachable) on macOS due to IPv6-only resolution. The Supavisor IPv4 pooler host above resolved the issue.
-
-### 8.3 Prisma initialisation and migration
-
-```bash
-# Generate Prisma Client after schema changes
-npx prisma generate
-
-# Apply initial migration to Supabase PostgreSQL
-npx prisma migrate dev --name init
-```
-
-**Outcome:** Migration `prisma/migrations/20260828233113_init/` applied successfully. Tables `User`, `Project`, `ProjectMember`, `Task`, `Subtask`, and `TaskComment` created with UUID primary keys and cascade delete rules.
-
-### 8.4 Git checkpoints **(manual)**
-
-```bash
-git add .
-git commit -m "feat(wave-2): setup prisma schema and apply initial supabase postgresql migration"
-git push origin main
-```
-
-Additional Wave 2 implementation files (auth, RBAC, Server Actions, UI integration, UAT refinements) were developed iteratively in Cursor AI sessions. Commit and push after each stable checkpoint using the same pattern:
-
-```bash
-git add .
-git commit -m "<concise message describing the Wave 2 milestone>"
-git push origin main
-```
-
-### 8.5 Quality verification
-
-```bash
-npm run lint
-npm run build
-npm run dev
-# Open http://localhost:3000 — sign in, create project, drag Kanban cards, refresh to confirm persistence
+```sql
+SELECT t.id, t.title,
+       cu.name AS created_by_name,
+       uu.name AS updated_by_name
+FROM "Task" t
+LEFT JOIN "User" cu ON cu.id = t."createdBy"
+LEFT JOIN "User" uu ON uu.id = t."updatedBy";
 ```
 
 ---
 
-## 9. Wave 2 Technical Implementation Steps
+## 6. Feature status at end of Wave 4A
+
+Catalogue reminder: **F-2101–F-2118 plus F-2119** (19 IDs); some split across waves (F-2109a/b, F-2114a/b).
+
+| ID | Feature | 4A status |
+|----|---------|-----------|
+| F-2101 | Holiday & working days | **Done** |
+| F-2102 | Weighted progress | **Done** (wired to UI) |
+| F-2103 | PS & 11 Status Flags | **Done** (wired to UI) |
+| F-2118 | Universal mutation audit | **Done** (4A increment) |
+| F-2109a | Landing-card schedule health | **Done** |
+| F-2104–F-2108, F-2115–F-2117, F-2119, F-2114a | Governance / Issue Log / lifecycle | Schema may exist; **UI Wave 4B** |
+| F-2110–F-2113, F-2114b, F-2111 charts | High-density grid, Analytics panes, portfolio, About | **Wave 4C** |
+
+**Task List enhancements:** 4A adds working-day duration, $W_i$, Actual/Target, Status Flag, audit names. The **high-density inline grid** is **F-2110 / Wave 4C**, not 4B.
 
 ---
 
-### Step 1 — Backend & Database Schema Setup
-
-| | |
-|--|--|
-| **Feature** | F-203 foundation — PostgreSQL persistence layer |
-| **Prompt (summary)** | Define Prisma schema aligned to `dev_plan.md` Section 3; configure Prisma 7 with external datasource URLs; apply initial migration to Supabase. |
-| **Files created** | `prisma/schema.prisma`, `prisma.config.ts`, `prisma/migrations/20260828233113_init/migration.sql`, `src/lib/prisma.ts`, `src/lib/mappers.ts` |
-| **Outcome** | Full relational schema with UUID PKs, enums, and cascade relationships. Prisma Client generated with `@prisma/adapter-pg` singleton for Next.js hot-reload safety. |
-
-#### Schema entities (`prisma/schema.prisma`)
-
-| Model | Purpose | Key relationships |
-|-------|---------|-------------------|
-| **User** | Profile row keyed by Supabase Auth UUID | Owns projects; project membership; task assignment; comments |
-| **Project** | Top-level workspace | `ownerId` → User; has many Tasks and ProjectMembers |
-| **ProjectMember** | Join table for permitted users | `projectId` + `userId` unique; cascade on delete |
-| **Task** | Kanban/list work item | Belongs to Project; optional assignee; status/priority/bucket enums |
-| **Subtask** | Checklist item on a Task | Cascade delete with parent Task |
-| **TaskComment** | Comment on a Task | Links Task and User; cascade delete |
-
-#### Enums
-
-| Enum | Values |
-|------|--------|
-| `GlobalRole` | `super_pm`, `pm`, `member`, `viewer` |
-| `TaskStatus` | `todo`, `in_progress`, `done` |
-| `TaskPriority` | `urgent`, `important`, `medium`, `low` |
-| `TaskBucket` | `initiating`, `planning`, `executing`, `monitoring`, `closing` |
-
-#### Prisma 7 configuration (`prisma.config.ts`)
-
-- Loads `.env.local` via `dotenv`
-- Points migrations at `DIRECT_URL` (session pooler, port 5432)
-- Schema path: `prisma/schema.prisma`
-
-#### Runtime client (`src/lib/prisma.ts`)
-
-- Uses `PrismaPg` adapter with `DATABASE_URL` (transaction pooler, port 6543)
-- Module-level singleton prevents connection exhaustion during `next dev` hot reload
-
----
-
-### Step 2 — Supabase Auth Helpers & Route Protection Middleware
-
-| | |
-|--|--|
-| **Feature** | Authentication + session management |
-| **Prompt (summary)** | Implement Supabase SSR helpers for browser, server, and middleware; protect app routes; create login and register pages. |
-| **Files created** | `src/lib/supabase/client.ts`, `src/lib/supabase/server.ts`, `src/lib/supabase/middleware.ts`, `src/lib/supabase/env.ts`, `src/middleware.ts`, `app/login/page.tsx`, `app/register/page.tsx`, `src/components/auth/LoginForm.tsx`, `src/components/auth/RegisterForm.tsx`, `src/components/auth/auth-validation.ts` |
-| **Outcome** | Cookie-based auth sessions; unauthenticated users redirected to `/login`; authenticated users redirected away from `/login` and `/register`. |
-
-#### Middleware behaviour (`src/middleware.ts` + `src/lib/supabase/middleware.ts`)
-
-| Route pattern | Unauthenticated | Authenticated |
-|---------------|-----------------|---------------|
-| `/`, `/projects`, `/projects/*` | Redirect → `/login?redirectTo=…` | Allow |
-| `/login`, `/register` | Allow | Redirect → `/` |
-| Static assets, `_next/*` | Excluded from matcher | Excluded |
-
-Session cookies are refreshed on every matched request via `supabase.auth.getUser()`.
-
----
-
-### Step 3 — RBAC Engine & Server Actions
-
-| | |
-|--|--|
-| **Feature ID** | F-203 |
-| **Prompt (summary)** | Implement role-based access control and Server Actions for auth, projects, and tasks; bootstrap first user as Super PM. |
-| **Files created** | `src/lib/rbac.ts`, `src/lib/actions/auth.ts`, `src/lib/actions/projects.ts`, `src/lib/actions/tasks.ts`, `src/lib/actions/errors.ts`, `src/lib/role-labels.ts` |
-| **Outcome** | All mutations authorised server-side before touching PostgreSQL. Client receives mapped DTOs via `src/lib/mappers.ts`. |
-
-#### RBAC privilege matrix (implemented)
-
-| Role | Project visibility | Create project | Project admin (edit/delete project) | Task CRUD | Kanban status moves |
-|------|-------------------|----------------|---------------------|-----------|---------------------|
-| **Super PM** | All projects | Yes | All projects | All tasks | All tasks |
-| **PM** | Owned + member projects | Yes | Owned projects only | Owned projects (admin); member projects (read) | Owned projects (admin) |
-| **Member** | Member projects only | No | No | Member projects (write) | Member projects (write) |
-| **Viewer** | Member projects only | No | No | Read-only | No |
-
-#### Access level resolution (`getProjectAccess`)
-
-| Level | Meaning |
-|-------|---------|
-| `admin` | Full project and task management |
-| `write` | Task CRUD and Kanban moves |
-| `read` | View-only |
-| `none` | Hidden / forbidden |
-
-#### Profile bootstrap (`bootstrapUserProfile` in `src/lib/rbac.ts`)
-
-1. On sign-in or sign-up, check if a `User` row exists for the Supabase Auth UUID.
-2. If not, count existing users: **count === 0 → `super_pm`**; otherwise **`member`**.
-3. Create profile with email, name (from metadata or email prefix), and assigned role.
-
-#### Server Actions summary
-
-| Module | Actions |
-|--------|---------|
-| `src/lib/actions/auth.ts` | `signInAction`, `signUpAction`, `signOutAction` |
-| `src/lib/actions/projects.ts` | `listProjects`, `getProject`, `createProject`, `updateProject`, `deleteProject` |
-| `src/lib/actions/tasks.ts` | `createTask`, `updateTaskFields`, `updateTaskStatus`, `addSubtask`, `toggleSubtask`, `addComment` |
-
-All actions return `ActionResult<T>` with Australian English error messages via `ActionError`.
-
----
-
-### Step 4 — UI & Cloud Database Integration
-
-| | |
-|--|--|
-| **Feature IDs** | F-201, F-202 (cloud-backed) |
-| **Prompt (summary)** | Wire home page and project detail views to Server Actions; add authenticated header; enable "+ New Project" modal for authorised roles. |
-| **Files created/modified** | `src/components/layout/AppHeader.tsx`, `src/components/projects/HomePageClient.tsx`, `app/page.tsx`, `app/layout.tsx`, `app/projects/[id]/page.tsx`, `src/components/projects/ProjectDetailView.tsx`, Kanban components (task mutation callbacks) |
-| **Outcome** | End-to-end cloud product: sign in → project list from PostgreSQL → project hub with List/Kanban → task drawer edits persisted via Server Actions. |
-
-#### Integration highlights
-
-| Component | Change |
-|-----------|--------|
-| `app/page.tsx` | Server component fetches projects via `listProjects()`; passes to `HomePageClient` |
-| `HomePageClient.tsx` | Project cards from database; "+ New Project" modal calls `createProject` Server Action |
-| `app/projects/[id]/page.tsx` | Server fetch of project + tasks with RBAC access level |
-| `ProjectDetailView.tsx` | Replaces `src/lib/store.ts` mutations with Server Actions; respects `canWriteTasks` / read-only mode |
-| `AppHeader.tsx` | Displays session user, role badge, sign-out; hides "Projects" nav when signed out |
-
-> **Note:** `src/lib/store.ts` remains in the repository as Wave 1 reference but is no longer used by main application routes.
-
----
-
-## 10. Wave 2 User Acceptance Testing (UAT) Log & Results
-
-Wave 2 UAT was executed against the **live Supabase PostgreSQL database**. Four official scenarios were defined; all **passed**.
-
-### 10.1 UAT matrix
-
-| Check | Scenario | Expected behaviour | Result |
-|-------|----------|--------------------|--------|
-| **1** | **First User Registration & Super PM Promotion** | First account registers successfully and receives `super_pm` role badge in AppHeader | **PASS** |
-| **2** | **Project Creation & Supabase Cloud Persistence** | "+ New Project" modal creates a row persisted in PostgreSQL | **PASS** |
-| **3** | **Kanban Drag-and-Drop & Cloud Sync** | Card movements and task drawer edits survive browser refresh | **PASS** |
-| **4** | **Multi-User RBAC Boundaries** | Second user registers as `member` with strict access restrictions | **PASS** |
-
-### 10.2 UAT Check 1 — First User Registration & Super PM Promotion
-
-| Field | Detail |
-|-------|--------|
-| **Test account** | `yugo@example.com` |
-| **Steps** | Register via `/register` → redirected to home → inspect AppHeader role badge |
-| **Verified** | User profile created in `User` table with `globalRole = super_pm`; badge displays **Super PM** |
-| **Result** | **PASS** |
-
-### 10.3 UAT Check 2 — Project Creation & Supabase Cloud Persistence
-
-| Field | Detail |
-|-------|--------|
-| **Steps** | Sign in as Super PM → click "+ New Project" → submit name and description → refresh page |
-| **Verified** | Project appears in home list after refresh; Supabase SQL Editor confirms row: `SELECT * FROM "Project";` |
-| **Result** | **PASS** |
-
-### 10.4 UAT Check 3 — Kanban Drag-and-Drop & Cloud Sync
-
-| Field | Detail |
-|-------|--------|
-| **Steps** | Open project → Kanban View → drag task between columns → open task drawer → edit title/description → hard refresh browser |
-| **Verified** | Task `status` and field updates persisted in PostgreSQL; UI reflects stored state after reload |
-| **Result** | **PASS** |
-
-### 10.5 UAT Check 4 — Multi-User RBAC Boundaries
-
-| Field | Detail |
-|-------|--------|
-| **Test account** | `member@example.com` |
-| **Steps** | Register second user → confirm role badge → attempt to access projects not assigned via `ProjectMember` |
-| **Verified** | Second user auto-assigned `member` role; "+ New Project" hidden; only member-assigned projects visible; task mutations blocked on non-member projects |
-| **Result** | **PASS** |
-
-### 10.6 UAT conclusion
-
-**All four Wave 2 verification scenarios passed.** Wave 2 is closed and ready for Wave 3 kick-off per `dev_plan.md` Section 7.
-
----
-
-## 11. Wave 2 UX Refinements & Performance Iterations
-
-Following core Wave 2 UAT, eight post-UAT enhancements were implemented to improve usability, performance, and terminology alignment.
-
-### 11.1 Refinement summary
-
-| # | Enhancement | Description | Files |
-|---|-------------|-------------|-------|
-| **1** | **Header Navigation** | Hide "Projects" nav link for unauthenticated users | `src/components/layout/AppHeader.tsx` |
-| **2** | **Password Visibility** | Lucide `Eye` / `EyeOff` show/hide toggle on Login and Register forms | `src/components/auth/PasswordInput.tsx`, `LoginForm.tsx`, `RegisterForm.tsx` |
-| **3** | **Multi-Tab Sync** | Global `onAuthStateChange` listener + `BroadcastChannel` + window focus refresh to synchronise login/logout/email verification across browser tabs | `src/components/providers/AuthSessionProvider.tsx`, `app/layout.tsx` |
-| **4** | **User Account Header** | Refactored crowded header into `UserDropdownMenu.tsx` — user name, email, role badge, Settings placeholder, Sign Out | `src/components/layout/UserDropdownMenu.tsx`, `AppHeader.tsx` |
-| **5** | **PMBOK Terminology Alignment** | Renamed UI label "Bucket" to **Process Group** (Initiating, Planning, Executing, Monitoring, Closing); database field remains `bucket` | `TaskDetailDrawer.tsx`, `TaskCard.tsx` |
-| **6** | **Optimistic Kanban Drag-and-Drop** | Instant local status update on drag with server sync; rollback to snapshot on Server Action failure | `ProjectDetailView.tsx` (`handleStatusChange`) |
-| **7** | **Task Drawer Input Lag Fix** | Local draft state buffering; title/description commit on `onBlur` to eliminate keystroke re-render focus loss | `TaskDetailDrawer.tsx` |
-| **8** | **Home Page Hero Text & Fluid Layout** | Updated copy to *"Select a project to switch seamlessly between List and Kanban views, and manage detailed task workflows."*; fluid `max-w-3xl w-full` responsive styling | `src/components/projects/HomePageClient.tsx` |
-
-### 11.2 Multi-Tab Sync — implementation detail
-
-`AuthSessionProvider` wraps the app in `app/layout.tsx` and:
-
-1. Subscribes to `supabase.auth.onAuthStateChange` → calls `router.refresh()`
-2. Broadcasts auth events to other tabs via `BroadcastChannel("sptt-auth-sync")`
-3. Refreshes session on window focus as a fallback when BroadcastChannel is unavailable
-
-### 11.3 Optimistic Kanban — implementation detail
-
-`ProjectDetailView.handleStatusChange`:
-
-1. Captures a `snapshot` of the current tasks array
-2. Applies optimistic `status` update immediately in local state
-3. Calls `updateTaskStatus` Server Action
-4. On failure: restores `snapshot` and surfaces error message
-5. On success: merges server response and calls `router.refresh()`
-
----
-
-## 12. Step-by-Step Replication Manual (Wave 2)
-
-Follow this recipe from the **Wave 1 complete state** (Section 6) to reproduce the exact Wave 2 full-stack product.
-
-### Phase A — Dependencies and environment
-
-1. Ensure Wave 1 codebase is present (Section 6, Phases A–D).
-2. Install Wave 2 packages (Section 8.1):
-   ```bash
-   npm install @supabase/supabase-js @supabase/ssr @prisma/client @prisma/adapter-pg pg
-   npm install -D prisma
-   ```
-3. Create a Supabase project (PostgreSQL + Auth enabled).
-4. Configure `.env.local` (Section 8.2):
-   - URL-encode special characters in the database password
-   - Use IPv4 pooler host `aws-0-ap-northeast-1.pooler.supabase.com`
-   - Port **5432** for `DIRECT_URL`; port **6543** for `DATABASE_URL`
-5. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-
-### Phase B — Database schema
-
-6. Create `prisma/schema.prisma` with all models and enums (Step 1, Section 9).
-7. Create `prisma.config.ts` pointing migrations at `DIRECT_URL`.
-8. Run:
-   ```bash
-   npx prisma migrate dev --name init
-   npx prisma generate
-   ```
-9. Create `src/lib/prisma.ts` with `PrismaPg` adapter singleton.
-10. Create `src/lib/mappers.ts` for Prisma → application DTO mapping.
-
-### Phase C — Authentication
-
-11. Create Supabase helpers:
-    - `src/lib/supabase/client.ts`
-    - `src/lib/supabase/server.ts`
-    - `src/lib/supabase/middleware.ts`
-    - `src/lib/supabase/env.ts`
-12. Create `src/middleware.ts` with route protection matcher.
-13. Create auth pages and forms:
-    - `app/login/page.tsx`, `app/register/page.tsx`
-    - `src/components/auth/LoginForm.tsx`, `RegisterForm.tsx`, `auth-validation.ts`
-
-### Phase D — RBAC and Server Actions
-
-14. Implement `src/lib/rbac.ts` (session user, project access, bootstrap logic).
-15. Implement Server Actions:
-    - `src/lib/actions/errors.ts`
-    - `src/lib/actions/auth.ts`
-    - `src/lib/actions/projects.ts`
-    - `src/lib/actions/tasks.ts`
-16. Add `src/lib/role-labels.ts` for shared role display labels.
-
-### Phase E — UI integration
-
-17. Create `src/components/layout/AppHeader.tsx`.
-18. Refactor `app/page.tsx` to server-fetch projects; create `HomePageClient.tsx` with "+ New Project" modal.
-19. Update `app/projects/[id]/page.tsx` to server-fetch project + tasks with RBAC.
-20. Rewire `ProjectDetailView.tsx` to Server Actions (replace LocalStorage store calls).
-21. Update `app/layout.tsx` to include `AppHeader` and session provider.
-
-### Phase F — Post-UAT refinements
-
-22. Apply all eight refinements documented in Section 11.
-23. Re-run quality checks:
-    ```bash
-    npm run lint
-    npm run build
-    ```
-
-### Phase G — UAT verification
-
-24. Execute the four UAT scenarios (Section 10):
-    - Register first user → confirm Super PM badge
-    - Create project → verify in Supabase SQL Editor
-    - Drag Kanban cards and edit drawer → refresh → confirm persistence
-    - Register second user → confirm Member restrictions
-
-25. Commit and push:
-    ```bash
-    git add .
-    git commit -m "feat(wave-2): complete full-stack cloud architecture with RBAC"
-    git push origin main
-    ```
-
----
-
-## Appendix C — Wave 2 file inventory
-
-| Path | Role |
-|------|------|
-| `prisma/schema.prisma` | PostgreSQL schema — models, enums, relationships |
-| `prisma.config.ts` | Prisma 7 config — migration datasource URL |
-| `prisma/migrations/20260828233113_init/` | Initial migration SQL |
-| `src/lib/prisma.ts` | Prisma Client singleton with PG adapter |
-| `src/lib/mappers.ts` | Prisma → application type mappers |
-| `src/lib/rbac.ts` | RBAC engine — session, access levels, bootstrap |
-| `src/lib/role-labels.ts` | Shared role display labels |
-| `src/lib/actions/auth.ts` | Sign in, sign up, sign out Server Actions |
-| `src/lib/actions/projects.ts` | Project CRUD Server Actions |
-| `src/lib/actions/tasks.ts` | Task CRUD Server Actions |
-| `src/lib/actions/errors.ts` | ActionResult types and error helpers |
-| `src/lib/supabase/client.ts` | Browser Supabase client |
-| `src/lib/supabase/server.ts` | Server Supabase client (cookies) |
-| `src/lib/supabase/middleware.ts` | Session refresh + route guards |
-| `src/lib/supabase/env.ts` | Environment variable validation |
-| `src/middleware.ts` | Next.js middleware entry |
-| `app/login/page.tsx` | Login route |
-| `app/register/page.tsx` | Register route |
-| `src/components/auth/LoginForm.tsx` | Login form |
-| `src/components/auth/RegisterForm.tsx` | Register form |
-| `src/components/auth/PasswordInput.tsx` | Password field with visibility toggle |
-| `src/components/auth/auth-validation.ts` | Client-side validation helpers |
-| `src/components/layout/AppHeader.tsx` | Authenticated app header |
-| `src/components/layout/UserDropdownMenu.tsx` | User account dropdown |
-| `src/components/providers/AuthSessionProvider.tsx` | Multi-tab auth sync |
-| `src/components/projects/HomePageClient.tsx` | Home page client — project list + modal |
-| `src/components/projects/ProjectDetailView.tsx` | Project hub — cloud-backed mutations |
-| `.env.local` | Supabase credentials *(local only — not committed)* |
-
----
-
-*End of Wave 2 log. Wave 3 entries begin below without rewriting completed history.*
-
----
-
-## 13. Wave 3 Overview & Feature Scope
-
-Wave 3 completes the Version 2.0 North Star by delivering collaboration and insight surfaces on top of the Wave 2 cloud + RBAC foundation.
-
-### 13.1 Feature coverage
-
-| Feature ID | Capability | Status |
-|------------|------------|--------|
-| **F-202 (comments)** | Cloud-synced `TaskComment` Server Actions + drawer UI | **Delivered** |
-| **F-204** | Interactive Gantt chart (Initial / Updated / Actual bars, Week/Month, freeze-panes) | **Delivered** |
-| **F-205** | Project analytics dashboard (Recharts + KPI cards + overdue panel) | **Delivered** |
-| **F-202 (PIC)** | Flexible assignee: registered member **or** custom free-text PIC (`assigneeName`) | **Delivered** |
-| **Multi-view hub** | Project tabs: List \| Kanban \| Gantt \| Analytics | **Delivered** |
-| **Hardening** | Delete project/task, Wave 3 UAT seed, RLS enablement, progress/`sortOrder` schema | **Delivered** |
-
-### 13.2 Architectural additions
-
-```
-ProjectDetailView (viewMode: list | kanban | gantt | analytics)
-    ├── TaskListView / KanbanBoard / TaskDetailDrawer
-    ├── ProjectGanttView  ← src/lib/gantt/date-utils.ts
-    ├── ProjectAnalyticsView  ← src/lib/analytics/task-metrics.ts
-    └── Comments  ← src/lib/actions/comments.ts (Prisma TaskComment)
-
-Seed / reset  ← prisma/seed.ts → src/lib/seed/database-seed.ts
-Permissions   ← src/lib/permissions.ts + rbac.ts (read-only Viewer guards)
-```
-
-### 13.3 Dependencies installed during Wave 3
-
-```bash
-cd "/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.0"
-npm install date-fns recharts
-npm install -D tsx   # required for prisma/seed.ts via package.json prisma.seed
-```
-
----
-
-## 14. Wave 3 Detailed Execution Phase & Prompt Log
-
-Each step below records the **exact user prompt** used in Cursor, the files touched, and the architectural outcome. Follow the steps in chronological order to recreate Wave 3 at the same quality level.
-
----
-
-### Step 1 — Task Comments Cloud Persistence & Integration (F-202)
-
-**Date:** Sunday, 30 August 2026  
-
-#### Exact prompt
-
-> Hi Cursor, we are starting Wave 3 - Step 1: Task Comments Cloud Persistence & Integration.
->
-> Please implement the following updates:
->
-> 1. Task Comments Server Actions (`src/lib/actions/comments.ts`):
->    - Build authenticated Server Actions backed by Prisma PostgreSQL:
->      * `getTaskComments(taskId: string)`: Fetch all comments for a task ordered by `createdAt` ascending, including author details (`id`, `name`, `email`).
->      * `createComment(taskId: string, content: string)`: Verify active session and project access permissions (Member+), then create a new `TaskComment` record.
->      * `deleteComment(commentId: string)`: Allow the comment author, project owner (PM), or Super PM to delete a comment.
->
-> 2. Wire Cloud Comments in TaskDetailDrawer (`src/components/kanban/TaskDetailDrawer.tsx`):
->    - Replace the "Wave 3 Placeholder" badge in the Comments section with live comment interactions.
->    - Fetch real-time comments when a task drawer is opened.
->    - Display comments in a clean list showing the author's name, initial avatar, comment content, and formatted Australian English timestamps (`DD/MM/YYYY, HH:mm`).
->    - Wire the "Post comment" form to invoke the `createComment` server action, clearing the input field and refreshing the list immediately upon submission.
->
-> Ensure strict TypeScript compliance, clean and consistent mode Tailwind styling, and natural Australian English copy.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `src/lib/actions/comments.ts` *(created)*; `TaskDetailDrawer.tsx` *(wired)*; `ProjectDetailView.tsx` *(callback wiring)* |
-| **RBAC** | Write roles (Member+) post; delete for author / owning PM / Super PM; Viewers blocked with Australian English messaging |
-| **Result** | Comments persist in PostgreSQL and appear immediately in the drawer after post |
-
----
-
-### Step 2 — Interactive Gantt Chart View (F-204)
-
-**Date:** Sunday, 30 August 2026  
-
-#### Exact prompt
-
-> Hi Cursor, we are moving to Wave 3 - Step 2: Interactive Gantt Chart View (F-204).
->
-> Please implement the Gantt Chart component and logic:
->
-> 1. Create Gantt Chart Component (`src/components/gantt/ProjectGanttView.tsx`):
->    - Build a clean timeline view rendering horizontal task bars mapped across weeks/months.
->    - Display planned durations (plannedStartDate to plannedDueDate) alongside actual durations (actualStartDate to actualCompletionDate).
->    - Color code bars by status (To Do, In Progress, Completed) and highlight overdue tasks.
->    - Add grouping toggles to group timeline rows by:
->      * Task List (Default)
->      * Assignee / PIC
->      * Process Group (Initiating, Planning, Executing, Monitoring, Closing)
->
-> 2. Defensive Date & Integrity Safeguards:
->    - Handle edge cases safely (e.g., missing start/due dates, inverted date ranges where start > due, or corrupt strings).
->    - Render fallback indicators or clamp invalid dates without crashing the chart or throwing React errors.
->
-> 3. Interactivity & Drawer Wiring:
->    - Clicking any task row or timeline bar opens the `TaskDetailDrawer` for that specific task.
->    - Integrate `date-fns` for clean date math and Australian English formatting (`DD/MM/YYYY`).
->
-> Ensure high contrast dark mode styling and strict TypeScript types.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `src/components/gantt/ProjectGanttView.tsx`, `src/lib/gantt/date-utils.ts` *(created)* |
-| **Note** | Later UAT renamed planned → **initial** dates and evolved grouping to **Task list** (by Process Group) + **Assignee / PIC** only; Week/Month scale restored. See Section 15. |
-| **Result** | First interactive Gantt surface integrated into the project hub |
-
----
-
-### Step 3 — Project Progress Dashboard & Analytics (F-205) + Multi-View Tabs
-
-**Date:** Sunday, 30 August 2026  
-
-#### Exact prompt
-
-> Hi Cursor, we are moving to Wave 3 - Step 3: Project Progress Dashboard & Analytics (F-205).
->
-> Please implement the Analytics Dashboard component and integrate it into our project view:
->
-> 1. Create Analytics View Component (`src/components/analytics/ProjectAnalyticsView.tsx`):
->    - Use `recharts` to build a clean, high-contrast dark-mode analytics dashboard.
->    - Include the following widgets & charts:
->      * Key Performance Cards: Total Tasks, Completion Percentage (%), Overdue Tasks Count, and Active Assignees Count.
->      * Status Distribution Chart: Recharts Pie/Donut Chart visualising To Do (amber), In Progress (sky), and Completed (emerald) proportions.
->      * Workload per PIC Chart: Recharts Bar Chart showing open vs completed task counts grouped by assignee/PIC name.
->      * Process Group Breakdown: Visual progress bars or distribution table across Process Groups (Initiating, Planning, Executing, Monitoring, Closing).
->      * Overdue Tasks Alert Panel: Clean list detailing all overdue tasks with assignee names and days overdue.
->
-> 2. Empty State & Defensive Logic:
->    - Handle empty projects gracefully without chart rendering errors, showing friendly empty state messages in Australian English when no task data exists.
->
-> 3. Tab Integration (`src/components/projects/ProjectDetailView.tsx`):
->    - Add the "Analytics" tab to the project view switcher: [ List View ] | [ Kanban Board ] | [ Gantt Chart ] | [ Analytics ].
->    - Ensure clicking the Analytics tab renders `ProjectAnalyticsView` seamlessly.
-> Ensure strict TypeScript compliance, clean Tailwind dark mode contrast, and natural Australian English copy.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `src/components/analytics/ProjectAnalyticsView.tsx`, `src/lib/analytics/task-metrics.ts`, `ProjectDetailView.tsx` (four-tab switcher) |
-| **Result** | Multi-view project hub complete: List, Kanban, Gantt, Analytics |
-
----
-
-### Step 4 — Hardening, RBAC Polish & System Audit
-
-**Date:** Sunday, 30 August 2026  
-
-#### Exact prompt
-
-> Hi Cursor, we are executing the final step of Wave 3: Hardening, RBAC Polish & System Audit (Step 4).
->
-> Please perform a final polish pass across our Wave 3 features (`ProjectGanttView.tsx`, `ProjectAnalyticsView.tsx`, and `ProjectDetailView.tsx`):
->
-> 1. RBAC Guard Audit:
->    - Verify that Viewers and read-only users cannot trigger edit modals, comment deletions, or task status updates from the Gantt chart, Analytics, or Task Detail surfaces.
->    - Ensure read-only badges and tooltips clearly indicate restricted actions in natural Australian English.
->
-> 2. Tab Navigation & State Preservation:
->    - Ensure switching between List View, Kanban Board, Gantt Chart, and Analytics tabs retains active filters and selected task drawer state smoothly without unnecessary re-mount flicker.
->
-> 3. Empty State & Loading Resilience:
->    - Verify loading skeleton states render cleanly while server actions fetch project data.
->    - Ensure all charts, timelines, and metric widgets render friendly Australian English fallback messages when a project has zero tasks or incomplete date ranges.
->
-> Please run type-checks and verify that `npm run build` and `npm run lint` pass cleanly.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `ReadOnlyAccessNotice.tsx`, permission wiring across drawer/Gantt/Kanban; `ProjectTasksSkeleton.tsx` / `app/projects/[id]/loading.tsx` |
-| **Result** | Viewers browse safely; write surfaces disabled with clear Australian English notice |
-
----
-
-### Step 5 — Delete Project / Task (RBAC-enforced)
-
-**Date:** Sunday, 30 August 2026  
-
-#### Exact prompt
-
-> Hi Cursor, please complete the missing Delete functionality for Projects and Tasks across our UI and Server Actions with strict RBAC enforcement:
->
-> 1. Task Deletion (`src/components/kanban/TaskDetailDrawer.tsx` & `src/lib/actions/tasks.ts`):
->    - Add a styled "Delete Task" button inside `TaskDetailDrawer.tsx` (guarded by permission check: Super PM, owning PM, or task author).
->    - Add a confirmation modal: "Are you sure you want to delete this task? This action cannot be undone."
->    - Wire it to a `deleteTask(taskId: string)` Server Action that validates RBAC permissions server-side and removes the task along with associated subtasks and comments.
->
-> 2. Project Deletion (`src/components/projects/ProjectDetailView.tsx`, project cards, & `src/lib/actions/projects.ts`):
->    - Add a "Delete Project" button/action on the project page header (guarded for Super PM and owning PM only).
->    - Add a confirmation modal: "Are you sure you want to delete this project? All associated tasks, checklists, and comments will be permanently removed."
->    - Wire it to `deleteProject(projectId: string)` Server Action to cascade-delete project records and redirect to `/`.
->
-> 3. UI State Refresh:
->    - Ensure deleting a task or project updates the UI state immediately and displays toast notifications in natural Australian English.
->
-> Please verify strict TypeScript compliance and clean dark-mode styling.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `ConfirmDialog.tsx`, `ToastProvider.tsx`, delete paths in `tasks.ts` / `projects.ts` |
-| **Result** | Cascade deletes with confirmation + toast feedback |
-
----
-
-### Step 6 — Initial Seed Script (`prisma/seed.ts`)
-
-**Date:** Sunday, 30 August 2026  
-
-#### Exact prompt
-
-> Hi Cursor, please create a database reset and seed script file at `prisma/seed.ts` (and a trigger Server Action / CLI helper):
->
-> 1. Safe Database Reset (Delete Order):
->    - Wipe existing project data safely in reverse dependency order to prevent foreign key errors:
->      `TaskComment` -> `Subtask` -> `Task` -> `ProjectMember` -> `Project`.
->
-> 2. Realistic Seed Data Insertion:
->    - Seed 3 distinct projects (e.g., "Mobile Banking App Refresh", "AI Model Showcase Web", and "Enterprise Cloud Migration").
->    - Populate each project with 8-12 tasks distributed across all Process Groups, statuses, priorities, varied dates (including overdue), checklists, and sample comments.
->
-> 3. Execution Setup:
->    - Add a `prisma.seed` configuration in `package.json` so we can run `npx prisma db seed` easily from the Terminal.
->
-> Please implement and run this seed script to populate our PostgreSQL Supabase database.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `prisma/seed.ts`, `src/lib/seed/database-seed.ts`, `package.json` (`"prisma": { "seed": "npx tsx prisma/seed.ts" }`) |
-| **Command** | `npx prisma db seed` |
-| **Result** | Repeatable UAT dataset; later rewritten for the Wave 3 UAT seed (Step 8) |
-
----
-
-### Step 7 — Pre-UAT: Recharts fix + Flexible PIC Assignment
-
-**Date:** Sunday, 30 August 2026 (prompt); verified Monday, 31 August 2026  
-
-#### Exact prompt
-
-> Hi Cursor, please resolve two issues across our codebase before we proceed to Wave 3 UAT:
->
-> 1. Fix Recharts Console Warning (`ProjectAnalyticsView.tsx`):
->    - Resolve the warning: "[browser] The width(0) and height(0) of chart should be greater than 0...".
->    - Pass `minWidth={0}` to all `<ResponsiveContainer>` components in `ProjectAnalyticsView.tsx`.
->    - Ensure all outer chart wrapper `<div>` elements explicitly include `w-full min-w-0 min-h-[300px]` CSS classes so Recharts safely measures bounds even inside hidden or flex container tabs.
->
-> 2. Flexible PIC Assignment — Registered Users & Custom Text PICs (F-202 / Task Details):
->    - Update `Task` model handling (`prisma/schema.prisma` if needed, `src/lib/types.ts`, and Server Actions) to support an optional `assigneeName` string field alongside `assigneeId`.
->    - In `TaskDetailDrawer.tsx`, upgrade the Assignee field:
->      * Allow PMs/Members to select a registered user from a dropdown OR type a custom un-registered PIC name (e.g. "Mr X").
->      * If a registered user is selected, save both `assigneeId` and `assigneeName`.
->      * If custom text is typed, save `assigneeId: null` and `assigneeName: "Mr X"`.
->    - Update UI Displays (`TaskCard.tsx`, `TaskDetailDrawer.tsx`, `ProjectGanttView.tsx`, `ProjectAnalyticsView.tsx`):
->      * Render the PIC name (`assigneeName`) seamlessly across cards, Gantt rows, and Analytics workload charts.
->      * Display a subtle visual tag for custom text PICs (e.g., a neutral gray initial badge or tooltip "Unregistered PIC") to distinguish them from registered user accounts.
->
-> Please run type-checks and verify that `npm run build` passes cleanly.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Migration** | `prisma/migrations/20260830140000_add_task_assignee_name/` |
-| **Files** | `AssigneePicField.tsx`, `PicLabel.tsx`, `src/lib/assignee-display.ts`, analytics/Gantt PIC labels |
-| **Charts** | `ResponsiveContainer` gains `minWidth={0}`; wrappers use `w-full min-w-0 min-h-[300px]`; Analytics mounts only when `chartsVisible` (deferred mount while tab is `hidden`) |
-| **Command** | `npx prisma migrate dev` (assigneeName) · `npx tsc --noEmit` · `npm run build` |
-
----
-
-### Step 8 — Wave 3 UAT Seed Rewrite
-
-**Date:** Tuesday, 1 September 2026  
-
-#### Exact prompt
-
-> Hi Cursor, please update our seed script at `prisma/seed.ts` to perform a clean database reset and populate fresh, realistic test data for Wave 3 UAT:
->
-> 1. Clean Up Existing Project & Task Data (Safe Cascade Order):
->    - Wipe data in reverse-dependency order: `TaskComment` -> `Subtask` -> `Task` -> `ProjectMember` -> `Project`.
->
-> 2. Clean Up Users Except Current Super PM:
->    - Preserve ONLY 1 Super PM account; delete all other existing User records.
->
-> 3. Create New Dummy Users (For Future Role Testing):
->    - PM: Alex Morgan (`pm.alex@tracker.local`)
->    - Members: Sarah Jenkins (`member.sarah@tracker.local`), David Chen (`member.david@tracker.local`)
->    - Viewer: Rachel Green (`viewer.rachel@tracker.local`)
->
-> 4. Create Small, Highly Realistic Dummy Projects:
->    - Project 1: "E-Commerce Mobile App Redesign" (Owned by Super PM) with Sarah & David as members; 8–10 tasks across all process groups/statuses/priorities; mix of registered PICs, unassigned, and custom PIC "Mr X"; checklists, comments, overdue tasks.
->    - Project 2: "Enterprise Cloud Infrastructure Migration" (Owned by Alex Morgan - PM) with Super PM and Sarah as members; 5–6 tasks.
->
-> 5. Execute Seed Script:
->    - Configure and run `npx prisma db seed` against Supabase PostgreSQL.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `src/lib/seed/database-seed.ts` rewritten; `prisma/seed.ts` thin CLI entry |
-| **Command** | `npx prisma db seed` |
-| **Primary UAT project** | **E-Commerce Mobile App Redesign** (used throughout Gantt UAT screenshots) |
-| **Auth note** | Seed creates PostgreSQL `User` profiles. Supabase Auth passwords must exist separately for login (e.g. Viewer Rachel password reset for UAT). |
-
----
-
-### Step 9 — Supabase RLS Hardening (security companion)
-
-**Dates:** Tuesday, 1 September – Wednesday, 2 September 2026  
-
-**Prompt intent:** Explain and remediate Supabase “RLS Disabled in Public” critical advisories without disrupting Prisma/Server Action development.
-
-| | |
-|--|--|
-| **Migration** | `prisma/migrations/20260901170000_enable_rls_harden_public_schema/` |
-| **Docs** | `doc/supabase-security.md` |
-| **Approach** | Enable RLS on app tables; app continues to use Prisma with the database role (server-side). Free-tier “leaked password protection” deferred. Unindexed FK warnings reviewed as non-blocking. |
-
----
-
-### Step 10 — Schema: Initial dates, progress, sortOrder (UAT 1 / UAT 3 / outer-UAT)
-
-**Date:** Saturday, 5 September 2026  
-
-#### Exact prompt (summary of mandatory requirements)
-
-> Apply a comprehensive update to address UAT 1, UAT 3, and outer-UAT revision requirements:
->
-> 1. Rename `plannedStartDate` / `plannedDueDate` → `initialStartDate` / `initialDueDate`; add `progress` Int `@default(0)` and `sortOrder` Int `@default(0)`.
-> 2. Defaults on create: initial start = today; initial due = today + 7; updated dates mirror initial; progress 0% / 1% / 100% by status.
-> 3. Kanban: To Do / Doing / Done labels; "+ Add Task" per column; vertical reorder via `sortOrder`; searchable PIC combobox; optimistic updates.
-> 4. Run `npx prisma migrate dev --name rename_planned_to_initial_and_add_progress` and `npx prisma generate`.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Migration** | `prisma/migrations/20260905120000_rename_planned_to_initial_and_add_progress/` |
-| **Files** | `src/lib/task-defaults.ts`, Kanban column Add Task, drawer progress controls, Gantt bar labels (Initial / Updated / Actual) |
-| **Commands** | `npx prisma migrate dev --name rename_planned_to_initial_and_add_progress` · `npx prisma generate` |
-
----
-
-### Step 11 — Progress / status consistency & subsequent Kanban UX
-
-**Dates:** Sunday, 6 September 2026 (multiple prompts)  
-
-Exact follow-up prompts (executed in order):
-
-1. **Progress slider & bidirectional status sync** — local draft buffering; progress ↔ status auto-sync; block future actual dates.
-2. **UTC timezone + backward status clearing** — local `format(date, 'yyyy-MM-dd')`; clear `actualStartDate` / `actualCompletionDate` on backward moves.
-3. **Top-of-column `sortOrder` on non-drag status moves**; remove flicker (`router.refresh` on field saves); remove redundant header "+ Add Task".
-
-See Section 15 for technical resolutions mapped to UAT Checks.
-
----
-
-### Step 12 — Gantt iterative fidelity (through Wave 3 close)
-
-**Dates:** Sunday, 6 September – Wednesday, 9 September 2026  
-
-Exact prompt themes (each executed and verified with screenshots):
-
-1. Timeline bounds, padding, Today line percentage math; row/header height sync.
-2. Triple bars (Initial / Updated / Actual); open Actual ends at Today; 2D sticky freeze-panes; Today full-line hover tooltip.
-3. Portal tooltips; clamp Actual past Today; node at bar end; Week/Month scale; grouping = Task list \| Assignee / PIC.
-4. Cursor-following Today tooltip; sticky Today under header (no header overlap); Month column day-proportional offset (`addMonths`, not `addDays(endOfMonth)`).
-5. Shared pixel geometry for bars and Today (`getBarPositionPx` / column widths).
-6. **Final close-out (9 Sep 2026):** Done Actual checkmark node aligned to bar **right end**; remove red **top circular node** on Today line (line retained).
-
-#### Exact final Gantt prompt
-
-> Hi Cursor, attached is the Gantt Chart appearance at this moment. Please analyse deeply and thoroughly.
->
-> 1. For activities that have been done/completed … the nodes and the end of the line should be on the same spot…
-> 2. … the node in the top of the [Today] line becomes a distraction. Could you please remove the node?
->
-> Ensure `./doc/dev_plan.md` stays aligned with our changes.
-
-#### Outcome
-
-| | |
-|--|--|
-| **Files** | `ProjectGanttView.tsx`, `src/lib/gantt/date-utils.ts`, `doc/dev_plan.md` (F-204 timeline notes) |
-| **Result** | Production-quality Gantt accepted for Wave 3 exit |
-
----
-
-## 15. Comprehensive UAT & Iterative Bug Resolution Log
-
-Wave 3 UAT was executed against the **live Supabase PostgreSQL** database using the Wave 3 UAT seed (primarily **E-Commerce Mobile App Redesign**). Six official checks were defined; all **passed** after the iterative fixes below.
-
-### 15.1 UAT matrix
-
-| Check | Scenario | Expected behaviour | Result |
-|-------|----------|--------------------|--------|
-| **1** | **Multi-View Tab Navigation** | Smooth switch between List, Kanban, Gantt, and Analytics; selected task drawer state preserved; no destructive remount flicker | **PASS** |
-| **2** | **Cloud Task Comments** | Open drawer → post comment → list refreshes with author + `DD/MM/YYYY, HH:mm`; delete respects RBAC; Viewer cannot post | **PASS** |
-| **3** | **Analytics Dashboard** | KPI cards, status donut, PIC workload, process-group bars, overdue panel; empty-state copy; **no** Recharts `width(0)/height(0)` console spam | **PASS** *(after Recharts fix)* |
-| **4** | **Flexible PIC + RBAC Surfaces** | Registered member or custom PIC ("Mr X"); Custom badge; Gantt/Analytics show PIC; Viewer read-only notice; seed role users available for boundary checks | **PASS** |
-| **5** | **Progress, Status & Date Integrity** | Progress slider usable without focus loss; progress ↔ status sync; local calendar “today”; backward moves clear actual dates; non-drag status moves land at **top** of column (`sortOrder`) | **PASS** *(after iterations)* |
-| **6** | **Interactive Gantt Fidelity** | Triple bars aligned to dates; Actual clamped to Today when open; 2D freeze-panes; Week/Month; instant portal tooltips; Today line correct; Done node on bar end; no Today top node | **PASS** *(after iterations)* |
-
-### 15.2 UAT Check 3 — Recharts `width(0) and height(0)`
-
-**Symptom:** Browser console flooded with Recharts warnings when visiting a project (charts measured inside `hidden` tab panels at 0×0).
-
-**Resolution:**
-
-1. Pass `minWidth={0}` on every `<ResponsiveContainer>`.
-2. Chart wrappers: `w-full min-w-0 min-h-[300px]`.
-3. Deferred mount: `ProjectDetailView` keeps Analytics in the DOM for tab state but passes `chartsVisible={viewMode === "analytics"}` so Recharts only mounts when the Analytics tab is active.
-
-**Files:** `ProjectAnalyticsView.tsx`, `ProjectDetailView.tsx`
-
-### 15.3 UAT Check 5 — UTC timezone date shift
-
-**Symptom:** Setting “today” via `new Date().toISOString().slice(0, 10)` shifted the calendar day backward in WIB (UTC+7) — e.g. evening local time stored as yesterday.
-
-**Resolution:**
-
-- Centralise local calendar dates in `src/lib/task-defaults.ts` using `date-fns` `format(date, "yyyy-MM-dd")`.
-- Replace ISO date-slice usage in Server Actions and UI paths that mean “calendar today”.
-- Document explicitly: never use UTC ISO date prefix for local calendar fields.
-
-**Files:** `src/lib/task-defaults.ts`, `src/lib/actions/tasks.ts`, drawer/Kanban call sites
-
-### 15.4 UAT Check 5 — Progress slider focus loss
-
-**Symptom:** Typing multi-digit progress (e.g. `50`) lost focus after each keystroke because parent re-renders reset the controlled input.
-
-**Resolution:**
-
-- Buffer progress in local `draftProgress` state inside `TaskDetailDrawer.tsx`.
-- Commit to parent / Server Action on blur or intentional commit (same pattern as title/description drafts).
-- Slider `<input type="range">` bound to the draft; container `overflow-visible` + padding so the thumb is not clipped; "%" adornment beside the numeric field.
-
-**Files:** `TaskDetailDrawer.tsx`
-
-### 15.5 UAT Check 5 — Backward status transition logic
-
-**Symptom:** Moving a Done task back to Doing/To Do left stale `actualCompletionDate` (and sometimes `actualStartDate`), so Gantt Actual bars and analytics stayed “completed”.
-
-**Resolution (`task-defaults` + Server Actions):**
-
-| New status | Progress | Actual dates |
-|------------|----------|--------------|
-| **To Do** | `0` | Clear `actualStartDate` **and** `actualCompletionDate` |
-| **Doing** | `1` if was 0% or 100% (preserve mid-range otherwise) | Set `actualStartDate` to local today if null; **clear** `actualCompletionDate` |
-| **Done** | `100` | Set `actualCompletionDate` to local today; set `actualStartDate` if null |
-
-**Files:** `src/lib/task-defaults.ts`, `src/lib/actions/tasks.ts`
-
-### 15.6 UAT Check 5 — Top-position card placement (`sortOrder`)
-
-**Symptom:** Status changes from the drawer/progress (not vertical DnD) inserted the card mid-column, making moves hard to find.
-
-**Resolution:**
-
-- On non-drag status transitions, assign `sortOrder` **lower than the current minimum** in the destination column so the card appears at the **top**.
-- Keep vertical DnD free to set explicit peer ordering.
-- Remove route-level `router.refresh()` on field saves to eliminate full-board blink; optimistic local merge only.
-- Remove redundant project-header "+ Add Task" (column headers only).
-
-**Files:** `ProjectDetailView.tsx`, `src/lib/actions/tasks.ts`, Kanban components
-
-### 15.7 UAT Check 6 — Gantt freeze-panes, bars, clamps, tooltips
-
-**Symptoms (iterative):** Bars crushed left; Actual extending past Today; Today line wrong on Month scale / scrolling away; tooltips clipped or not cursor-following; Done checkmark left of bar end; Today top red circle distracting.
-
-**Resolutions (final architecture):**
-
-| Topic | Technical approach |
-|-------|--------------------|
-| **2D freeze-panes** | Sticky date header (`top-0`), sticky task rail (`left-0`), sticky corner (`top-0 left-0` higher z-index); scroll container `overflow-auto` |
-| **Triple bars** | Initial (zinc), Updated (sky), Actual (emerald); inclusive end math through end calendar day |
-| **Open Actual** | End exclusive at **start of today**; never draw past Today line |
-| **Pixel geometry** | Day-proportional `columnWidths`; shared `getTimelineOffsetPx` / `getBarPositionPx` for bars **and** Today |
-| **Month scale** | Advance columns with `addMonths` + start-of-day (avoid `addDays(endOfMonth)` retaining `23:59:59`) |
-| **Tooltips** | Portal + cursor follow; InstantHoverTip pattern; bar tips for Initial / Updated / Actual |
-| **Done node** | Node at bar **right end** (`right-0 translate-x-1/2`) so node X ≡ line end |
-| **Today marker** | Full-height red `w-px` line under header; **no** top circular node |
-
-**Files:** `ProjectGanttView.tsx`, `src/lib/gantt/date-utils.ts`, `doc/dev_plan.md` (F-204)
-
-### 15.8 UAT conclusion
-
-**All six Wave 3 verification scenarios passed.** Wave 3 is closed. Version 2.0 North Star features F-201 through F-205 are delivered and UAT-verified (F-206 hosts entry remains optional local setup from Wave 1).
-
----
-
-## 16. Final Verification & Replication Commands (Wave 3)
-
-Use this recipe after Waves 1–2 are in place (Sections 6 and 12).
-
-### 16.1 Install Wave 3 packages
-
-```bash
-cd "/Users/yugoananda/Cursor Project/Simple Project Task Tracker 2.0"
-npm install date-fns recharts
-npm install -D tsx
-```
-
-Confirm `package.json` includes:
-
-```json
-"prisma": {
-  "seed": "npx tsx prisma/seed.ts"
-}
-```
-
-### 16.2 Schema migrations (chronological)
-
-```bash
-# Wave 2 baseline (if starting fresh)
-npx prisma migrate dev --name init
-
-# Wave 3 — flexible PIC
-npx prisma migrate dev --name add_task_assignee_name
-# Applied historically as: 20260830140000_add_task_assignee_name
-
-# Wave 3 — RLS hardening (Supabase advisories)
-npx prisma migrate dev --name enable_rls_harden_public_schema
-# Applied historically as: 20260901170000_enable_rls_harden_public_schema
-
-# Wave 3 — initial dates, progress, sortOrder
-npx prisma migrate dev --name rename_planned_to_initial_and_add_progress
-# Applied historically as: 20260905120000_rename_planned_to_initial_and_add_progress
-
-npx prisma generate
-```
-
-On an existing clone that already contains migration folders, prefer:
-
-```bash
-npx prisma migrate deploy
-npx prisma generate
-```
-
-### 16.3 Database seeding
-
-```bash
-npx prisma db seed
-# equivalent helper script:
-npm run db:seed
-```
-
-Expected console summary: Super PM preserved; dummy PM / Members / Viewer profiles; two projects including **E-Commerce Mobile App Redesign**.
-
-### 16.4 Quality gates (run after each Wave 3 milestone)
+## 7. Architecture patterns to copy (quality bar)
+
+1. **Server Actions only** for data — no browser Supabase Data API for business tables (RLS revokes anon/authenticated).  
+2. **`withAuditSession`** — every write spreads `auditCreate` / `auditUpdate`.  
+3. **Pure analytics modules** (`working-days.ts`, `weighted-progress.ts`) — unit-tested; UI is a consumer.  
+4. **DTO name fields** for UI; DB stores UUIDs; JOINs for SQL inspection.  
+5. **Australian English** copy; dates displayed DD/MM/YYYY where user-facing.  
+6. **Vertical slices** — a wave is not “done” until the stakeholder can exercise it on live Supabase without opening a test runner.
+
+### 7.1 Quality gates (before each wave UAT)
 
 ```bash
 npx tsc --noEmit
 npm run lint
 npm run build
-npm run dev
-# Open http://localhost:3000 — sign in as Super PM → open E-Commerce project
+npx prisma migrate status
 ```
 
-### 16.5 Manual Wave 3 smoke checklist
+---
 
-1. Tabs: List → Kanban → Gantt → Analytics (no Recharts 0×0 warnings).
-2. Drawer: post/delete comment; set registered PIC and custom "Mr X".
-3. Progress slider: type `50`, drag range; status becomes Doing; no focus loss.
-4. Move Done → To Do: actual dates cleared; card at **top** of To Do.
-5. Gantt: Week and Month; sticky rail/header; Today line under header without top node; Done Actual node on bar end; hover tooltips for bars and Today.
-6. Analytics: KPIs, donut, workload, overdue list.
-7. Viewer login (if Auth user configured): read-only notice; no mutations.
+## 8. Key file map after Wave 4A
 
-### 16.6 Implement Wave 3 code in order
-
-1. `src/lib/actions/comments.ts` + drawer wiring (Step 1).
-2. `ProjectGanttView.tsx` + `date-utils.ts` (Step 2; apply Section 15.7 fidelity fixes).
-3. `ProjectAnalyticsView.tsx` + `task-metrics.ts` + four-tab hub (Step 3; apply Recharts deferred mount).
-4. RBAC polish, skeletons, delete + toasts (Steps 4–5).
-5. Seed + `assigneeName` migration + PIC UI (Steps 6–8).
-6. RLS migration + `supabase-security.md` (Step 9).
-7. Progress / `sortOrder` / initial-date migration + `task-defaults.ts` (Steps 10–11; apply Section 15.3–15.6).
-8. Final Gantt close-out (Step 12).
-9. Re-run Section 16.4 commands and Section 15.1 UAT matrix.
+```
+prisma/schema.prisma
+prisma/migrations/20260912120000_wave4a1_schema_audit_lifecycle_issues/
+prisma/migrations/20260920100000_wave4a_audit_actor_names/          # historical
+prisma/migrations/20260920110000_wave4a_actor_master_join/          # drop names + System user
+src/lib/audit.ts
+src/lib/audit-display.ts
+src/lib/analytics/working-days.ts
+src/lib/analytics/weighted-progress.ts
+src/lib/analytics/weighted-progress.test.ts
+src/lib/actions/holidays.ts
+src/components/schedule/ProgressPairBadges.tsx
+src/components/schedule/StatusFlagBadge.tsx
+src/components/settings/HolidayCalendarClient.tsx
+app/settings/page.tsx
+app/settings/holidays/page.tsx
+src/components/tasks/TaskListView.tsx          # audit names + schedule health
+src/components/kanban/*                        # Actual/Target + flags
+src/components/gantt/ProjectGanttView.tsx      # Task + Progress columns
+src/components/projects/HomePageClient.tsx
+src/components/projects/ProjectDetailView.tsx  # mutation queue / merge
+doc/dev_plan.md · dev_req.md · dev_ref.md · dev_spec.md
+```
 
 ---
 
-## Appendix D — Wave 3 file inventory
+## 9. Step-by-step replication recipe (Wave 4A only)
 
-| Path | Role |
-|------|------|
-| `src/lib/actions/comments.ts` | Comment list / create / delete Server Actions |
-| `src/lib/actions/seed.ts` | Optional in-app seed trigger helper |
-| `src/lib/gantt/date-utils.ts` | Timeline columns, offsets, bar geometry, Actual range |
-| `src/lib/analytics/task-metrics.ts` | Analytics aggregates for F-205 |
-| `src/lib/assignee-display.ts` | Shared PIC display helpers |
-| `src/lib/task-defaults.ts` | Local today, progress/status/date transition rules |
-| `src/lib/permissions.ts` | UI permission helpers |
-| `src/lib/seed/database-seed.ts` | Wave 3 UAT reset + seed logic |
-| `prisma/seed.ts` | CLI seed entry (`npx prisma db seed`) |
-| `src/components/gantt/ProjectGanttView.tsx` | Interactive Gantt (F-204) |
-| `src/components/analytics/ProjectAnalyticsView.tsx` | Analytics dashboard (F-205) |
-| `src/components/tasks/AssigneePicField.tsx` | Searchable member + custom PIC |
-| `src/components/tasks/PicLabel.tsx` | PIC label + Custom badge |
-| `src/components/projects/ReadOnlyAccessNotice.tsx` | Viewer / read-only banner |
-| `src/components/projects/ProjectTasksSkeleton.tsx` | Loading skeleton |
-| `src/components/ui/ConfirmDialog.tsx` | Delete confirmations |
-| `src/components/ui/InstantHoverTip.tsx` | Instant tooltips |
-| `src/components/providers/ToastProvider.tsx` | Toast notifications |
-| `app/projects/[id]/loading.tsx` | Route loading UI |
-| `doc/supabase-security.md` | RLS / Supabase advisory notes |
-| `prisma/migrations/20260830140000_add_task_assignee_name/` | `assigneeName` |
-| `prisma/migrations/20260901170000_enable_rls_harden_public_schema/` | RLS enable |
-| `prisma/migrations/20260905120000_rename_planned_to_initial_and_add_progress/` | Initial dates + progress + sortOrder |
+1. Start from a working **v2.0** app on Supabase (Auth + Prisma).  
+2. Copy into a 2.1 workspace; connect a dedicated GitHub remote; confirm UI parity.  
+3. Expand `dev_req` / `dev_plan` / `dev_ref` for audit, lifecycle, Issue Log, agile waves (or reuse the committed docs).  
+4. Apply W4A-1 migration; implement `withAuditSession` on all writes.  
+5. Implement `working-days.ts` + `/settings/holidays` (Super PM).  
+6. Implement `weighted-progress.ts` + unit tests; surface metrics on List/Kanban/Gantt/drawer/landing.  
+7. Apply UI refinements in §5.5.  
+8. Run Wave 4A UAT pack on live data; fix audit names, date races, drawer chrome.  
+9. Confirm actor-master strategy (User + System seed + JOINs).  
+10. Record **UAT PASSED**; only then start Wave 4B.
 
 ---
 
-## Appendix E — Wave completion tracker (final)
+## 10. Appendix — Prompt index (2.1 → end of 4A)
 
-| Wave | Focus | Status |
-|------|-------|--------|
-| **Wave 1** | F-201 Kanban + F-202 Planner drawer (client UI) | **Complete — UAT verified** |
-| **Wave 2** | Supabase Auth, PostgreSQL/Prisma, RBAC (F-203) | **Complete — UAT verified** |
-| **Wave 3** | Gantt, analytics, cloud comments (F-204, F-205, F-202) | **Complete — UAT verified** |
+| ID | Topic |
+|----|--------|
+| A–B | Clone 2.1 / GitHub remote |
+| C | Audit + Completed/soft-delete/purge + completed visibility (ID requirements) |
+| D–E | Fix Mermaid Chapter 8 |
+| F–G | Issue Log + Analytics Issue Intelligence |
+| H | Agile waves + per-wave UAT |
+| I–J | Start Wave 4A step-by-step |
+| §5.5 | Pre-UAT UI revision prompts (Actual/Target, cap 100%, Gantt, flags) |
+| K–L | UAT pack help; date race; hide drawer audit |
+| M | Actor master / JOIN best practice; 4A PASSED |
+
+Wave 4B prompts (stage-gated implementation) are appended below as each stage completes.
 
 ---
 
-*End of Wave 3 log. Version 2.0 North Star implementation journal is complete through Wave 3 UAT close-out (9 September 2026).*
+## 11. Wave 4B stage reports
+
+### W4B-1 / W4B-2 (prior)
+
+User approval queue (email-confirm gated via `/auth/confirm` + `/auth/callback`), Super PM settings (Approvals, Privilege matrix, Safe deletion), applicant approval email (SMTP or Resend), holiday calendar, and related RBAC/audit hardening. Unapproved users cannot sign in; middleware force-signs them out to `/login` with a notice. Pending/rejected applicants may be permanently removed from Approvals. Approvals / Privilege matrix / Safe deletion directories use sticky instant search so long tenant lists stay scannable (Privilege matrix: role chips + expand-one editors; Safe deletion: role chips on Active, purge-due sort + due-soon cue on Deactivated). See Settings routes under `/settings`.
+
+**UAT hardening (post W4B-4):** Super PM **Create account** tab (`provisionUserBySuperPm`, FR-GOV-07) provisions known people when mailbox confirmation is impractical — Auth identity with confirmed email and an immediately `APPROVED` profile, bypassing the queue. Requires `SUPABASE_SERVICE_ROLE_KEY`. Covered by **UAT-405A**. Password reset (self-service email + Super PM one-time reveal) and Settings → Account for all approved roles are covered by **UAT-405B** (FR-GOV-08 / FR-GOV-09). Duplicate registration emails return clear Australian English errors. Portfolio scope (**My projects** / **All projects** / per-PM) and assignee PIC portal combobox are covered by **UAT-405C**. Super PM **Viewer project visibility** (`/settings/viewer-visibility`, `syncViewerProjectGrants` → `ProjectMember` only) is covered by **UAT-405D**. Full executable steps for browser agents: **`doc/dev_uat.md`**.
+
+### W4B-3 — Roster, milestones, Issue Log (this stage)
+
+**Purpose.** Give owning PMs an operable programme-office surface on each project: edit metadata and team roster, maintain milestones with Gantt stage-gate markers, and run a first-class Issue Log that never contaminates weighted task schedule maths. Landing cards surface open-issue pressure.
+
+**How it was built (structure & practices).**
+
+1. **Server Actions as the write boundary**  
+   - `src/lib/actions/projects.ts` — `updateProject` (name/description + roster sync), `listDirectoryUsers`, landing `openIssueCount` / `criticalOpenIssueCount` via `issue.groupBy`.  
+   - `src/lib/actions/milestones.ts` — CRUD with `updatedTarget = initialTarget` on create; admin-gated.  
+   - `src/lib/actions/issues.ts` — raise / update / close / comment / delete; `IssueActivity` written in the **same transaction** as the mutation; PIC field restrictions; `revalidatePath` on project hub and `/`.  
+   - Pure schedule helper kept off the `"use server"` boundary: `src/lib/analytics/issue-schedule.ts` (`computeIssueFixFlag`).
+
+2. **Domain types** in `src/lib/types.ts` (`Milestone`, `Issue`, `IssueComment`, `IssueActivity`) mapped from Prisma with soft actor UUIDs + display-name JOINs where needed.
+
+3. **UI composition (project hub)**  
+   - `EditProjectModal` — roster checkboxes (owner locked on).  
+   - `ProjectMilestonesPanel` — compact stage-gate strip; Add/Edit modal (name, description, updated target, achieved date, delete); View all when the chip list is long.  
+   - Fifth hub tab **Issue Log**: `ProjectIssueLogView` register + `IssueDetailDrawer` (comments, activity trail, close/resolve).  
+   - `ProjectGanttView` — dashed vertical milestone markers anchored on `actualAchieved ?? updatedTarget` (amber pending / emerald achieved); Gantt legend lists both **Milestone (pending)** and **Milestone (achieved)** when any milestones exist; dates included in timeline bounds.
+   - **FR-DAT-01:** `actualAchieved` (milestones), task/issue actual dates reject future local calendar days via `assertActualDateNotFuture`; planned targets remain free to be future.  
+   - `app/projects/[id]/page.tsx` loads project, tasks, issues, milestones, and holidays in parallel.
+
+4. **Database / integrity**  
+   - No new migration in this stage — Wave 4A schema already held `Milestone`, `Issue`, `IssueComment`, `IssueActivity`.  
+   - Issues remain excluded from `$W_i` / Project PS (only tasks feed `weighted-progress`).  
+   - Open-issue counts exclude `resolved` / `closed` / `cancelled`.
+
+5. **Verification** — `tsc --noEmit` clean after wiring.
+
+**Explicitly deferred at the time of this stage report.**  
+- **W4B-4:** Completed Projects, soft-delete/restore, retention purge, Purged Project Register — **later completed** (see W4B-4 below).  
+- **Wave 4C:** Issue Intelligence charts on Analytics; executive portfolio / macro Gantt diamonds — still deferred.
+
+### W4B-4 — Lifecycle, retention and purge (this stage)
+
+**Purpose.** Govern programmes across Active → Completed → soft-deleted → physically purged, with an immutable tombstone register and Super PM recycle-bin controls. Landing stays Active-only.
+
+**What shipped**
+
+| Surface | Role |
+|---------|------|
+| `/projects/completed` | Completed Projects workspace (visibility via `completedProjectAccess` + owning PM) |
+| Soft-delete | Owning PM / Super PM; 30-day `purgeDueAt`; blocking warning |
+| Settings → Deleted Projects | Super PM restore / permanent purge (name confirmation) |
+| Settings → Purged Project Register | Append-only tombstones |
+| `runProjectRetentionJob` | Auto-complete @ 30 days @ 100%; purge soft-deletes; purge completed @ 5 years; soft-deactivated user warning/purge; Super PM **Run retention job** on Deleted Projects |
+| Landing / hub | **Move to Completed** at 100%; Completed nav; soft-delete copy |
+
+**How it was built**
+
+1. **`src/lib/actions/project-lifecycle.ts`** — single write module for mark/reopen/list completed, soft-delete/restore/purge, list purged, retention job. Physical purge always inserts `PurgedProject` then deletes the operational row in one transaction.
+2. **RBAC** — `projectsVisibilityFilter` = Active ∧ `deletedAt IS NULL`; `completedProjectsVisibilityFilter` respects Super PM / ALL / ASSIGNED / owning-PM; soft-deleted rows are not readable on `/projects/[id]`; Completed projects are mutation-read-only until reopen.
+3. **Progress clock** — `syncProjectProgressClock` after task create/update/delete maintains `progressReached100At` for auto-complete.
+4. **No new migration** — lifecycle columns and `PurgedProject` already existed from Wave 4A schema.
+5. **Verification** — `tsc --noEmit` clean.
+
+### Post W4B-4 hardening — Viewer project visibility (this increment)
+
+**Purpose.** After a Viewer is approved, a Super PM must grant Active-project visibility without asking every owning PM to open Edit Project (PMs cannot edit peers’ rosters).
+
+**What shipped**
+
+| Surface | Role |
+|---------|------|
+| Settings → Viewer project visibility | Super PM only (`/settings/viewer-visibility`) |
+| `src/lib/actions/viewer-visibility.ts` | Directory, grant list, transactional Active-membership sync |
+| `ViewerVisibilityClient.tsx` | Select Viewer → checkbox Active projects → Save |
+| Edit Project roster copy | Notes the Super PM cross-portfolio path |
+
+**Integrity / security**
+
+- Writes only `ProjectMember` rows for the selected approved `globalRole = viewer` account.
+- Sync scope is **Active ∧ not soft-deleted** projects; other roster members are never removed.
+- Non–Super PM page access redirects home; Server Actions return `FORBIDDEN`.
+- Continues the ban on `User.projectVisibility: String[]` (FR-GOV-05 / Recommendation 1).
+
+**Verification** — `tsc --noEmit` clean. UAT: **UAT-405D**.
+
+**Wave 4B implementation includes this governance surface.** Wave 4B UAT was executed next (§12).
+
+---
+
+## 12. Wave 4B UAT — accepted (4–5 October 2026)
+
+**Environment:** `http://localhost:3000` · Cursor IDE browser · live Supabase.  
+**Executable pack:** `doc/dev_uat.md` (v1.8).  
+**Gate decision:** **Wave 4B UAT = PASSED.** Wave 4C must not start until its development tranche is complete.
+
+### 12.1 Packs executed
+
+| Pack | Test IDs | Verdict |
+|------|----------|---------|
+| Auth / visibility | UAT-405, 405A–D | **Pass** (4 Oct 2026) |
+| Milestones / Issue Log | UAT-407, 419–422 | **Pass** (4 Oct 2026) |
+| Wave 4A maths & audit (regression during 4B session) | UAT-401–404, 411 | **Pass** (5 Oct 2026) |
+| Lifecycle | UAT-412, 415–417 | **Pass** (5 Oct 2026) |
+| Governance | UAT-406, 414 | **Pass** (5 Oct 2026) |
+| Retention (job-assisted) | UAT-413, 418 | **Pass** (5 Oct 2026) |
+
+### 12.2 Job-assisted retention method (UAT-413 / 418)
+
+Pure calendar waits (30 days / five years) are not practical in a UAT session. The accepted method was:
+
+1. **Seed disposable fixtures only** via `scripts/uat-retention-fixtures.ts prepare` — backdate `progressReached100At` / `completedPurgeDueAt` on named UAT projects.  
+2. **Preflight** to confirm no non-fixture portfolio rows would be touched.  
+3. **Invoke** Super PM Settings → Deleted Projects → **Run retention job** (confirm dialog).  
+4. **Verify** Completed (**Auto retention**) and Purged Register (**Completed retention expired** / System).  
+5. **Restore shields** if any portfolio rows were temporarily protected.
+
+The system clock was never changed. Real portfolio projects were not mutated.
+
+### 12.3 Material defects fixed during Wave 4B UAT
+
+| Area | Fix |
+|------|-----|
+| Task drawer blur commits | Commit title/description/progress from `event.currentTarget.value` |
+| Analytics overdue due label | Use effective due (`updatedDueDate ?? initialDueDate`) |
+| Edit Project modal | Sticky Save footer on long rosters |
+| Safe deletion | **Loading impact…**; plural copy for tasks / accounts |
+| Deleted Projects | Confirm before retention; **Running…** busy state |
+| Purged Register | Plural counts (`1 task` not `1 tasks`) |
+
+### 12.4 Explicitly not started
+
+- Wave 4C: high-density grid polish, Schedule / Issue Intelligence charts, `/portfolio`, macro Gantt, About modal.  
+- `dev_spec.md` refresh to 2.1 (stakeholder-deferred until programme close).
+
+---
+
+*Wave 4B UAT accepted 5 October 2026. Pause before Wave 4C development.*

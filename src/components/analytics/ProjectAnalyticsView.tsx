@@ -179,7 +179,9 @@ function OverduePanel({
                   </p>
                   <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                     <PicLabel task={row.task} className="inline-flex" /> · Due{" "}
-                    {formatAuDate(row.task.initialDueDate)}
+                    {formatAuDate(
+                      row.task.updatedDueDate ?? row.task.initialDueDate,
+                    )}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold tabular-nums text-white dark:bg-red-500">

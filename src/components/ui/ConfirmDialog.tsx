@@ -64,7 +64,7 @@ export default function ConfirmDialog({
             disabled={isPending}
             className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
           >
-            {isPending ? "Deleting…" : confirmLabel}
+            {isPending ? "Working…" : confirmLabel}
           </button>
         </div>
       </div>

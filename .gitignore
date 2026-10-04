@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+.uat-retention-shields.json
 
 # debug
 npm-debug.log*

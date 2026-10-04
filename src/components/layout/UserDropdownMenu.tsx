@@ -1,9 +1,11 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
+import NotificationBadge from "@/src/components/ui/NotificationBadge";
 import { signOutAction } from "@/src/lib/actions/auth";
+import { createClient } from "@/src/lib/supabase/client";
 import { getRoleLabel } from "@/src/lib/role-labels";
 import type { GlobalRole } from "@/src/lib/types";
 
@@ -11,15 +13,20 @@ export type UserDropdownMenuProps = {
   name: string;
   email: string;
   globalRole: GlobalRole;
+  pendingApprovalCount?: number;
 };
 
 export default function UserDropdownMenu({
   name,
   email,
   globalRole,
+  pendingApprovalCount = 0,
 }: UserDropdownMenuProps) {
   const [open, setOpen] = useState(false);
+  const [isSigningOut, startSignOut] = useTransition();
   const rootRef = useRef<HTMLDivElement>(null);
+  const showApprovalCue =
+    globalRole === "super_pm" && pendingApprovalCount > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -44,16 +51,34 @@ export default function UserDropdownMenu({
     };
   }, [open]);
 
+  function handleSignOut() {
+    startSignOut(async () => {
+      try {
+        await signOutAction();
+        // Also clear the browser client session, then hard-navigate.
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      } catch {
+        // Still leave the page even if one sign-out path fails.
+      }
+      window.location.assign("/login");
+    });
+  }
+
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-500/70 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:border-slate-300 hover:bg-slate-700/60"
+        disabled={isSigningOut}
+        className="relative inline-flex items-center gap-1.5 rounded-lg border border-slate-500/70 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:border-slate-300 hover:bg-slate-700/60 disabled:opacity-60"
         aria-expanded={open}
         aria-haspopup="menu"
       >
         <span className="max-w-[10rem] truncate">{name}</span>
+        {showApprovalCue ? (
+          <NotificationBadge count={pendingApprovalCount} tone="onDark" />
+        ) : null}
         <ChevronDown
           className={[
             "size-4 shrink-0 transition-transform",
@@ -80,29 +105,32 @@ export default function UserDropdownMenu({
           </div>
 
           <div className="px-2 py-2">
-            <button
-              type="button"
+            <a
+              href="/settings"
               role="menuitem"
-              disabled
-              className="flex w-full cursor-not-allowed items-center rounded-lg px-3 py-2 text-left text-sm text-slate-500 dark:text-zinc-500"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-700/60 dark:hover:bg-zinc-800"
+              onClick={() => setOpen(false)}
             >
-              Settings
-              <span className="ml-auto text-[10px] uppercase tracking-wide">
-                Soon
-              </span>
-            </button>
+              <span className="flex-1">Settings</span>
+              {showApprovalCue ? (
+                <NotificationBadge
+                  count={pendingApprovalCount}
+                  tone="onDark"
+                />
+              ) : null}
+            </a>
           </div>
 
           <div className="border-t border-slate-700/80 px-2 py-2 dark:border-zinc-700">
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                role="menuitem"
-                className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-300 transition hover:bg-red-950/40 hover:text-red-200"
-              >
-                Sign out
-              </button>
-            </form>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={isSigningOut}
+              onClick={handleSignOut}
+              className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-300 transition hover:bg-red-950/40 hover:text-red-200 disabled:opacity-60"
+            >
+              {isSigningOut ? "Signing out…" : "Sign out"}
+            </button>
           </div>
         </div>
       ) : null}

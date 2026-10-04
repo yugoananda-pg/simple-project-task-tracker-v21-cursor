@@ -108,6 +108,14 @@ export function getEffectiveDueDate(task: {
   return task.updatedDueDate ?? task.initialDueDate;
 }
 
+/** Effective start date for schedule maths — prefer updated, else initial. */
+export function getEffectiveStartDate(task: {
+  updatedStartDate: string | null;
+  initialStartDate: string | null;
+}): string | null {
+  return task.updatedStartDate ?? task.initialStartDate;
+}
+
 type SyncableTask = Pick<
   Task,
   "status" | "progress" | "actualStartDate" | "actualCompletionDate"

@@ -2,17 +2,29 @@
 
 **Document Identifier:** `doc/dev_plan.md`  
 **Product Title:** Simple Project Task Tracker 2.1 (Executive Portfolio Intelligence System)  
-**Version:** 2.1.0  
-**Status:** Canonical Master Plan (North Star) — Approved for Release 2.1 Implementation  
+**Version:** 2.1.5  
+**Status:** Canonical Master Plan (North Star) — Waves **4A** and **4B** implemented and UAT-accepted; Wave **4C** not yet developed  
+**Amendment:** Universal mutation audit trail; Completed Projects (not Archive); soft-delete / restore / purge; five-year completed retention; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE target Cursor; delivery status aligned to as-built UAT (`doc/dev_uat.md`)  
 **Target Platform:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Supabase PostgreSQL, Prisma ORM 7  
-**IDE Target:** Antigravity Standalone Environment  
+**IDE Target:** Cursor (Agent / IDE browser automation for UAT)  
 **Language Standard:** Professional Australian English (`en-AU`)  
 **Companion Specifications:**
-* [`./doc/dev_req.md`](./dev_req.md) — Detailed System Requirements Specification (Release 2.1)
-* [`./doc/dev_ref.md`](./dev_ref.md) — Raw Refinement Requirements Blueprint
-* [`./doc/dev_spec.md`](./dev_spec.md) — Technical Specification Baseline (Wave 3 Close-out)
-* [`./doc/dev_proc.md`](./dev_proc.md) — Historical Engineering Journal & Execution Log
-* [`./doc/supabase-security.md`](./supabase-security.md) — Row-Level Security (RLS) Baseline
+* [`dev_req.md`](./dev_req.md) — Detailed System Requirements Specification (Release 2.1)
+* [`dev_ref.md`](./dev_ref.md) — Raw Refinement Requirements Blueprint
+* [`dev_spec.md`](./dev_spec.md) — Technical Specification Baseline (Wave 3 Close-out)
+* [`dev_proc.md`](./dev_proc.md) — Historical Engineering Journal & Execution Log
+* [`dev_uat.md`](./dev_uat.md) — Executable User Acceptance Testing pack (wave exit evidence)
+* [`supabase-security.md`](./supabase-security.md) — Row-Level Security (RLS) Baseline
+
+### Programme delivery status (as-built, 5 Oct 2026)
+
+| Wave | Build | UAT | Evidence |
+| :--- | :--- | :--- | :--- |
+| **4A — Live schedule health** | Shipped | **Accepted** (5 Oct 2026) | `doc/dev_uat.md` — UAT-401–404, UAT-411 |
+| **4B — Governed programme office** | Shipped | **Accepted** (4–5 Oct 2026; job-assisted UAT-413 / 418 included) | `doc/dev_uat.md` — UAT-405, 405A–D, 406–407, 412–422 |
+| **4C — Executive visualisation** | **Not in current build** | Deferred | Do not execute UAT-408–410, 423–425, UAT-R until 4C development completes |
+
+The dated work-package table in Section 8 remains the **original planned** critical path (12 Sep–12 Oct 2026). Actual engineering and UAT calendars slipped relative to that plan; acceptance evidence is authoritative in `doc/dev_uat.md`, not the planned Sep UAT windows alone.
 
 ---
 
@@ -20,11 +32,11 @@
 
 Simple Project Task Tracker 2.1 is an **Executive Portfolio Intelligence System** designed for capital programme governance, multi-project delivery leadership, and high-velocity engineering teams. In complex enterprise delivery, unweighted task counts and subjective progress percentages routinely obscure critical schedule slippage—a dozen rapid administrative completions cannot compensate for a four-week delay on an architectural dependency. 
 
-Version 2.1 addresses this fundamental challenge by transitioning from an operational task tracker into an executive intelligence platform. It introduces a mathematically rigorous **Weighted Progress Engine** based on business working days (excluding statutory Australian holidays and corporate shutdowns), an **Uncapped Target Progress & Punctuality Score (PS) Engine** for early schedule risk detection, a deterministic **11-State Status Flag Matrix**, cumulative **S-Curve & Burn-Down Visualisations**, and a multi-tiered **Executive Portfolio Dashboard** with macro Gantt roadmaps. 
+Version 2.1 addresses this fundamental challenge by transitioning from an operational task tracker into an executive intelligence platform. It introduces a mathematically rigorous **Weighted Progress Engine** based on business working days (excluding statutory Australian holidays and corporate shutdowns), a **Capped Target Progress & Punctuality Score (PS) Engine** for schedule risk detection, a deterministic **11-State Status Flag Matrix**, cumulative **S-Curve & Burn-Down Visualisations**, a per-project **Issue Log** for unplanned impediments (kept strictly outside the weighted task schedule, with every mutation reflected on the same project’s Analytics tab as **Issue Intelligence**), and a multi-tiered **Executive Portfolio Dashboard** with macro Gantt roadmaps. 
 
 Primary stakeholders comprise:
-* **Super PMs (Platform Administrators & Portfolio Directors):** Requiring portfolio-wide aggregation, registration governance, holiday scheduling, and safe resource reallocation.
-* **Project Managers (PMs / Delivery Leads):** Requiring milestone control, roster management, accurate S-Curve schedule tracking, and automated delay detection.
+* **Super PMs (Platform Administrators & Portfolio Directors):** Requiring portfolio-wide aggregation, registration governance, holiday scheduling, safe resource reallocation, discretion over who may view Completed Projects, and exclusive restore / permanent-purge authority.
+* **Project Managers (PMs / Delivery Leads):** Requiring milestone control, roster management, an Issue Log whose activity and progress appear on the project Analytics dashboard, accurate S-Curve schedule tracking, and automated delay detection.
 * **Team Members (Specialist Contributors):** Requiring high-density tabular workspaces with inline editing and transparent personal workload clarity.
 * **Viewers (Executive Sponsors & External Auditors):** Requiring read-only access to macro milestones, portfolio health indicators, and audited progress trails.
 
@@ -36,27 +48,33 @@ The scope for Version 2.1 is catalogued below into discrete, testable, and demon
 
 ```mermaid
 graph TD
-    subgraph W4A["Wave 4A: Core Engines & Data Layer"]
+    subgraph W4A["Wave 4A: Live schedule health"]
         F2101["F-2101: Global Holiday Calendar Engine"]
         F2102["F-2102: Weighted Progress Engine"]
-        F2103["F-2103: Punctuality Score & 11-State Flag Engine"]
+        F2103["F-2103: Punctuality Score and 11-State Flag Engine"]
+        F2118["F-2118: Universal Mutation Audit Trail"]
+        F2109A["F-2109a: Landing-card schedule health"]
     end
 
-    subgraph W4B["Wave 4B: Governance & Project Milestones"]
-        F2104["F-2104: Registration Approval & User Onboarding"]
-        F2105["F-2105: Dynamic RBAC & Dashboard Delegation"]
-        F2106["F-2106: Safe Account Deletion & Asset Handover"]
-        F2107["F-2107: Project Lifecycle & Roster Editor"]
+    subgraph W4B["Wave 4B: Governed programme office"]
+        F2104["F-2104: Registration Approval and User Onboarding"]
+        F2105["F-2105: Dynamic RBAC and Dashboard Delegation"]
+        F2106["F-2106: Safe Account Deactivation and Purge"]
+        F2107["F-2107: Project Lifecycle and Roster Editor"]
         F2108["F-2108: Project Milestone Tracking Engine"]
+        F2119["F-2119: Per-Project Issue Log"]
+        F2115["F-2115: Completed Projects Workspace"]
+        F2116["F-2116: Soft-Delete, Restore and Retention Purge"]
+        F2117["F-2117: Purged Project Register"]
+        F2114B["F-2114a: Settings console minus About"]
     end
 
-    subgraph W4C["Wave 4C: Visualisations & Executive Portfolios"]
-        F2109["F-2109: Smart Landing Page & Executive Cards"]
+    subgraph W4C["Wave 4C: Executive visualisation"]
         F2110["F-2110: High-Density Tabular Workspace"]
-        F2111["F-2111: Per-Project S-Curve & Burn-Down Charts"]
+        F2111["F-2111: Per-Project Analytics: Schedule and Issue Intelligence"]
         F2112["F-2112: Multi-Project Executive Portfolio Dashboard"]
         F2113["F-2113: Macro Executive Gantt Chart"]
-        F2114["F-2114: Global Settings Console & System About Modal"]
+        F2114C["F-2114b: System About Modal"]
     end
 
     W4A --> W4B
@@ -67,77 +85,182 @@ graph TD
 * **Scope:** Dedicated CRUD management interface under `/settings/holidays` restricted to Super PMs.
 * **Capability:** Captures statutory Australian public holidays and corporate shutdown dates (`@db.Date`).
 * **Calculation Impact:** Underpins all scheduling arithmetic, defining working days strictly as Monday–Friday excluding registered holidays. Dynamically recalculates dependent task durations, relative weights, and target progress trajectories.
+* **Wave 4A increment:** Super PMs must be able to create, edit, and delete holidays in the running application. A library without `/settings/holidays` is not a completed 4A deliverable.
 
 ### F-2102: Mathematically Rigorous Weighted Progress Engine
 * **Scope:** Task-level and project-level progress computation engine (`src/lib/analytics/weighted-progress.ts`).
 * **Capability:** Computes relative task weight $W_i$ based on planned working-day duration relative to aggregate project working days:
   $$W_i = \frac{D_{\text{planned}_i}}{\sum_{k=1}^{n} D_{\text{planned}_k}}$$
 * **Symmetrical Summation:** Project progress is derived via the direct linear sum of weighted tasks ($P_{\text{actual}_{\text{project}}} = \sum W_i \times P_{\text{actual}_i}$; $P_{\text{target}_{\text{project}}} = \sum W_i \times P_{\text{target}_i}$), guaranteeing $100.0\%$ mathematical normalisation with zero secondary re-weighting distortion.
+* **Wave 4A increment:** $W_i$, $P_{\text{target}}$, and $P_{\text{actual}}$ shall be visible on the live task List, Kanban, Gantt Progress column, task drawer, and landing cards. A calculation module that is only unit-tested is not a completed 4A deliverable.
 
 ### F-2103: Punctuality Score (PS) & 11-State Status Flag Engine
 * **Scope:** Schedule variance and early warning classification engine.
 * **Capability:** 
-  * Uncapped target progress ($P_{\text{target}} = E_{\text{elapsed}} / D_{\text{planned}}$), allowing target progress to exceed $100\%$ when tasks breach their due dates.
+  * Target progress capped at $100\%$ ($P_{\text{target}} = \min(100\%,\ E_{\text{elapsed}} / D_{\text{planned}} \times 100\%)$), including when tasks breach their due dates.
   * Piecewise evaluation of Punctuality Score across Not Started, In Progress, and Completed tasks, plus project-level aggregate punctuality.
   * Deterministic mapping to exactly one of **11 Australian English PM Status Flags** (Due to Commence, Delayed Commencement, Critically Overdue Start, On Track, Slipping, Critically Delayed, Ahead of Schedule, Completed Ahead of Schedule, Completed On Time, Completed Late, Completed Severely Late).
+* **Wave 4A increment:** The Status Flag pill shall render on the task row, Kanban card, Gantt Task column, drawer, and landing card in the running application. The Gantt Progress column shows stacked Actual / Target per task.
 
 ### F-2104: Registration Approval & User Onboarding Workflow
 * **Scope:** Identity management and edge security boundary.
-* **Capability:** Newly registered accounts automatically enter `approvalStatus = PENDING`. Next.js edge middleware redirects unapproved accounts to `/pending-approval` with informative messaging and session sign-out capabilities. Super PMs manage an approval console under `/settings/users` to review, approve, or reject candidate accounts.
+* **Capability:** Self-service registration creates `approvalStatus = PENDING` and sends a Supabase email-confirmation link (prefer `/auth/confirm?token_hash=…` to avoid mailbox prefetch consuming the OTP). Only after the registrant confirms (`emailConfirmedAt` set) does the account enter the Super PM approval queue (badges + optional Super PM email). Unconfirmed or unreachable addresses never appear in the queue. Until `APPROVED`, sign-in is refused and any session is signed out at the edge (login notice; `/pending-approval` redirects to the same notice). Super PMs approve at `/settings/users` **and must select `globalRole`** in that step. On approval, the applicant receives a brief email naming the assigned role and a link to `/login`, then signs in with the credentials they registered. Reject applies to pending candidates; Super PMs may permanently delete pending/rejected applicants. Approved accounts use the Privilege Matrix. Separately, Super PMs may **provision** a known person under Create account (`provisionUserBySuperPm`, FR-GOV-07): Auth identity with confirmed email + immediately `APPROVED` profile, bypassing confirmation and the queue when mailbox access is unavailable. Duplicate emails (self-service or provision) return clear Australian English errors. Email on an existing account is immutable.
+
+### F-2104A: Password Reset & Shared Settings Account Hub
+* **Scope:** Credential recovery and personal account settings (`/forgot-password`, `/settings`, `/settings/account`).
+* **Capability:** Approved users request a temporary password by email (`requestPasswordResetAction`). When email is unavailable, Super PMs generate a temporary password via `resetUserPasswordBySuperPm` and share it out-of-band (shown once in the UI). All approved roles access Settings → Account to update display name and change password; Super PMs retain governance surfaces under the same Settings hub (Users & privileges, Viewer project visibility, Holidays, Deleted / Purged projects).
 
 ### F-2105: Dynamic RBAC Governance & Dashboard Delegation
-* **Scope:** Granular authorization engine (`src/lib/rbac.ts`).
-* **Capability:** Super PMs can arbitrarily delegate or revoke executive dashboard access per user across three distinct scopes: `PROJECT` (Per-Project Analytics), `PM_PORTFOLIO` (PM Portfolio Analytics), and `TOTAL_COMPANY` (Macro Enterprise Portfolio). Project visibility and write rights are strictly governed via indexed relational `ProjectMember` join records.
+* **Scope:** Granular authorization engine (`src/lib/rbac.ts`) and `/settings/users` Privilege Matrix (**Wave 4B**).
+* **Capability:** Super PMs can arbitrarily delegate or revoke executive dashboard access per user across three distinct scopes: `PROJECT` (Per-Project Analytics), `PM_PORTFOLIO` (PM Portfolio Analytics), and `TOTAL_COMPANY` (Macro Enterprise Portfolio). Super PMs can also set `completedProjectAccess` (`NONE` | `ASSIGNED` | `ALL`) per account, deciding who may view projects labelled Completed, and can change `globalRole` after approval. Project visibility and write rights are strictly governed via indexed relational `ProjectMember` join records (never `User.projectVisibility[]`). Owning PMs always retain implicit access to their own completed projects. PM / Super PM home Portfolio scope supports **My projects**, **All projects**, and per-PM owned portfolios. Approvals and Privilege matrix UIs use instant name/email search; Privilege matrix adds role filter chips and expand-one editors so long directories remain scannable.
 
-### F-2106: Safe Account Deletion & Asset Handover Protocol
-* **Scope:** Database integrity and administrative user management.
-* **Capability:** Direct cascading deletion of user accounts is blocked. When a Super PM initiates user deletion, an integrity scanner checks for owned projects and assigned tasks. If dependencies exist, a **Safe Handover Modal** mandates the atomic reassignment of all projects and tasks to a nominated replacement user before the user record is purged.
+### F-2105A: Super PM Viewer Project Visibility
+* **Scope:** Cross-portfolio Viewer grants (`/settings/viewer-visibility`, `src/lib/actions/viewer-visibility.ts`).
+* **Capability:** After a Viewer is approved or provisioned, a Super PM grants read-only Active-project access from one Settings screen instead of asking each owning PM to edit every roster. Saves sync that Viewer’s Active `ProjectMember` rows only. Edit Project → team roster remains a valid single-project alternate path.
+
+### F-2106: Safe Account Deactivation, Reactivation & Purge Protocol
+* **Scope:** Database integrity and administrative user management (`/settings/users` Safe deletion tab; retention job).
+* **Capability:** Direct cascading deletion of active accounts is blocked. Deactivation is role-aware:
+  * **PM / Super PM:** Per-project ownership handover to another approved PM/Super PM; tasks and issue PIC on owned projects follow the new owner; leftover assignments on non-owned projects go to each project's lead PM; receiving PMs are emailed. At least one active approved Super PM must remain.
+  * **Member:** Tasks/PIC → project owners; memberships removed.
+  * **Viewer:** Soft-deactivate only.
+  * Soft-deactivate sets `deactivatedAt` / `deactivatedBy`, `approvalStatus = REJECTED`, `purgeDueAt = now + 30 days` (and later `purgeWarningSentAt` when the 2-day Super PM email warning is sent). Reactivate restores approval without re-registration. Hard delete (and auto-purge after retention) permanently removes the User row and Auth identity when configured. Super PM may reassign project owners independently via Edit Project.
+  * **Safe deletion directory UX** (`/settings/users` → **Safe deletion** tab): sticky name/email search across Active and Deactivated; role chips on Active (A–Z); Deactivated ordered by purge due (soonest first) with a due-soon cue within ~2 days; per-project ownership handover selects on Review & deactivate; compact action rows retained.
 
 ### F-2107: Project Lifecycle & Dynamic Roster Editor
 * **Scope:** Project administration modal accessible to owning PMs and Super PMs.
-* **Capability:** Inline updating of project metadata (Name, Description) and dynamic team roster composition (adding, editing permissions, or removing `ProjectMember` records).
+* **Capability:** Inline updating of project metadata (Name, Description) and dynamic team roster composition (adding or removing `ProjectMember` records). When weighted actual progress is $100\%$, exposes **Move to Completed Projects**. Exposes **Delete project** (soft-delete with a blocking warning). Notes that Super PMs may also grant Viewers under Settings → Viewer project visibility.
 
 ### F-2108: Project Milestone Tracking Engine
-* **Scope:** High-level contractual deliverable and stage-gate tracking.
-* **Capability:** CRUD interface for project milestones, capturing `initialTarget`, `updatedTarget`, and `actualAchieved` dates. Automatic initial synchronisation (`updatedTarget = initialTarget`). Visual integration as vertical stage-gate markers on project Gantt charts and diamond nodes on executive macro bars.
+* **Scope:** High-level contractual deliverable and stage-gate tracking (`ProjectMilestonesPanel.tsx`, `milestones.ts`).
+* **Capability:** CRUD for project milestones (`initialTarget`, `updatedTarget`, `actualAchieved`, optional description). On create, `updatedTarget = initialTarget`. Project hub shows a **compact stage-gate strip** (count, next-target summary, chips; View all when long); **Add** / chip click opens a modal for create or edit (name, description, updated target, achieved date, delete). Vertical stage-gate markers on project Gantt; diamond nodes on executive macro bars (Wave 4C).
+
+### F-2119: Per-Project Issue Log
+* **Scope:** Unplanned impediment register inside each project workspace (`ProjectIssueLogView.tsx`, `IssueDetailDrawer.tsx`).
+* **Nomenclature:** **Issue Log** (PMBOK / Australian PM practice). Not a Task list, not a risk register, not a Kanban column.
+* **Capability:**
+  * Fifth hub tab: List, Kanban, Gantt, Analytics, **Issue Log**.
+  * Sequential `ISS-001` identifiers per project.
+  * Classification: category, severity, status (`open` → `in_progress` → `blocked` | `resolved` → `closed`, plus `cancelled`).
+  * PIC (`picId` / `picName`) using the same badge pattern as tasks.
+  * Multi-dates: initial start/end, updated start/end, actual start / actual resolution — same immutability and copy-on-create rules as tasks.
+  * Fix-activity `progress` $0$–$100\%$ with bidirectional status sync; `resolved` is not auto-`closed`.
+  * Optional links to a same-project Task or Milestone.
+  * Threaded `IssueComment` activity.
+  * Append-only `IssueActivity` event log (raise, progress, status, PIC, dates, classification, comment, close, cancel).
+  * Issue-level PS and 11-state **Fix schedule flag** for display on the register and aggregation **only** inside Issue Intelligence (F-2111).
+  * **Exclusion from** task $W_i$, Project PS, **Schedule** S-Curve, **task** burn-down, and Gantt task bars. Exclusion from the weighted schedule does **not** mean the work is invisible on Analytics.
+  * Landing-card open-issue count; every Issue Log mutation is reflected live on the Analytics **Issue Intelligence** pane (F-2111).
+  * Owning PM / Super PM full CRUD and close; members may raise and, if PIC, update progress; Viewers read-only.
+  * Safe User Deletion reassigns `picId` with task assignees and writes `PIC_CHANGED` activity.
+* **Wave split:** The Issue Log register, drawer, comments, `IssueActivity` writes, Fix schedule flag, and landing open-issue count ship in **Wave 4B** as a usable impediment register. Charts, KPIs, and the activity stream on the Analytics tab (F-2111 Issue Intelligence) ship in **Wave 4C**.
 
 ### F-2109: Smart Landing Page Views & Enhanced Project Cards
 * **Scope:** Primary application entry point (`app/page.tsx`).
 * **Capability:**
-  * Role-aware smart defaults: Super PMs and PMs land on "My Own Projects"; Team Members land on "My Assigned Projects". Quick-filter tabs allow instant switching to "All Projects" or "Projects by PM".
-  * Enhanced project cards displaying designated PM identity, real-time Status Flag pill badges, task counts, and compact dual progress bars ($P_{\text{target}}$ vs. $P_{\text{actual}}$).
+  * Role-aware smart defaults: Super PMs and PMs default to **My projects** (owned or with tasks assigned); Members/Viewers see roster-scoped Active projects. PM / Super PM **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs).
+  * **Active-only listing:** Landing page query is `lifecycleStatus = ACTIVE AND deletedAt IS NULL`.
+  * Dedicated **Completed Projects** control navigating to `/projects/completed` for Super PMs, owning PMs, and accounts granted completed visibility.
+  * Enhanced project cards displaying designated PM identity, real-time Status Flag pill badges, task counts, compact dual progress bars ($P_{\text{target}}$ vs. $P_{\text{actual}}$), and **open-issue count** (rose when any open issue is Critical). Cards at $100\%$ additionally show **Move to Completed Projects**.
+* **Wave split:** Status Flag and dual progress bars ship in **Wave 4A** (usable schedule health). Active-only listing, Completed control, Portfolio scope, and **Move to Completed Projects** ship in **Wave 4B**. Open-issue count ships in **Wave 4B** with the Issue Log.
 
-### F-2110: High-Density Tabular Workspace
+### F-2110: High-Density Tabular Workspace — **Wave 4C increment (partial base already in 4A/4B)**
 * **Scope:** Workspace data presentation layer (`TaskListView.tsx`).
-* **Capability:** High-density enterprise data grid presenting task order, title, process group, priority, relative weight ($W_i$), multi-dates (initial, updated, actual), PIC badge, status, and progress. Supports inline cell editing for rapid status, priority, and progress updates without opening the task drawer.
+* **Capability:** High-density enterprise data grid presenting task order, title, process group, priority, relative weight ($W_i$), multi-dates (initial, updated, actual), PIC badge, status, and progress. Supports inline cell editing for rapid status, priority, and progress updates without opening the task drawer. The project hub also hosts the Issue Log grid (F-2119) as a peer view, not a replacement for this task table.
+* **As-built note:** Wave 4A already surfaces $W_i$, progress, and Status Flags on the existing List. Wave 4C still owns the full high-density inline-edit grid polish specified here.
 
-### F-2111: Per-Project S-Curve & Effort Burn-Down Visualisations
-* **Scope:** Analytical engine inside `ProjectAnalyticsView.tsx`.
+### F-2111: Per-Project Analytics — Schedule Visualisations & Issue Intelligence — **Wave 4C (not yet in build)**
+* **Scope:** Analytical engine inside `ProjectAnalyticsView.tsx`, with planned `IssueIntelligencePane.tsx` and `src/lib/analytics/issue-intelligence.ts` (Wave 4B ships Issue Log only; Analytics Issue Intelligence remains 4C).
 * **Capability:**
-  * **S-Curve:** Renders cumulative planned baseline ($P_{\text{target}}(t)$) versus cumulative actual achievement ($P_{\text{actual}}(t)$) over the project calendar duration.
-  * **Burn-Down:** Visualises remaining working-day effort over time against an ideal linear burn-down trajectory.
-  * **Dashboard Header:** Integrates aggregate Punctuality Score ($\text{Project PS}$), Target vs. Actual progress divergence ($\Delta P$), and overall project Status Flag.
+  * **Two labelled panes on the same Analytics hub tab** (not a sixth tab), stacked vertically:
+    1. **Schedule Intelligence (tasks only).**
+    2. **Issue Intelligence (Issue Log).**
+  * **Schedule S-Curve:** Renders cumulative planned baseline ($P_{\text{target}}(t)$) versus cumulative actual achievement ($P_{\text{actual}}(t)$) over the project calendar duration using **task** weights $W_i$ only.
+  * **Task burn-down:** Visualises remaining working-day *task* effort over time against an ideal linear burn-down trajectory.
+  * **Schedule header:** Aggregate Punctuality Score ($\text{Project PS}$), Target vs. Actual progress divergence ($\Delta P$), overall project Status Flag. Issue counts do not appear here.
+  * **Issue Intelligence header:** Non-cancelled total; cancelled count; status counts; critical-and-active; overdue; $\bar{P}_{\text{issue}}$ over the active set; mean **Issue PS** (em dash when none active); closure rate; last activity (actor, `ISS-nnn`, time).
+  * **Issue Fix Realisation:** Duration-weighted among non-cancelled issues using $W_j^{\text{issue}}$ (equal weight fallback). Target from issue working-day elapsed/planned dates; actual as a step function of `progress` from `IssueActivity`. Chart title **Issue Fix Realisation** — never an unqualified “S-Curve”.
+  * **Issue burn-down:** Remaining active issues versus calendar, against an ideal linear close-out when dates exist.
+  * **Breakdowns:** Status, severity, and category stacks; Fix schedule flag histogram; PIC load (active issues, *Unassigned* grouped).
+  * **Activity stream:** Twenty most recent `IssueActivity` events; selecting a row opens the Issue drawer.
+  * **Live coupling:** `getProjectIssueAnalytics(projectId)` reads the same Prisma rows as the Issue Log. Every Issue Log Server Action writes `IssueActivity` in the same transaction and `revalidatePath`s the workspace. No warehouse that can lag.
+  * **Empty state:** *No issues have been logged for this project*, with a control to switch to Issue Log. Schedule pane still renders.
+  * **Completed projects:** Issue Intelligence remains as historical readout. Soft-deleted projects are not analysed until restored.
+  * Issues **never** enter task $W_i$, Project PS, Schedule S-Curve, or task burn-down.
+* **Wave 4C increment:** This entire visualisation pane is the Wave 4C usable increment. Wave 4B UAT confirms the Issue Log register without requiring these charts.
 
-### F-2112: Multi-Project Executive Portfolio Dashboard
+### F-2112: Multi-Project Executive Portfolio Dashboard — **Wave 4C (not yet in build)**
 * **Scope:** Dedicated enterprise routing under `/portfolio`.
 * **Capability:** Provides three analytical scopes accessible based on user privileges:
   1. *Analytics by Project:* Comparative deep-dive across selected projects.
   2. *Analytics by PM:* Aggregated portfolio performance and resource allocation under a designated PM.
-  3. *Total Company Projects:* Macro enterprise capital investment overview across all active corporate programmes.
+  3. *Total Company Projects:* Macro enterprise capital investment overview across all **active** corporate programmes (Completed excluded unless the viewer is authorised and explicitly includes that cohort).
 
-### F-2113: Macro Executive Gantt Chart
+### F-2113: Macro Executive Gantt Chart — **Wave 4C (not yet in build)**
 * **Scope:** Top-level visual timeline on `/portfolio`.
 * **Capability:** Three uncluttered horizontal timeline bars per project: Initial Planned Span (zinc), Updated Planned Span (sky), and Actual Realisation Span (emerald/amber). Milestone diamond nodes overlaid directly on the bars with instant 0ms hover tooltips detailing milestone achievements and variances.
 
 ### F-2114: Global Settings Console & System About Modal
 * **Scope:** Platform administration and governance console.
-* **Capability:** Centralised administrative navigation under `/settings` (User Approvals, Privilege Matrix, Safe Deletion, Holiday Calendar). System About modal displaying version `v2.1.0-executive-intel`, runtime stack details, and formal architectural credits recognising **Yugo Ananda** as the Grand Designer and Chief Solution Architect.
+* **Capability:** Centralised administrative navigation under `/settings`:
+  * User Approvals
+  * Privilege Matrix (role, dashboard scopes, **Completed Projects visibility**)
+  * Safe User Deletion
+  * Holiday Calendar
+  * **Deleted Projects** (restore / permanently delete)
+  * **Purged Project Register** (read-only tombstones)
+* System About modal displaying version `v2.1.4-executive-intel`, runtime stack details, and formal architectural credits recognising **Yugo Ananda** as the Grand Designer and Chief Solution Architect — **Wave 4C (not yet in build)**.
+* **Wave split:** Holiday Calendar ships in **Wave 4A**. Approvals, privilege matrix, Safe User Deletion, Viewer project visibility, Account settings, Deleted Projects, and the Purged Project Register ship in **Wave 4B** (as-built). The About modal ships in **Wave 4C**.
+
+### F-2115: Completed Projects Workspace
+* **Scope:** Label-only completion of programmes that have reached $100\%$ weighted actual progress.
+* **Nomenclature:** **Completed Projects** is adopted. **Archive** is rejected (collides with records management and with soft-delete).
+* **Capability:**
+  * Manual **Move to Completed Projects** by owning PM or Super PM.
+  * Automatic labelling after **30 consecutive calendar days** at $100\%$ (`completionMethod = AUTO_RETENTION`, System actor).
+  * Operational row remains; landing page excludes it.
+  * Dedicated `/projects/completed` view.
+  * Five-year retention clock starts at `completedAt` (the labelling instant). Example: labelled **30 September 2026** → physical purge due **30 September 2031**.
+  * Owning PM / Super PM may **Reopen** to Active (cancels the five-year clock).
+
+### F-2116: Soft-Delete, Restore & Retention Purge
+* **Scope:** Non-destructive delete with Super PM recovery, then timed physical removal.
+* **Capability:**
+  * Owning PM deletes own projects; Super PM may delete any. Mandatory warning: restore is Super PM only; unrestored rows are permanently removed after **30 calendar days**.
+  * Flags: `deletedAt`, `deletedBy`, `purgeDueAt`. Hidden from landing and Completed views.
+  * Super PM **Restore** from Settings → Deleted Projects.
+  * Super PM **Permanently delete** (hard delete) after a typed name confirmation.
+  * Retention job (`runProjectRetentionJob`) physically purges expired soft-deletes and five-year-old Completed rows, and processes soft-deactivated user warnings/purges. Super PM may invoke it manually from Deleted Projects for tests.
+
+### F-2117: Purged Project Register
+* **Scope:** Immutable tombstone table `PurgedProject`, written **before** the operational `Project` is deleted.
+* **Capability:** Records original identity, denormalised owner, full audit snapshot, lifecycle at purge, related-entity counts, JSON snapshot, and the purge event (Super PM manual, 30-day soft-delete expiry, or five-year completed expiry). Super PM inspects `/settings/purged-projects`. Rows are append-only.
+
+### F-2118: Universal Mutation Audit Trail
+* **Scope:** Binding four-stamp standard on every operational mutation.
+* **Capability:** `createdAt` / `createdBy` (immutable after insert) and `updatedAt` / `updatedBy` (refreshed on every update), **NOT NULL**, injected by `withAuditSession`. Automated jobs use `SYSTEM_ACTOR_ID` (durable `User` row). Actor names come from joining `User` — no per-table name columns and no separate Actor table (FR-AUD-08). Closes v2.1.0 gaps (User actors, ProjectMember updates, TaskComment stamps, nullable actors, unspecified destructive history).
+* **Wave 4A increment:** Stamps are persisted from the first 4A mutation and are inspectable on the task **List** row (Created by / Updated by names). A schema-only audit trail is not a completed 4A deliverable.
 
 ---
 
 ## 3. Data Models & Entity Relationships
 
-All database primary keys are PostgreSQL **UUID** strings. Calendar dates are stored as `@db.Date` without time components. Timestamps are stored as `timestamptz`. Every operational entity incorporates a standardised **Audit Trail** (`createdAt`, `createdBy`, `updatedAt`, `updatedBy`).
+All database primary keys are PostgreSQL **UUID** strings. Calendar dates are stored as `@db.Date` without time components. Timestamps are stored as `timestamptz`.
+
+### 3.0 Universal Mutation Audit Trail (binding)
+
+Every persistable **create** and **update** shall record **when and by whom** the row was created, and **when and by whom** it was last edited.
+
+| Stamp | Rule |
+| :--- | :--- |
+| `createdAt` | `timestamptz` NOT NULL, default `now()`, **immutable** after insert |
+| `createdBy` | UUID NOT NULL — session user or `SYSTEM_ACTOR_ID` (`00000000-0000-4000-8000-000000000001`) |
+| `updatedAt` | `timestamptz` NOT NULL, `@updatedAt` |
+| `updatedBy` | UUID NOT NULL — last mutating actor or System |
+
+Covered operational entities include `Issue` and `IssueComment`. Append-only `IssueActivity` records create stamps only and must not be updated. **v2.1.0 gaps closed by this amendment:** `User` lacked actor stamps; `ProjectMember` and `TaskComment` lacked update stamps; actor columns were nullable; automated jobs had no System actor; physical delete left no surviving row. Soft-delete / complete / restore are **updates** (refresh `updatedAt`/`updatedBy` plus dedicated lifecycle columns). Physical delete writes `PurgedProject` first, then destroys the operational graph. Injection is mandatory via `withAuditSession`.
+
+**Actor master (best practice):** `User` is the single directory of actors (`id` → `name` / `email`). Stamp columns store UUIDs only — **no** denormalised name columns on each table, and **no** separate `Actor` table. Resolve names in Supabase SQL with `LEFT JOIN "User"` on `createdBy` / `updatedBy`. Soft (non-blocking) UUID references preserve Safe User Deletion; Wave 4B **uses** soft-deactivate so joins keep returning names until hard purge. The System actor is a durable `User` row (`SYSTEM_ACTOR_ID`, not an Auth login). See FR-AUD-03 / FR-AUD-08.
 
 ```mermaid
 erDiagram
@@ -145,13 +268,40 @@ erDiagram
     User ||--o{ ProjectMember : "belongs to"
     User ||--o{ Task : "assigned to"
     User ||--o{ TaskComment : "authors"
+    User ||..o{ Task : "createdBy / updatedBy (soft UUID)"
     
     Project ||--o{ ProjectMember : "has"
     Project ||--o{ Task : "contains"
     Project ||--o{ Milestone : "tracks"
+    Project ||--o{ Issue : "logs"
     
     Task ||--o{ Subtask : "divides into"
     Task ||--o{ TaskComment : "threaded with"
+    Task ||--o{ Issue : "optionally related"
+    
+    Issue ||--o{ IssueComment : "threaded with"
+    Issue ||--o{ IssueActivity : "event log"
+    Project ||--o{ IssueActivity : "project feed"
+
+    PurgedProject {
+        uuid id PK
+        uuid originalProjectId
+        string name
+        string ownerEmail
+        string ownerName
+        ProjectLifecycleStatus lifecycleStatusAtPurge
+        timestamptz completedAt
+        timestamptz deletedAt
+        timestamptz purgedAt
+        uuid purgedBy
+        string purgedByEmail
+        string purgedByName
+        PurgeTrigger purgeTrigger
+        string purgeReason
+        json snapshotJson
+        timestamptz createdAt
+        uuid createdBy
+    }
     
     Holiday {
         uuid id PK
@@ -173,8 +323,16 @@ erDiagram
         timestamptz approvedAt
         uuid approvedBy
         DashboardScope[] dashboardAccess
+        CompletedProjectAccess completedProjectAccess
+        timestamptz emailConfirmedAt
+        timestamptz deactivatedAt
+        uuid deactivatedBy
+        timestamptz purgeDueAt
+        timestamptz purgeWarningSentAt
         timestamptz createdAt
+        uuid createdBy
         timestamptz updatedAt
+        uuid updatedBy
     }
     
     Project {
@@ -182,6 +340,15 @@ erDiagram
         string name
         string description
         uuid ownerId FK
+        ProjectLifecycleStatus lifecycleStatus
+        timestamptz progressReached100At
+        timestamptz completedAt
+        uuid completedBy
+        CompletionMethod completionMethod
+        timestamptz completedPurgeDueAt
+        timestamptz deletedAt
+        uuid deletedBy
+        timestamptz purgeDueAt
         timestamptz createdAt
         uuid createdBy
         timestamptz updatedAt
@@ -195,6 +362,8 @@ erDiagram
         boolean canEdit
         timestamptz createdAt
         uuid createdBy
+        timestamptz updatedAt
+        uuid updatedBy
     }
     
     Milestone {
@@ -209,6 +378,43 @@ erDiagram
         uuid createdBy
         timestamptz updatedAt
         uuid updatedBy
+    }
+    
+    Issue {
+        uuid id PK
+        uuid projectId FK
+        int issueNumber
+        string title
+        IssueCategory category
+        IssueSeverity severity
+        IssueStatus status
+        uuid picId FK
+        string picName
+        uuid raisedBy
+        date initialStartDate
+        date initialDueDate
+        date updatedStartDate
+        date updatedDueDate
+        date actualStartDate
+        date actualResolutionDate
+        int progress
+        uuid relatedTaskId FK
+        uuid relatedMilestoneId FK
+        timestamptz createdAt
+        uuid createdBy
+        timestamptz updatedAt
+        uuid updatedBy
+    }
+
+    IssueActivity {
+        uuid id PK
+        uuid projectId FK
+        uuid issueId FK
+        IssueActivityType eventType
+        string summary
+        json payloadJson
+        timestamptz createdAt
+        uuid createdBy
     }
     
     Task {
@@ -242,9 +448,72 @@ erDiagram
 type GlobalRole = "super_pm" | "pm" | "member" | "viewer";
 type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 type DashboardScope = "PROJECT" | "PM_PORTFOLIO" | "TOTAL_COMPANY";
+type CompletedProjectAccess = "NONE" | "ASSIGNED" | "ALL";
+type ProjectLifecycleStatus = "ACTIVE" | "COMPLETED";
+type CompletionMethod = "MANUAL" | "AUTO_RETENTION";
+type PurgeTrigger = "SUPER_PM_MANUAL" | "SOFT_DELETE_RETENTION_EXPIRED" | "COMPLETED_RETENTION_EXPIRED";
+type IssueCategory =
+  | "scope"
+  | "schedule"
+  | "cost"
+  | "quality"
+  | "technical"
+  | "resource"
+  | "stakeholder"
+  | "safety"
+  | "commercial"
+  | "other";
+type IssueSeverity = "critical" | "high" | "medium" | "low";
+type IssueStatus = "open" | "in_progress" | "blocked" | "resolved" | "closed" | "cancelled";
+type IssueActivityType =
+  | "RAISED"
+  | "STATUS_CHANGED"
+  | "PROGRESS_CHANGED"
+  | "PIC_CHANGED"
+  | "DATES_CHANGED"
+  | "CLASSIFICATION_CHANGED"
+  | "COMMENTED"
+  | "CLOSED"
+  | "CANCELLED";
 type TaskStatus = "todo" | "in_progress" | "done";
 type TaskPriority = "urgent" | "important" | "medium" | "low";
 type TaskBucket = "initiating" | "planning" | "executing" | "monitoring" | "closing";
+
+type IssueIntelligenceDto = {
+  kpis: {
+    totalNonCancelled: number;
+    cancelled: number;
+    byStatus: Record<IssueStatus, number>;
+    criticalActive: number;
+    overdue: number;
+    meanFixProgress: number; // 0–100, one decimal
+    meanIssuePs: number | null;
+    closureRate: number; // 0–100, one decimal
+    lastActivityAt: string | null;
+    lastActivityByName: string | null;
+    lastActivityIssueNumber: number | null;
+  };
+  series: {
+    fixRealisation: { t: string; targetPct: number; actualPct: number }[];
+    burnDown: { t: string; remaining: number; ideal: number | null }[];
+  };
+  stacks: {
+    status: { status: IssueStatus; count: number }[];
+    severity: { severity: IssueSeverity; count: number }[];
+    category: { category: IssueCategory; count: number }[];
+    flags: { flag: string; count: number }[];
+    picLoad: { picId: string | null; picName: string; activeCount: number }[];
+  };
+  activity: {
+    id: string;
+    issueId: string;
+    issueNumber: number;
+    eventType: IssueActivityType;
+    summary: string;
+    createdAt: string;
+    createdByName: string;
+  }[];
+};
 ```
 
 ### 3.2 Canonical Prisma Models (`prisma/schema.prisma`)
@@ -256,9 +525,9 @@ model Holiday {
   isNational  Boolean  @default(true)
   
   createdAt   DateTime @default(now())
-  createdBy   String?  @db.Uuid
+  createdBy   String   @db.Uuid
   updatedAt   DateTime @updatedAt
-  updatedBy   String?  @db.Uuid
+  updatedBy   String   @db.Uuid
 
   @@index([date])
 }
@@ -271,18 +540,31 @@ model User {
   approvalStatus  ApprovalStatus   @default(PENDING)
   approvedAt      DateTime?
   approvedBy      String?          @db.Uuid
-  dashboardAccess DashboardScope[] @default([PROJECT, PM_PORTFOLIO])
-  
+  dashboardAccess          DashboardScope[]         @default([PROJECT, PM_PORTFOLIO])
+  completedProjectAccess   CompletedProjectAccess   @default(NONE)
+  emailConfirmedAt DateTime?
+  deactivatedAt   DateTime?
+  deactivatedBy   String?          @db.Uuid
+  purgeDueAt      DateTime?
+  purgeWarningSentAt DateTime?
+
   createdAt       DateTime         @default(now())
+  createdBy       String           @db.Uuid
   updatedAt       DateTime         @updatedAt
+  updatedBy       String           @db.Uuid
 
   ownedProjects   Project[]        @relation("ProjectOwner")
   projectMembers  ProjectMember[]
   assignedTasks   Task[]           @relation("TaskAssignee")
+  assignedIssues  Issue[]          @relation("IssuePic")
   comments        TaskComment[]
+  issueComments   IssueComment[]
 
   @@index([email])
   @@index([approvalStatus])
+  @@index([emailConfirmedAt])
+  @@index([deactivatedAt])
+  @@index([purgeDueAt])
 }
 
 model Project {
@@ -290,18 +572,34 @@ model Project {
   name        String
   description String   @default("")
   ownerId     String   @db.Uuid
+
+  lifecycleStatus      ProjectLifecycleStatus @default(ACTIVE)
+  progressReached100At DateTime?
+  completedAt          DateTime?
+  completedBy          String?                @db.Uuid
+  completionMethod     CompletionMethod?
+  completedPurgeDueAt  DateTime?
+  deletedAt            DateTime?
+  deletedBy            String?                @db.Uuid
+  purgeDueAt           DateTime?
   
   createdAt   DateTime @default(now())
-  createdBy   String?  @db.Uuid
+  createdBy   String   @db.Uuid
   updatedAt   DateTime @updatedAt
-  updatedBy   String?  @db.Uuid
+  updatedBy   String   @db.Uuid
 
   owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id])
   members     ProjectMember[]
   tasks       Task[]
   milestones  Milestone[]
+  issues      Issue[]
+  issueActivities IssueActivity[]
 
   @@index([ownerId])
+  @@index([lifecycleStatus, deletedAt])
+  @@index([progressReached100At])
+  @@index([completedPurgeDueAt])
+  @@index([purgeDueAt])
 }
 
 model ProjectMember {
@@ -311,7 +609,9 @@ model ProjectMember {
   canEdit   Boolean  @default(true)
   
   createdAt DateTime @default(now())
-  createdBy String?  @db.Uuid
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -331,9 +631,9 @@ model Milestone {
   actualAchieved DateTime? @db.Date
 
   createdAt      DateTime  @default(now())
-  createdBy      String?   @db.Uuid
+  createdBy      String    @db.Uuid
   updatedAt      DateTime  @updatedAt
-  updatedBy      String?   @db.Uuid
+  updatedBy      String    @db.Uuid
 
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -364,9 +664,9 @@ model Task {
   weightOverride       Float?
 
   createdAt            DateTime     @default(now())
-  createdBy            String?      @db.Uuid
+  createdBy            String       @db.Uuid
   updatedAt            DateTime     @updatedAt
-  updatedBy            String?      @db.Uuid
+  updatedBy            String       @db.Uuid
 
   project              Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee             User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
@@ -376,13 +676,110 @@ model Task {
   @@index([projectId])
   @@index([projectId, status, sortOrder])
 }
+
+model Issue {
+  id                   String        @id @default(uuid()) @db.Uuid
+  projectId            String        @db.Uuid
+  issueNumber          Int
+  title                String
+  description          String        @default("")
+  category             IssueCategory @default(technical)
+  severity             IssueSeverity @default(medium)
+  status               IssueStatus   @default(open)
+  picId                String?       @db.Uuid
+  picName              String        @default("")
+  raisedBy             String        @db.Uuid
+  raisedAt             DateTime      @default(now())
+  initialStartDate     DateTime?     @db.Date
+  initialDueDate       DateTime?     @db.Date
+  updatedStartDate     DateTime?     @db.Date
+  updatedDueDate       DateTime?     @db.Date
+  actualStartDate      DateTime?     @db.Date
+  actualResolutionDate DateTime?     @db.Date
+  progress             Int           @default(0)
+  impactSummary        String        @default("")
+  resolutionSummary    String        @default("")
+  relatedTaskId        String?       @db.Uuid
+  relatedMilestoneId   String?       @db.Uuid
+  sortOrder            Int           @default(0)
+  createdAt            DateTime      @default(now())
+  createdBy            String        @db.Uuid
+  updatedAt            DateTime      @updatedAt
+  updatedBy            String        @db.Uuid
+
+  @@unique([projectId, issueNumber])
+  @@index([projectId, status, severity])
+}
+
+model IssueActivity {
+  id          String            @id @default(uuid()) @db.Uuid
+  projectId   String            @db.Uuid
+  issueId     String            @db.Uuid
+  eventType   IssueActivityType
+  summary     String
+  payloadJson Json
+  createdAt   DateTime          @default(now())
+  createdBy   String            @db.Uuid
+
+  @@index([projectId, createdAt])
+  @@index([issueId, createdAt])
+}
+
+model PurgedProject {
+  id                     String                  @id @default(uuid()) @db.Uuid
+  originalProjectId      String                  @db.Uuid
+  name                   String
+  description            String
+  ownerId                String?                 @db.Uuid
+  ownerEmail             String
+  ownerName              String
+  lifecycleStatusAtPurge ProjectLifecycleStatus
+  createdAtOriginal      DateTime
+  createdByOriginal      String?
+  createdByEmailOriginal String?
+  updatedAtOriginal      DateTime
+  updatedByOriginal      String?
+  updatedByEmailOriginal String?
+  completedAt            DateTime?
+  completedBy            String?
+  completedByEmail       String?
+  completionMethod       CompletionMethod?
+  completedPurgeDueAt    DateTime?
+  deletedAt              DateTime?
+  deletedBy              String?
+  deletedByEmail         String?
+  memberCount            Int
+  taskCount              Int
+  subtaskCount           Int
+  commentCount           Int
+  milestoneCount         Int
+  issueCount             Int
+  issueCommentCount      Int
+  issueActivityCount     Int
+  lastKnownActualProgress Float?
+  lastKnownTargetProgress Float?
+  snapshotJson           Json
+  purgedAt               DateTime                @default(now())
+  purgedBy               String                  @db.Uuid
+  purgedByEmail          String
+  purgedByName           String
+  purgeTrigger           PurgeTrigger
+  purgeReason            String?
+  createdAt              DateTime                @default(now())
+  createdBy              String                  @db.Uuid
+
+  @@index([originalProjectId])
+  @@index([purgedAt])
+  @@index([purgeTrigger])
+  @@index([ownerEmail])
+}
 ```
 
 ---
 
 ## 4. API Surface & Server Action Contracts
 
-All server mutations and data queries execute exclusively through **Next.js Server Actions** (`"use server"`). No direct client-side database connections or browser Supabase Data API calls are permitted. Every action re-validates authentication, user approval status, and project-level authorization.
+All server mutations and data queries execute exclusively through **Next.js Server Actions** (`"use server"`). No direct client-side database connections or browser Supabase Data API calls are permitted. Every action re-validates authentication, user approval status, and project-level authorization. Every write is wrapped in `withAuditSession` so `createdBy` / `updatedBy` cannot be omitted.
 
 ```typescript
 // Shared Action Result Contract
@@ -400,17 +797,29 @@ type ActionResult<T> =
 * `deleteHoliday(id: string): Promise<ActionResult<void>>`
   * *Authorization:* Super PM only.
 
-### 4.2 User Governance & Administration Actions (`src/lib/actions/governance.ts`)
-* `listUsersForApproval(): Promise<ActionResult<{ pending: User[]; approved: User[]; rejected: User[] }>>`
+### 4.2 User Governance & Administration Actions (`src/lib/actions/users.ts`)
+* `listProjects(scope?: { browseOwnerId?: string | null })` — Active landing list. PM default = owned ∪ tasked; optional `browseOwnerId` for peer portfolio (PM/Super PM only). Member/Viewer = `ProjectMember` only.
+* `listBrowsableProjectOwners()` — PM/Super PM owners with Active projects (home-page filter).
+* `listManagedUsers(): Promise<ActionResult<ManagedUserDto[]>>`
   * *Authorization:* Super PM only.
-* `updateUserApproval(input: { userId: string; status: ApprovalStatus }): Promise<ActionResult<User>>`
-  * *Authorization:* Super PM only. Records `approvedAt` and `approvedBy`.
-* `updateUserPrivileges(input: { userId: string; globalRole: GlobalRole; dashboardAccess: DashboardScope[] }): Promise<ActionResult<User>>`
-  * *Authorization:* Super PM only.
-* `inspectUserDeletion(userId: string): Promise<ActionResult<{ ownedProjectCount: number; assignedTaskCount: number }>>`
-  * *Authorization:* Super PM only. Performs dependency pre-scan before deletion.
-* `safeDeleteUser(input: { targetUserId: string; replacementUserId: string }): Promise<ActionResult<void>>`
-  * *Authorization:* Super PM only. Atomically reassigns all owned projects and assigned tasks to `replacementUserId` in a single database transaction, then removes the target user record and revokes Supabase auth.
+* `countPendingApprovals(): Promise<number>`
+  * *Authorization:* Super PM only. Counts confirmed PENDING (non-deactivated) for badges.
+* `approveUser(input: { userId: string; globalRole: GlobalRole }): Promise<ActionResult<ManagedUserWithMailDto>>`
+  * *Authorization:* Super PM only. Sets `APPROVED`, records `approvedAt` / `approvedBy`, and assigns `globalRole` in the same write. Super PM role forces `completedProjectAccess = ALL`. Applicant approval email is scheduled after the write (SMTP or Resend).
+* `rejectUser(userId: string): Promise<ActionResult<ManagedUserDto>>`
+  * *Authorization:* Super PM only. For pending candidates (not a substitute for privilege edits on approved users).
+* `deleteRegistrationApplicant(userId: string): Promise<ActionResult<{ id: string }>>`
+  * *Authorization:* Super PM only. Permanently removes PENDING or REJECTED applicants who are not in Safe deletion; clears Auth identity when the service role key is configured.
+* `provisionUserBySuperPm(input: { name; email; temporaryPassword; confirmPassword; globalRole }): Promise<ActionResult<ManagedUserDto>>`
+  * *Authorization:* Super PM only. Creates Auth user with `email_confirm: true` and an immediately `APPROVED` Prisma profile (FR-GOV-07). Requires `SUPABASE_SERVICE_ROLE_KEY`. Rolls back Auth if the profile write fails. Duplicate emails return `DUPLICATE_EMAIL_PROVISION_MESSAGE`.
+* `resetUserPasswordBySuperPm(userId): Promise<ActionResult<{ userId; email; name; temporaryPassword }>>`
+  * *Authorization:* Super PM only (not self). Generates a temporary password, updates Auth, returns the password once for offline hand-off (FR-GOV-08).
+* `updateManagedUserName(input: { userId; name }): Promise<ActionResult<ManagedUserDto>>`
+  * *Authorization:* Super PM only (not self). Email remains immutable.
+* `updateUserPrivileges(input: { userId: string; globalRole: GlobalRole; dashboardAccess: DashboardScope[]; completedProjectAccess: CompletedProjectAccess }): Promise<ActionResult<ManagedUserDto>>`
+  * *Authorization:* Super PM only. Records `updatedBy`. Super PM's own `completedProjectAccess` cannot be reduced below `ALL`.
+* `getUserDeletionImpact` / `deactivateUser` / `reactivateUser` / `hardDeleteUser` / `runUserRetentionPass` — role-aware soft-deactivate with handover, reactivate, hard delete, and retention (Wave 4B).
+* `reassignProjectOwner` — Super PM project ownership transfer with email (Wave 4B).
 
 ### 4.3 Project Lifecycle & Milestone Actions (`src/lib/actions/projects.ts` & `milestones.ts`)
 * `updateProjectDetails(input: { projectId: string; name: string; description: string }): Promise<ActionResult<Project>>`
@@ -426,15 +835,54 @@ type ActionResult<T> =
 * `deleteMilestone(milestoneId: string): Promise<ActionResult<void>>`
   * *Authorization:* Project Admin or Super PM.
 
+### 4.3B Issue Log Actions (`src/lib/actions/issues.ts`)
+* `listIssues(projectId: string): Promise<ActionResult<Issue[]>>`
+  * *Authorization:* Any user with read access to the project.
+* `createIssue(input: { projectId: string; title: string; description?: string; category: IssueCategory; severity: IssueSeverity; picId?: string; initialStartDate?: string; initialDueDate?: string; impactSummary?: string; relatedTaskId?: string; relatedMilestoneId?: string }): Promise<ActionResult<Issue>>`
+  * *Authorization:* Super PM, owning PM, or project member. Allocates next `issueNumber`. Copies initial dates into updated dates. Sets `raisedBy` / `raisedAt`. Writes `IssueActivity` (`RAISED`) in the same transaction. `revalidatePath`s the project workspace (Issue Log **and** Analytics).
+* `updateIssue(input: { issueId: string; patch: Partial<IssueWritableFields> }): Promise<ActionResult<Issue>>`
+  * *Authorization:* Super PM / owning PM (all fields); PIC (progress, dates, comments, status except `closed`). Enforces progress ↔ status sync. Writes `PROGRESS_CHANGED`, `STATUS_CHANGED`, `PIC_CHANGED`, `DATES_CHANGED`, and/or `CLASSIFICATION_CHANGED` as applicable, then `revalidatePath`.
+* `closeIssue(input: { issueId: string; resolutionSummary: string }): Promise<ActionResult<Issue>>`
+  * *Authorization:* Owning PM or Super PM. Writes `CLOSED` activity and `revalidatePath`.
+* `deleteIssue(issueId: string): Promise<ActionResult<void>>`
+  * *Authorization:* Owning PM or Super PM. ConfirmDialog required. Cascades comments and activity. `revalidatePath` so Issue Intelligence drops the issue.
+* `addIssueComment(input: { issueId: string; content: string }): Promise<ActionResult<IssueComment>>`
+  * *Authorization:* Any project member, owning PM, or Super PM. Writes `COMMENTED` activity and `revalidatePath`.
+* `getProjectIssueAnalytics(projectId: string): Promise<ActionResult<IssueIntelligenceDto>>` — **Wave 4C (not yet in build)**
+  * *Authorization:* Any user with read access to the project (same gate as the Analytics tab).
+  * *Returns:* Section 3.7 / F-2111 KPIs, Fix Realisation and burn-down series, breakdown stacks, and the twenty most recent `IssueActivity` rows. Computed by planned `src/lib/analytics/issue-intelligence.ts` from live Prisma rows. Must not consult a warehouse.
+* Internal helper `recordIssueActivity(...)` is **not** a public Server Action; Issue Log actions call it inside their write transaction.
+
+### 4.3A Project Completion, Soft-Delete & Purge Actions (`src/lib/actions/project-lifecycle.ts`)
+* `markProjectCompleted(projectId: string): Promise<ActionResult<Project>>`
+  * *Authorization:* Owning PM or Super PM. Requires $P_{\text{actual}} = 100\%$ and `deletedAt IS NULL`.
+* `reopenProject(projectId: string): Promise<ActionResult<Project>>`
+  * *Authorization:* Owning PM or Super PM. Requires `lifecycleStatus = COMPLETED` and `deletedAt IS NULL`.
+* `listCompletedProjects(): Promise<ActionResult<Project[]>>`
+  * *Authorization:* Super PM (all); owning PM (owned); `ASSIGNED` / `ALL` per `completedProjectAccess`.
+* `softDeleteProject(projectId: string): Promise<ActionResult<void>>`
+  * *Authorization:* Owning PM (own) or Super PM. Sets `deletedAt`, `deletedBy`, `purgeDueAt = now() + 30 days`.
+* `listDeletedProjects(): Promise<ActionResult<Project[]>>`
+  * *Authorization:* Super PM only.
+* `restoreProject(projectId: string): Promise<ActionResult<Project>>`
+  * *Authorization:* Super PM only.
+* `purgeProject(input: { projectId: string; reason?: string; confirmName: string }): Promise<ActionResult<{ purgedProjectId: string }>>`
+  * *Authorization:* Super PM only. Writes `PurgedProject` then deletes the operational graph. `purgeTrigger = SUPER_PM_MANUAL`.
+* `listPurgedProjects(): Promise<ActionResult<PurgedProject[]>>`
+  * *Authorization:* Super PM only.
+* `runProjectRetentionJob(): Promise<ActionResult<{ autoCompleted: number; purgedSoftDeleted: number; purgedCompleted: number; usersWarned: number; usersPurged: number }>>`
+  * *Authorization:* Super PM (manual invoke from Settings → Deleted Projects → **Run retention job**, with confirm) or System cron. Actor = `SYSTEM_ACTOR_ID`. Order: auto-complete → 30-day soft-delete expiry → five-year completed expiry → soft-deactivated user warning/purge (`runUserRetentionPass`).
+
 ### 4.4 Task & Inline Grid Actions (`src/lib/actions/tasks.ts`)
 * `updateTaskInline(input: { taskId: string; patch: Partial<Pick<Task, "status" | "priority" | "progress" | "assigneeId" | "assigneeName">> }): Promise<ActionResult<Task>>`
   * *Authorization:* Project Member with `canEdit: true`, Project Admin, or Super PM.
   * *Side Effect:* Synchronises bidirectional progress/status rules and recalculates punctuality flags.
 
-### 4.5 Executive Portfolio Actions (`src/lib/actions/portfolio.ts`)
+### 4.5 Executive Portfolio Actions (`src/lib/actions/portfolio.ts`) — **Wave 4C (not yet in build)**
 * `getPortfolioSummary(scope: DashboardScope, filterPmId?: string): Promise<ActionResult<PortfolioSummaryDto>>`
   * *Authorization:* Session user must hold the requested `DashboardScope` in their `dashboardAccess` array.
   * *Returns:* Aggregate active projects, portfolio punctuality score, portfolio weighted target vs. actual progress, status flag breakdown, and macro Gantt project span items.
+  * *Status:* Planned for Wave 4C. Privilege matrix may already expose dashboard scopes; the `/portfolio` route and this action module are not shipped yet.
 
 ---
 
@@ -452,39 +900,53 @@ sequenceDiagram
 
     Candidate->>App: Submits Registration Form
     App->>Auth: supabase.auth.signUp()
-    Auth-->>Candidate: Verification Email Sent
-    Candidate->>Auth: Clicks Verification Link
-    Auth-->>App: Session Established
-    App->>DB: Bootstrap Profile (approvalStatus: PENDING)
-    
-    Candidate->>App: Requests / or /projects
-    MW->>DB: Inspect approvalStatus
-    DB-->>MW: PENDING
-    MW-->>Candidate: Redirect to /pending-approval
-    
-    SuperPM->>App: Reviews /settings/users
-    SuperPM->>DB: updateUserApproval(APPROVED)
-    
-    Candidate->>App: Requests / or /projects
+    App->>DB: Bootstrap Profile (PENDING, emailConfirmedAt null)
+    Auth-->>Candidate: Confirmation Email Sent
+    Note over Candidate,SuperPM: Unreachable emails never confirm — never enter Super PM queue
+    Candidate->>Auth: Clicks Confirmation Link
+    Auth-->>App: /auth/callback exchanges code
+    App->>DB: Set emailConfirmedAt; notify Super PMs
+    App->>Auth: Sign out (stay signed out until approved)
+
+    Candidate->>App: Attempts sign-in while PENDING
+    App->>Auth: signInWithPassword
+    App->>Auth: Sign out + error / login notice
+
+    SuperPM->>App: Reviews /settings/users (confirmed PENDING only)
+    SuperPM->>DB: approveUser(APPROVED + globalRole)
+    App-->>Candidate: Approval email with assigned role
+
+    Candidate->>App: Signs in with registered credentials
     MW->>DB: Inspect approvalStatus
     DB-->>MW: APPROVED
     MW-->>Candidate: Access Granted (Landing Page)
 ```
 
+**Alternate path — Super PM direct provisioning (FR-GOV-07):** when the person is known but cannot use email confirmation, the Super PM submits Create account at `/settings/users`. The app calls `auth.admin.createUser` (`email_confirm: true`) and inserts an `APPROVED` profile with `emailConfirmedAt` set. The user signs in immediately with the temporary password; they never enter the PENDING queue.
+
 ### 5.2 Role-Based Access Control (RBAC) Matrix
 
-| Operational Capability | Super PM | Project Manager (Owner) | Project Manager (Non-Owner) | Team Member (Assigned) | Viewer (Assigned) | Candidate (Pending) |
+| Operational Capability | Super PM | Project Manager (Owner) | Project Manager (Peer browse) | Team Member (Roster) | Viewer (Settings- or roster-granted) | Candidate (Pending) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **System Settings & Holiday Calendar** | Full Access | Denied | Denied | Denied | Denied | Denied |
-| **User Approval & Privilege Override** | Full Access | Denied | Denied | Denied | Denied | Denied |
+| **System Settings, Holiday Calendar, Deleted Projects, Purged Register** | Full Access | Denied | Denied | Denied | Denied | Denied |
+| **Settings → Account (own name / password)** | Allowed | Allowed | Allowed | Allowed | Allowed | Denied |
+| **User Approval, Direct Provisioning, Privilege Override, Password Reset for others & Completed Visibility** | Full Access | Denied | Denied | Denied | Denied | Denied |
 | **Safe User Deletion & Reassignment** | Full Access | Denied | Denied | Denied | Denied | Denied |
-| **Create New Project** | Allowed | Allowed | Allowed | Denied | Denied | Denied |
+| **Home: portfolio scope (My / All / per-PM)** | Allowed | Allowed | Allowed | Denied | Denied | Denied |
+| **Create New Project** | Allowed | Allowed | Denied | Denied | Denied | Denied |
 | **Edit Project Roster & Metadata** | Allowed | Allowed | Denied | Denied | Denied | Denied |
+| **Move to Completed / Reopen** | Allowed | Allowed (owned) | Denied | Denied | Denied | Denied |
+| **View Completed Projects** | All | Owned always; others if granted | If granted | If granted | If granted | Denied |
+| **Soft-delete project** | Allowed | Allowed (owned) | Denied | Denied | Denied | Denied |
+| **Restore / Permanently delete project** | Allowed | Denied | Denied | Denied | Denied | Denied |
 | **Manage Project Milestones** | Allowed | Allowed | Denied | Denied | Denied | Denied |
-| **Create / Edit Tasks (Kanban / Table)** | Allowed | Allowed | Denied | Allowed (`canEdit`) | Denied | Denied |
-| **Delete Task** | Allowed | Allowed | Denied | Allowed (If PIC) | Denied | Denied |
-| **View Project Workspace (4 Views)** | All Projects | Owned Projects | Permitted Only | Permitted Only | Permitted Only | Denied |
-| **Per-Project Analytics Dashboard** | Allowed | Allowed | Permitted Only | Permitted Only | Permitted Only | Denied |
+| **Raise Issue** | Allowed | Allowed | Denied | Allowed | Denied | Denied |
+| **Edit Issue (PIC progress / dates)** | Allowed | Allowed | Denied | Allowed if PIC | Denied | Denied |
+| **Close / Delete Issue** | Allowed | Allowed | Denied | Denied | Denied | Denied |
+| **Create tasks / Kanban reorder** | Allowed | Allowed | Denied | Denied | Denied | Denied |
+| **Edit / delete assigned task (PIC)** | Allowed | Allowed | Allowed if PIC | Allowed if PIC | Denied | Denied |
+| **View Project Workspace (5 Views)** | All Active (+ Completed if authorised) | Owned / tasked (+ own Completed) | Peer Active (read) | Roster Active only | Roster Active only | Denied |
+| **Per-Project Analytics Dashboard** | Allowed | Allowed | Read | Read | Read | Denied |
 | **PM Portfolio Dashboard** | Allowed | If Delegated | If Delegated | If Delegated | Denied | Denied |
 | **Total Company Executive Dashboard** | Allowed | If Delegated | If Delegated | If Delegated | Denied | Denied |
 
@@ -505,7 +967,7 @@ $$D_{\text{planned}_i} = \max\left(1, \sum_{t = T_{\text{start}_i}}^{T_{\text{du
 
 ### 6.2 Relative Task Weight ($W_i$)
 $$W_i = \frac{D_{\text{planned}_i}}{\sum_{k=1}^{n} D_{\text{planned}_k}}$$
-* **Constraint:** $\sum_{i=1}^{n} W_i = 1.0 \quad (100.0\%)$ across the project.
+* **Constraint:** $\sum_{i=1}^{n} W_i = 1.0 \quad (100.0\%)$ across the **tasks** of the project. Issues are excluded.
 * **Fallback:** If $\sum D = 0$ (e.g. empty project or missing dates), $W_i = 1/n$.
 
 ### 6.3 Symmetrical Progress Direct Sum
@@ -514,11 +976,11 @@ $$W_i = \frac{D_{\text{planned}_i}}{\sum_{k=1}^{n} D_{\text{planned}_k}}$$
   $$P_{\text{actual}_{\text{project}}} = \sum_{i=1}^{n} \text{WeightedActual}_i$$
   $$P_{\text{target}_{\text{project}}} = \sum_{i=1}^{n} \text{WeightedTarget}_i$$
 
-### 6.4 Uncapped Target Progress ($P_{\text{target}}$)
+### 6.4 Capped Target Progress ($P_{\text{target}}$)
 For $T_{\text{now}} \ge T_{\text{start}_i}$:
 $$E_{\text{elapsed}_i} = \sum_{t = T_{\text{start}_i}}^{T_{\text{now}}} \operatorname{IsWorkDay}(t)$$
-$$P_{\text{target}_i} = \frac{E_{\text{elapsed}_i}}{D_{\text{planned}_i}}$$
-*(Target progress exceeds $100\%$ when $T_{\text{now}} > T_{\text{due}_i}$).*
+$$P_{\text{target}_i} = \min\left(100\%,\ \frac{E_{\text{elapsed}_i}}{D_{\text{planned}_i}} \times 100\%\right)$$
+*(Target progress remains at $100\%$ when $T_{\text{now}} > T_{\text{due}_i}$.)*
 
 ### 6.5 Punctuality Score (PS) Piecewise Formulation
 1. **Not Started ($P_{\text{actual}} = 0\%$):**
@@ -534,6 +996,7 @@ $$P_{\text{target}_i} = \frac{E_{\text{elapsed}_i}}{D_{\text{planned}_i}}$$
    \end{cases}$$
 3. **Completed ($P_{\text{actual}} = 100\%$):**
    $$\text{PS}_i = \frac{D_{\text{planned}_i}}{\max\left(1, D_{\text{actual}_i}\right)} \times 100\%$$
+   where $D_{\text{actual}_i}$ is working days from effective planned start $T_{\text{start}_i}$ through $T_{\text{actualCompletion}_i}$ (schedule span). Late finishes therefore yield low PS even when active work was a single day.
 4. **Project-Level Aggregate PS:**
    $$\text{Project PS} = \begin{cases}
    100.0\% & \text{if } P_{\text{target}_{\text{project}}} = 0 \text{ and } P_{\text{actual}_{\text{project}}} = 0 \\
@@ -552,10 +1015,10 @@ $$P_{\text{target}_i} = \frac{E_{\text{elapsed}_i}}{D_{\text{planned}_i}}$$
 | **SF-05** | **Slipping** | $85\% \le \text{PS} < 95\%$ | $0\% < P_{\text{actual}} < 100\%$ | Amber badge (`bg-amber-500/10 text-amber-400 border-amber-500/30`) |
 | **SF-06** | **Critically Delayed** | $\text{PS} < 85\%$ | $0\% < P_{\text{actual}} < 100\%$ | Rose badge (`bg-rose-500/10 text-rose-400 border-rose-500/30`) |
 | **SF-07** | **Ahead of Schedule** | $\text{PS} \ge 105\%$ | $0\% < P_{\text{actual}} < 100\%$ | Teal badge (`bg-teal-500/10 text-teal-400 border-teal-500/30`) |
-| **SF-08** | **Completed Ahead of Schedule** | $\text{PS} \ge 105\%$ | $P_{\text{actual}} = 100\%$ | Indigo badge (`bg-indigo-500/10 text-indigo-400 border-indigo-500/30`) |
-| **SF-09** | **Completed On Time** | $95\% \le \text{PS} < 105\%$ | $P_{\text{actual}} = 100\%$ | Zinc badge (`bg-zinc-500/10 text-zinc-300 border-zinc-500/30`) |
-| **SF-10** | **Completed Late** | $85\% \le \text{PS} < 95\%$ | $P_{\text{actual}} = 100\%$ | Amber-zinc badge (`bg-amber-950/30 text-amber-300 border-amber-700/50`) |
-| **SF-11** | **Completed Severely Late** | $\text{PS} < 85\%$ | $P_{\text{actual}} = 100\%$ | Rose-zinc badge (`bg-rose-950/30 text-rose-300 border-rose-700/50`) |
+| **SF-08** | **Completed Ahead of Schedule** | $\text{PS} \ge 105\%$ | $P_{\text{actual}} = 100\%$ | Indigo badge (`bg-indigo-100 text-indigo-950`) |
+| **SF-09** | **Completed On Time** | $95\% \le \text{PS} < 105\%$ | $P_{\text{actual}} = 100\%$ | Zinc badge (`bg-zinc-200 text-zinc-900`) |
+| **SF-10** | **Completed Late** | $85\% \le \text{PS} < 95\%$ | $P_{\text{actual}} = 100\%$ | Amber badge (`bg-amber-200 text-amber-950`) |
+| **SF-11** | **Completed Severely Late** | $\text{PS} < 85\%$ | $P_{\text{actual}} = 100\%$ | Rose badge (`bg-rose-200 text-rose-950`) |
 
 ---
 
@@ -568,8 +1031,15 @@ $$P_{\text{target}_i} = \frac{E_{\text{elapsed}_i}}{D_{\text{planned}_i}}$$
 * **Negative PS Suppression:** In severe delays ($P_{\text{target}} > 100\%$), not-started task PS is clamped at $\max(0.0\%, 100\% - P_{\text{target}})$.
 
 ### 7.2 Relational Integrity & Security Constraints
-* **First Normal Form (1NF) Compliance:** Array storage of foreign project IDs on the `User` model (`projectVisibility: String[]`) is strictly banned. Visibility is governed via the indexed relational `ProjectMember` table.
-* **Strict Foreign Key Constraints:** Cascade deletion of a user profile with active projects or tasks is prevented at the database and application levels. Reassignment via the Safe Handover Wizard is mandatory.
+* **Issue versus Task:** Issues reuse working-day and PS *functions* for a per-issue Fix schedule flag and for **Issue Intelligence** on the Analytics tab. They **must not** enter $\sum D_{\text{planned}}$, task $W_i$, Project PS, **Schedule** S-Curve series, task burn-down, or Gantt task rows. Local issue weights $W_j^{\text{issue}}$ exist only inside the Issue Intelligence pane.
+* **Landing-page completeness:** Queries for `/` shall exclude `COMPLETED` and soft-deleted rows. A dedicated Completed Projects control is mandatory wherever the landing page is shown to authorised roles.
+* **Retention clocks:**
+  * Auto-complete: 30 calendar days from `progressReached100At` while still at $100\%$ and still Active.
+  * Soft-delete purge: 30 calendar days from `deletedAt`.
+  * Completed purge: **five years** from `completedAt` (labelling instant), not from first reaching $100\%$. Example: labelled 30 September 2026 → purge 30 September 2031.
+* **Purge atomicity:** `PurgedProject` insert and operational `DELETE` share one transaction. A purge that deletes without a tombstone is a severity-1 defect.
+* **First Normal Form (1NF) Compliance:** Array storage of foreign project IDs on the `User` model (`projectVisibility: String[]`) is strictly banned. Visibility is governed via the indexed relational `ProjectMember` table. Completed visibility is `completedProjectAccess`, not an array of project ids.
+* **Strict Foreign Key Constraints:** Cascade deletion of a user profile with active projects or tasks is prevented at the database and application levels. Reassignment via **Safe deletion** (per-project ownership handover on Review & deactivate) is mandatory for PM/Super PM targets.
 * **Edge Session Enforcement:** Unapproved users cannot execute Server Actions. Requests are intercepted at the middleware boundary.
 
 ### 7.3 Explicitly Out of Scope for Release 2.1
@@ -581,62 +1051,148 @@ $$P_{\text{target}_i} = \frac{E_{\text{elapsed}_i}}{D_{\text{planned}_i}}$$
 
 ## 8. Implementation Order (Phased Wave Roadmap)
 
-The development plan is structured into three consecutive execution waves under the **Wave 4 Milestone Programme**:
+The development plan is structured into three consecutive execution waves under the **Wave 4 Milestone Programme**. Work is strictly sequential: each work package starts the calendar day after its predecessor finishes. Durations are **calendar days**. The programme opens on **Saturday 12 September 2026** and closes on **Monday 12 October 2026** (31 calendar days).
+
+### 8.0 Agile delivery rules (binding)
+
+These rules override any reading of the waves as “engines first, screens later, UAT last”.
+
+1. **Usable increment:** A wave is complete only when a Super PM or PM can exercise the increment in the **running application** against live Supabase PostgreSQL. Libraries, Prisma migrations, Server Action contracts, and unit tests are necessary but **not sufficient**. A wave that ships only code that nobody can click is a failed wave and shall be replanned before the next wave starts.
+2. **UAT at every wave exit:** Each wave ends with a dedicated UAT package (`W4A-U`, `W4B-U`, `W4C-U`) executed on the integrated build. The next wave **must not** start until that package is accepted. Priority-1 defects found in a wave’s UAT are fixed in that wave; they are not carried forward as known issues.
+3. **Fail fast:** Unit tests and the four engineering quality gates (Section 9) run throughout the wave. They are a prerequisite to opening the wave UAT window, not a substitute for it.
+4. **Regression at release:** Wave 4C UAT re-executes the Wave 4A and Wave 4B packs on the fully integrated product (pack **UAT-R**). That is close-out regression, not the first time those scenarios are run.
+5. **Vertical slices:** Features are sliced so the stakeholder sees value at each gate. Calculation engines are wired into existing v2.0 surfaces in Wave 4A. Governance and the Issue Log are operable in Wave 4B. Executive charts and portfolio views land in Wave 4C.
+
+**Usable increment per wave**
+
+| Wave | Who can use it on exit day | What they can do in the running app |
+| :--- | :--- | :--- |
+| **4A — Live schedule health** | Super PM; owning PM; members on existing projects | Super PM maintains the holiday calendar. PMs see working-day weights, capped target progress (max $100\%$), Punctuality Score, 11 Status Flags, and audit stamps on List, Kanban, Gantt, the task drawer, and landing cards. |
+| **4B — Governed programme office** | Super PM; owning PM; members; unapproved candidates | Super PM approves users, delegates privileges, hands over departing accounts, restores or purges deleted work, and inspects the Purged Project Register. PMs edit roster and milestones, maintain the Issue Log, move finished programmes to Completed Projects, and soft-delete with a warning. |
+| **4C — Executive visualisation** | Super PM; PM; delegated portfolio viewers | PMs use the high-density task grid and the full Analytics tab (Schedule Intelligence and Issue Intelligence). Executives use `/portfolio` and the macro Gantt. Anyone can open the About modal. |
+
+> **Note on visualisation:** A Mermaid `gantt` diagram is not used here. The Cursor / VS Code Markdown preview rejects that diagram type (task metadata commas, `after` tags, and `axisFormat` tokens all surface as “Mermaid Syntax Error”). The schedule is therefore given as a dependency flowchart (flowchart syntax is proven in Section 2 of this document) plus an explicit dated work-package table.
+
+### 8.1 Critical path (sequential)
 
 ```mermaid
-gantt
-    title Release 2.1 Implementation Programme (Wave 4)
-    dateFormat  YYYY-MM-DD
-    section Wave 4A: Core Engines
-    Prisma Schema & Migrations       :active, w4a1, 2026-09-12, 2d
-    Working Days & Holiday Engine    :w4a2, after w4a1, 2d
-    Weighted Progress & PS Engine    :w4a3, after w4a2, 3d
-    section Wave 4B: Governance & Milestones
-    Registration Approval Workflow   :w4b1, after w4a3, 3d
-    RBAC Delegation & Safe Deletion  :w4b2, after w4b1, 3d
-    Project Roster & Milestones UI   :w4b3, after w4b2, 3d
-    section Wave 4C: Visualisations & Portfolios
-    High-Density Data Table & Cards  :w4c1, after w4b3, 3d
-    Per-Project S-Curve & Burn-Down  :w4c2, after w4c1, 3d
-    Executive Portfolio Dashboard    :w4c3, after w4c2, 4d
-    UAT Verification & Close-out     :w4c4, after w4c3, 2d
+flowchart TD
+    Start([Programme start 12 Sep 2026]) --> A1
+    subgraph W4A[Wave 4A Live schedule health]
+        A1["W4A-1 Schema, migrations, audit trail<br/>12 to 13 Sep 2026 - 2d"]
+        A2["W4A-2 Holiday engine and Super PM holiday UI<br/>14 to 15 Sep 2026 - 2d"]
+        A3["W4A-3 Weights, PS, flags on live workspace<br/>16 to 17 Sep 2026 - 2d"]
+        AU["W4A-U Wave 4A UAT<br/>18 Sep 2026 - 1d"]
+        A1 --> A2 --> A3 --> AU
+    end
+    AU --> GateA{{Wave 4A UAT accepted}}
+    GateA --> B1
+    subgraph W4B[Wave 4B Governed programme office]
+        B1["W4B-1 Registration approval workflow<br/>19 to 20 Sep 2026 - 2d"]
+        B2["W4B-2 RBAC delegation and safe deletion<br/>21 to 22 Sep 2026 - 2d"]
+        B3["W4B-3 Roster, milestones, Issue Log<br/>23 to 25 Sep 2026 - 3d"]
+        B4["W4B-4 Lifecycle, retention and purge<br/>26 to 28 Sep 2026 - 3d"]
+        BU["W4B-U Wave 4B UAT<br/>29 to 30 Sep 2026 - 2d"]
+        B1 --> B2 --> B3 --> B4 --> BU
+    end
+    BU --> GateB{{Wave 4B UAT accepted}}
+    GateB --> C1
+    subgraph W4C[Wave 4C Executive visualisation]
+        C1["W4C-1 High-density tabular workspace<br/>01 to 03 Oct 2026 - 3d"]
+        C2["W4C-2 Per-project Analytics Schedule and Issue Intelligence<br/>04 to 06 Oct 2026 - 3d"]
+        C3["W4C-3 Portfolio, macro Gantt, About modal<br/>07 to 09 Oct 2026 - 3d"]
+        CU["W4C-U Wave 4C UAT plus regression<br/>10 to 12 Oct 2026 - 3d"]
+        C1 --> C2 --> C3 --> CU
+    end
+    CU --> Done([Release 2.1 accepted 12 Oct 2026])
 ```
 
-### Wave 4A — Core Calculation Engines & Data Infrastructure
-* **Objective:** Establish schema models, migrations, and mathematically proven calculation libraries.
-* **Deliverables:**
-  1. Apply Prisma migration: `Holiday`, `Milestone`, `ApprovalStatus`, `DashboardScope`, and audit trail columns.
-  2. Implement `src/lib/analytics/working-days.ts` (Australian holiday parsing, business day arithmetic).
-  3. Implement `src/lib/analytics/weighted-progress.ts` ($W_i$, $P_{\text{target}}$, $\text{PS}$, and 11 Status Flags).
-  4. Unit test suite validating mathematical piecewise continuity and edge cases.
-* **Exit Criteria:** Automated test suite achieves $100\%$ pass rate across all mathematical edge cases.
+### 8.2 Master schedule
 
-### Wave 4B — Governance, User Onboarding & Project Milestones
-* **Objective:** Secure the perimeter, build user approvals, and enable milestone management.
-* **Deliverables:**
-  1. Build Super PM Global Holiday Management UI (`/settings/holidays`).
-  2. Build User Registration Approval console (`/settings/users`) and edge middleware redirection to `/pending-approval`.
-  3. Implement Safe Account Deletion & Asset Handover Wizard.
-  4. Implement Project Settings modal (roster editing) and Milestone management engine.
-* **Exit Criteria:** Super PM can approve users, reassign projects safely, and manage milestones with complete audit logging.
+| ID | Wave | Work package | Start | Finish | Duration | Predecessor | Primary outputs |
+| :--- | :--- | :--- | :--- | :--- | ---: | :--- | :--- |
+| **W4A-1** | 4A | Prisma schema, migrations, audit injection | 12 Sep 2026 | 13 Sep 2026 | 2d | — | Full 2.1 schema (`Holiday`, `Milestone`, `Issue`, `IssueComment`, `IssueActivity`, `PurgedProject`, lifecycle columns); `withAuditSession` on writes |
+| **W4A-2** | 4A | Holiday engine **and** Super PM UI | 14 Sep 2026 | 15 Sep 2026 | 2d | W4A-1 | `working-days.ts`; `/settings/holidays` CRUD in the running app |
+| **W4A-3** | 4A | Weights, PS, flags on live v2.0 surfaces | 16 Sep 2026 | 17 Sep 2026 | 2d | W4A-2 | `weighted-progress.ts`; $W_i$, $P_{\text{target}}$, PS, 11 flags on List, Kanban, Gantt, drawer, landing cards |
+| **W4A-U** | 4A | **Wave 4A UAT** | 18 Sep 2026 *(planned)* | 18 Sep 2026 | 1d | W4A-3 | UAT-401 to UAT-404, UAT-411 — **accepted 5 Oct 2026** (`doc/dev_uat.md`) |
+| **W4B-1** | 4B | Registration approval workflow | 19 Sep 2026 | 20 Sep 2026 | 2d | W4A-U | Email-confirm gate, `/settings/users`, forced sign-out, approval email; Create account provisioning (FR-GOV-07) |
+| **W4B-2** | 4B | RBAC delegation and safe deletion | 21 Sep 2026 | 22 Sep 2026 | 2d | W4B-1 | Privilege matrix including `completedProjectAccess`; Safe deletion tab with ownership handover; Viewer project visibility |
+| **W4B-3** | 4B | Roster, milestones, Issue Log | 23 Sep 2026 | 25 Sep 2026 | 3d | W4B-2 | Edit Project modal; Milestone CRUD and Gantt markers; Issue Log register, drawer, `IssueActivity`; landing open-issue count |
+| **W4B-4** | 4B | Lifecycle, retention and purge | 26 Sep 2026 | 28 Sep 2026 | 3d | W4B-3 | Completed Projects; soft-delete / restore; `runProjectRetentionJob` (incl. user retention); Purged Project Register; Completed control on landing |
+| **W4B-U** | 4B | **Wave 4B UAT** | 29 Sep 2026 *(planned)* | 30 Sep 2026 | 2d | W4B-4 | UAT-405, UAT-405A–D, UAT-406 to UAT-407, UAT-412 to UAT-422 — **accepted 4–5 Oct 2026** (`doc/dev_uat.md`; UAT-413/418 job-assisted) |
+| **W4C-1** | 4C | High-density tabular workspace | 01 Oct 2026 | 03 Oct 2026 | 3d | W4B-U | Inline-edit task grid with weight and multi-date columns — **not started** |
+| **W4C-2** | 4C | Per-project Analytics | 04 Oct 2026 | 06 Oct 2026 | 3d | W4C-1 | Schedule Intelligence; Issue Intelligence pane; `issue-intelligence.ts`; `getProjectIssueAnalytics` — **not started** |
+| **W4C-3** | 4C | Executive portfolio and About | 07 Oct 2026 | 09 Oct 2026 | 3d | W4C-2 | `/portfolio`; three scopes; macro Gantt; About modal `v2.1.4-executive-intel` — **not started** |
+| **W4C-U** | 4C | **Wave 4C UAT + regression** | 10 Oct 2026 | 12 Oct 2026 | 3d | W4C-3 | UAT-408 to UAT-410, UAT-423 to UAT-425; pack **UAT-R** — **deferred until 4C ships** |
 
-### Wave 4C — High-Density Workspaces, Advanced Visualisations & Executive Portfolios
-* **Objective:** Deliver executive dashboards, high-density grids, and macro Gantt roadmaps.
-* **Deliverables:**
-  1. Implement High-Density Tabular Workspace with inline cell editing.
-  2. Upgrade Landing Page project cards with dual target vs. actual progress meters and Status Flag badges.
-  3. Implement Per-Project S-Curve and Burn-Down visualisations in `ProjectAnalyticsView.tsx`.
-  4. Build the dedicated `/portfolio` route featuring Project, PM, and Total Company scopes.
-  5. Build the Macro Executive Gantt Chart with milestone diamond nodes and instant 0ms tooltips.
-  6. Embed System About modal crediting Yugo Ananda as Grand Designer.
-  7. Execute full User Acceptance Testing (UAT) verification matrix.
-* **Exit Criteria:** Complete system passes all 10 UAT verification scenarios against live Supabase PostgreSQL.
+**Wave roll-up**
+
+| Wave | Planned window | Calendar days | Usable increment on exit | Exit gate | As-built (5 Oct 2026) |
+| :--- | :--- | ---: | :--- | :--- | :--- |
+| **4A — Live schedule health** | 12–18 Sep 2026 | 7 | Holidays and schedule health in the running app | Wave 4A UAT pack accepted | **Shipped + UAT accepted** |
+| **4B — Governed programme office** | 19–30 Sep 2026 | 12 | Approvals, Issue Log, Completed/Deleted/Purged operable | Wave 4B UAT pack accepted | **Shipped + UAT accepted** |
+| **4C — Executive visualisation** | 01–12 Oct 2026 | 12 | Analytics, portfolio, high-density grid, About | Wave 4C UAT pack + UAT-R accepted | **Not started** |
+| **Programme** | 12 Sep–12 Oct 2026 | **31** | Release 2.1 accepted | All three wave packs green | **Blocked on Wave 4C** |
+
+No parallel tracks are authorised on the critical path above. A later wave must not start while its predecessor’s UAT pack still has open priority-1 defects.
+
+The Gantt-style calendar is therefore:
+
+```text
+Sep 2026                    Oct 2026
+12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 | 01 02 03 04 05 06 07 08 09 10 11 12
+W4A-1|--|
+     W4A-2|--|
+          W4A-3|--|
+                U|
+                 W4B-1|--|
+                       W4B-2|--|
+                             W4B-3|------|
+                                       W4B-4|------|
+                                                 W4B-U|--|
+                                                         W4C-1|------|
+                                                               W4C-2|------|
+                                                                     W4C-3|------|
+                                                                           W4C-U|------|
+```
+
+### Wave 4A — Live schedule health
+* **Objective:** Put working-day weights, Punctuality Scores, Status Flags, holiday administration, and audit stamps into the hands of Super PMs and PMs on the existing workspace — not only into libraries.
+* **Stakeholder-usable deliverables:**
+  1. Prisma migration for the full 2.1 schema (including Issue and lifecycle tables so later waves do not re-baseline the database) and `withAuditSession` on every write.
+  2. Super PM holiday calendar at `/settings/holidays`, backed by `working-days.ts`. Creating a Tuesday holiday must change a Mon–Wed task from 3 days to 2 **in the UI**.
+  3. $W_i$, $P_{\text{target}}$, $P_{\text{actual}}$, Project PS, and the 11 Status Flags rendered on List, Kanban, Gantt, the task drawer, and landing cards.
+  4. Four-stamp audit visible when a task is created and then edited by a second user.
+  5. Automated mathematical unit tests (engineering gate before UAT, not the UAT itself).
+* **Explicitly not in 4A:** Issue Log UI, S-Curve charts, Issue Intelligence pane, registration approval, Completed Projects, `/portfolio`. Those wait for later waves; their tables may exist unused.
+* **UAT pack:** UAT-401, UAT-402, UAT-403, UAT-404, UAT-411 — **accepted** (`doc/dev_uat.md`, 5 Oct 2026).
+* **Exit criteria:** Wave 4A UAT pack accepted on live Supabase. A PM can demonstrate schedule health on a real project without opening a test runner. **Met as of 5 Oct 2026.**
+
+### Wave 4B — Governed programme office
+* **Objective:** A Super PM can run the platform as a PMO, and a PM can run a project’s roster, milestones, Issue Log, and lifecycle, without waiting for executive charts.
+* **Stakeholder-usable deliverables:**
+  1. Email-confirm-gated registration approval queue, forced sign-out until APPROVED, approval email with role, middleware session gate; Super PM Create account / password reset; shared Settings hub.
+  2. Privilege matrix (`dashboardAccess`, `completedProjectAccess`), **Safe deletion** with ownership handover, and Super PM **Viewer project visibility** (cross-portfolio Active grants via `ProjectMember`).
+  3. Edit Project (roster), PM Portfolio scope (My / All / per-PM), Milestone CRUD with Gantt vertical markers, Issue Log register and drawer with transactional `IssueActivity` writes, landing-card open-issue count.
+  4. Completed Projects, soft-delete with warning, Super PM restore, Super PM hard-delete, Purged Project Register, `runProjectRetentionJob` (projects + soft-deactivated users), Super PM **Run retention job** control on Deleted Projects.
+* **Explicitly not in 4B:** Schedule S-Curve, Issue Fix Realisation charts, `/portfolio`, high-density inline grid, About modal. The Issue Log is usable as a register; Analytics Issue Intelligence waits for 4C.
+* **UAT pack:** UAT-405, UAT-405A, UAT-405B, UAT-405C, UAT-405D, UAT-406, UAT-407, UAT-412 to UAT-422 — **accepted** (`doc/dev_uat.md`, 4–5 Oct 2026).
+* **Exit criteria:** Wave 4B UAT pack accepted. Super PM can approve a user, grant Viewer visibility across projects, complete a handover, restore a deleted project, run retention, and inspect a purge tombstone. A PM can log, progress, and close an issue without distorting task weights. **Met as of 5 Oct 2026.**
+
+### Wave 4C — Executive visualisation
+* **Objective:** Deliver the remaining executive readouts on top of a programme office that is already in daily use.
+* **Stakeholder-usable deliverables:**
+  1. High-density inline-edit task grid.
+  2. Per-project Analytics: Schedule Intelligence and Issue Intelligence (`IssueIntelligencePane.tsx`, `issue-intelligence.ts`, `getProjectIssueAnalytics`).
+  3. `/portfolio` with three scopes, macro Gantt, and the System About modal.
+* **UAT pack:** UAT-408, UAT-409, UAT-410, UAT-423, UAT-424, UAT-425, plus **UAT-R** (full re-run of Wave 4A and Wave 4B packs on the integrated build) — **deferred** until this wave is implemented.
+* **Exit criteria:** Wave 4C UAT pack and UAT-R accepted. Release 2.1 is accepted only when all three wave packs are green. **Not met** — Wave 4C development has not started.
 
 ---
 
 ## 9. Quality Gates & Verification Strategy
 
-Every milestone within Version 2.1 must satisfy the following four quality gates prior to promotion:
+Every work package within Version 2.1 must satisfy the following engineering gates **before** that wave’s UAT window opens:
 
 ```bash
 # Gate 1: Strict TypeScript Compilation
@@ -652,18 +1208,57 @@ npm run build
 npx prisma migrate status
 ```
 
-### User Acceptance Testing (UAT) Acceptance Matrix
-1. **UAT-401 (Holiday Engine):** Define a national holiday on Tuesday; verify Mon–Wed task duration equals 2 working days.
-2. **UAT-402 (Weighted Progress):** Verify Task A (10 days) and Task B (2 days) receive weights of $83.3\%$ and $16.7\%$ respectively.
-3. **UAT-403 (Punctuality Score):** Verify 5-day overdue task with $50\%$ progress reports $P_{\text{target}} = 150\%$, $\text{PS} = 33.3\%$, and **Critically Delayed** status.
-4. **UAT-404 (Status Flag SF-01):** Verify unstarted task due next week displays **Due to Commence** with sky blue badge.
-5. **UAT-405 (Approval Onboarding):** Verify newly registered candidate is intercepted by middleware and held at `/pending-approval`.
-6. **UAT-406 (Safe Deletion Wizard):** Verify deleting a PM prompts asset reassignment and transfers owned projects without orphan errors.
-7. **UAT-407 (Milestones):** Verify creating a milestone establishes synchronized targets and renders vertical markers on Gantt charts.
-8. **UAT-408 (S-Curve Realisation):** Verify S-Curve dynamically plots cumulative target line against actual progress realization.
-9. **UAT-409 (Macro Executive Gantt):** Verify `/portfolio` renders three clean macro bars per project with interactive milestone diamond nodes.
-10. **UAT-410 (Credits Modal):** Verify System About modal renders version `v2.1.0-executive-intel` and official architectural credits.
+**Gate 5 — Wave UAT (binding):** The wave UAT pack is executed in the running application against live Supabase. The next wave does not start until the pack is accepted. Priority-1 defects are fixed in-wave.
+
+### User Acceptance Testing (UAT) — grouped by wave
+
+**Executable pack:** `doc/dev_uat.md` (browser-agent steps, landmarks, deferred 4C, run sheet). Summary bullets below match that pack.
+
+Scenarios are accepted **in the wave that first makes them exercisable**. They are not deferred to a single end-of-programme UAT. Wave 4C additionally re-runs the earlier packs as **UAT-R**.
+
+#### Wave 4A pack (`W4A-U` — planned 18 September 2026; **accepted 5 October 2026**)
+1. **UAT-401 (Holiday Engine):** Super PM creates a national holiday on Tuesday in `/settings/holidays`; a Mon–Wed task duration equals 2 working days **on the task row**.
+2. **UAT-402 (Weighted Progress):** Task A (10 days) and Task B (2 days) display weights of $83.3\%$ and $16.7\%$ on the live List view.
+3. **UAT-403 (Punctuality Score):** As of 20/09/2026, a task with Updated Start `07/09/2026`, Updated Due `18/09/2026` (10 WD), and $50\%$ progress reports $P_{\text{target}} = 100\%$ (capped), $\text{PS} = 50.0\%$, and **Critically Delayed** on the task and landing card.
+4. **UAT-404 (Status Flag SF-01):** An unstarted task due next week displays **Due to Commence** with a sky blue badge in the running app.
+5. **UAT-411 (Audit stamps):** Create a task as User A, then edit it as User B — **List** shows **Created by** = User A’s login name and **Updated by** = User B’s login name (UUIDs are not shown; the drawer does not display audit stamps).
+
+#### Wave 4B pack (`W4B-U` — planned 29–30 September 2026; **accepted 4–5 October 2026**)
+6. **UAT-405 (Approval Onboarding):** Register → confirm email on `/auth/confirm` → refused sign-in until Super PM approves with role; applicant gets approval email; then signs in with registered credentials. Unreachable emails stay off the queue. Rejected/pending applicants can be deleted permanently from Approvals.
+6a. **UAT-405A (Direct Provisioning):** Super PM creates an account under Create account (name, email, temporary password, role). New user is immediately `APPROVED` and can sign in without confirmation or queue wait. Duplicate email shows a clear error.
+6b. **UAT-405B (Password Reset & Account Settings):** Forgot password emails a temporary password when mail works; Super PM Reset password shows a one-time temporary password; Settings → Account lets any approved user change name/password (email read-only); non–Super PM Settings lists Account only.
+6c. **UAT-405C (Project visibility):** PM default home = owned/tasked; Portfolio scope supports All projects and per-PM browse; assigned tasks remain editable. Member/Viewer see roster-only projects; Member edits only assigned tasks; Viewer is read-only. Assignee picker opens on focus with roster + owner + Super PM and type-to-filter.
+6d. **UAT-405D (Viewer visibility — Super PM):** Approve a Viewer; Super PM grants Active projects A/B under Settings → Viewer project visibility; Viewer home shows only those projects (read-only). Non–Super PM cannot open the page. Grants persist as `ProjectMember` rows.
+7. **UAT-406 (Safe Deletion Wizard):** Deleting a PM prompts asset reassignment and transfers owned projects without orphan errors.
+8. **UAT-407 (Milestones):** Hub shows a compact milestone strip; Add/Edit modal creates or revises a stage gate (`updatedTarget` mirrors `initialTarget` on create); Gantt shows a vertical marker.
+9. **UAT-412 (Manual complete):** At $100\%$, owning PM moves the project to Completed — it leaves `/` and appears on `/projects/completed`; `completedPurgeDueAt = completedAt + 5 years`.
+10. **UAT-413 (Auto-complete):** After 30 days at $100\%$ without the button, the job labels Completed with System actor and `AUTO_RETENTION`. *(Job-assisted UAT may seed disposable `progressReached100At` timestamps; must not alter the system clock or non-fixture portfolio rows.)*
+11. **UAT-414 (Completed visibility):** Member with `NONE` cannot list others' completed work; Super PM grant of `ASSIGNED` reveals membership-scoped completed projects. Owning PM sees own completed without a grant.
+12. **UAT-415 (Soft-delete warning):** Delete shows the 30-day / Super PM restore warning; after confirm the project leaves Active and Completed views.
+13. **UAT-416 (Restore):** Super PM restore from Settings returns the prior lifecycle; PMs are forbidden.
+14. **UAT-417 (Hard-delete):** Super PM permanent delete writes `PurgedProject` with `SUPER_PM_MANUAL` then removes the operational row.
+15. **UAT-418 (Five-year purge):** Project labelled Completed on 30/09/2026 is physically removed on 30/09/2031 with `COMPLETED_RETENTION_EXPIRED` and System actor. *(Job-assisted UAT may advance disposable `completedPurgeDueAt` only; System actor tombstone required.)*
+16. **UAT-419 (Issue raise):** PM logs an issue with PIC and initial dates — `ISS-001` appears; updated dates mirror initial; progress $0\%$; audit stamps set.
+17. **UAT-420 (Issue progress):** PIC moves progress $40\%$ then $100\%$ — status `in_progress` then `resolved`; project task weights **unchanged**. (Issue Intelligence charts are Wave 4C — see UAT-423.)
+18. **UAT-421 (Issue close):** Non-PIC member cannot close; owning PM closes with `resolutionSummary`.
+19. **UAT-422 (Issue excluded from weights):** One 10-day task plus an 8-day issue — task weight remains $100\%$; issue absent from Gantt task rows.
+
+#### Wave 4C pack (`W4C-U` — planned 10–12 October 2026; **deferred — Wave 4C not in build**)
+20. **UAT-408 (S-Curve Realisation):** Schedule S-Curve plots cumulative target against actual *task* progress realisation.
+21. **UAT-409 (Macro Executive Gantt):** `/portfolio` renders three clean macro bars per project with interactive milestone diamond nodes.
+22. **UAT-410 (Credits Modal):** System About modal renders version `v2.1.4-executive-intel` and official architectural credits.
+23. **UAT-423 (Issue Intelligence live progress):** After PIC sets ISS-001 to $40\%$, Analytics Issue Intelligence shows $40\%$ mean progress and Fix Realisation actual; Schedule S-Curve is unchanged.
+24. **UAT-424 (Issue Intelligence activity stream):** A comment on ISS-001 appears as `COMMENTED` in the Analytics activity stream with actor and timestamp; Last activity KPI matches.
+25. **UAT-425 (Issue Intelligence empty state):** A project with tasks but no issues shows *No issues have been logged for this project* on Analytics; Schedule pane still plots.
+26. **UAT-R (Regression):** Re-execute the entire Wave 4A pack and Wave 4B pack on the integrated 4C build. Any failure is a priority-1 regression and blocks release acceptance.
 
 ---
 
-*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development.*
+### Document control
+
+| Version | Date | Notes |
+|---------|------|--------|
+| 2.1.4 | Prior | North Star plan through Wave 4 programme design (agile UAT gates) |
+| 2.1.5 | 5 Oct 2026 | IDE Target → Cursor; companion `dev_uat.md`; as-built Wave 4A/4B acceptance vs planned schedule; User `purgeDueAt` / `purgeWarningSentAt`; retention job return shape + user pass; Safe deletion naming aligned to UI |
+
+*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C remains the outstanding delivery tranche.*

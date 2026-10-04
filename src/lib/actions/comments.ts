@@ -8,10 +8,12 @@ import {
   ActionError,
   type ActionResult,
 } from "@/src/lib/actions/errors";
+import { auditCreate, auditUpdate } from "@/src/lib/audit";
 import { prisma } from "@/src/lib/prisma";
 import {
+  canMutateTask,
   getProjectAccess,
-  requireSessionUser,
+  requireApprovedSessionUser,
   type SessionUser,
 } from "@/src/lib/rbac";
 
@@ -52,7 +54,7 @@ function mapCommentWithAuthor(comment: {
 }
 
 async function requireReadableTaskComments(taskId: string) {
-  const user = await requireSessionUser();
+  const user = await requireApprovedSessionUser();
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     include: {
@@ -121,9 +123,12 @@ export async function createComment(
   content: string,
 ): Promise<ActionResult<TaskCommentWithAuthor>> {
   try {
-    const { user, task, access } = await requireReadableTaskComments(taskId);
-    if (access === "read") {
-      throw new ActionError("You do not have permission to post comments.", "FORBIDDEN");
+    const { user, task } = await requireReadableTaskComments(taskId);
+    if (!canMutateTask(user, task.project, task)) {
+      throw new ActionError(
+        "You do not have permission to post comments on this task.",
+        "FORBIDDEN",
+      );
     }
 
     const trimmed = validateCommentContent(content);
@@ -134,16 +139,18 @@ export async function createComment(
           taskId,
           userId: user.id,
           content: trimmed,
+          ...auditCreate(user.id),
         },
         include: { user: { select: COMMENT_AUTHOR_SELECT } },
       });
+      const touch = auditUpdate(user.id);
       await tx.task.update({
         where: { id: taskId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
       await tx.project.update({
         where: { id: task.projectId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
       return comment;
     });
@@ -159,7 +166,7 @@ export async function deleteComment(
   commentId: string,
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await requireSessionUser();
+    const user = await requireApprovedSessionUser();
 
     const comment = await prisma.taskComment.findUnique({
       where: { id: commentId },
@@ -196,13 +203,14 @@ export async function deleteComment(
 
     await prisma.$transaction(async (tx) => {
       await tx.taskComment.delete({ where: { id: commentId } });
+      const touch = auditUpdate(user.id);
       await tx.task.update({
         where: { id: comment.taskId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
       await tx.project.update({
         where: { id: comment.task.projectId },
-        data: { updatedAt: new Date() },
+        data: touch,
       });
     });
 

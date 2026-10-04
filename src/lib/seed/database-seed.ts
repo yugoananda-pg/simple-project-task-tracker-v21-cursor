@@ -9,6 +9,12 @@ import {
   type User,
 } from "@prisma/client";
 
+import {
+  SYSTEM_ACTOR_DISPLAY_NAME,
+  SYSTEM_ACTOR_EMAIL,
+  SYSTEM_ACTOR_ID,
+} from "@/src/lib/audit-display";
+
 /** Fixed UUIDs so UAT docs and re-seeds stay reproducible (not tied to Supabase Auth). */
 export const SEED_USER_IDS = {
   pm: "a1000001-0001-4001-8001-000000000001",
@@ -160,12 +166,44 @@ async function resolveSuperPm(prisma: PrismaClient): Promise<User> {
   return superPms[0]!;
 }
 
+/**
+ * Ensures the System audit actor exists in `User` (FR-AUD-03 / FR-AUD-08).
+ * Not a Supabase Auth login — only an actor-master row for JOIN name resolution.
+ */
+export async function ensureSystemActor(prisma: PrismaClient): Promise<void> {
+  await prisma.user.upsert({
+    where: { id: SYSTEM_ACTOR_ID },
+    create: {
+      id: SYSTEM_ACTOR_ID,
+      email: SYSTEM_ACTOR_EMAIL,
+      name: SYSTEM_ACTOR_DISPLAY_NAME,
+      globalRole: "viewer",
+      approvalStatus: "APPROVED",
+      approvedAt: new Date(),
+      dashboardAccess: [],
+      completedProjectAccess: "NONE",
+      createdBy: SYSTEM_ACTOR_ID,
+      updatedBy: SYSTEM_ACTOR_ID,
+    },
+    update: {
+      email: SYSTEM_ACTOR_EMAIL,
+      name: SYSTEM_ACTOR_DISPLAY_NAME,
+      approvalStatus: "APPROVED",
+      updatedBy: SYSTEM_ACTOR_ID,
+    },
+  });
+}
+
 async function wipeNonSuperPmUsers(
   prisma: PrismaClient,
   superPmId: string,
 ): Promise<number> {
   const result = await prisma.user.deleteMany({
-    where: { id: { not: superPmId } },
+    where: {
+      id: {
+        notIn: [superPmId, SYSTEM_ACTOR_ID],
+      },
+    },
   });
   return result.count;
 }
@@ -183,10 +221,17 @@ async function ensureDummyUsers(prisma: PrismaClient): Promise<number> {
         email: definition.email,
         name: definition.name,
         globalRole: definition.globalRole,
+        approvalStatus: "APPROVED",
+        approvedAt: new Date(),
+        completedProjectAccess:
+          definition.globalRole === "super_pm" ? "ALL" : "NONE",
+        createdBy: definition.id,
+        updatedBy: definition.id,
       },
       update: {
         name: definition.name,
         globalRole: definition.globalRole,
+        updatedBy: definition.id,
       },
     });
     if (!existing) created += 1;
@@ -590,8 +635,10 @@ export async function resetAndSeedDatabase(
 ): Promise<SeedSummary> {
   const superPm = await resolveSuperPm(prisma);
 
+  await ensureSystemActor(prisma);
   await wipeProjectData(prisma);
   const usersDeleted = await wipeNonSuperPmUsers(prisma, superPm.id);
+  await ensureSystemActor(prisma);
   const usersCreated = await ensureDummyUsers(prisma);
 
   const users = await loadSeedUserMap(prisma, superPm);
@@ -612,8 +659,14 @@ export async function resetAndSeedDatabase(
         name: seedProject.name,
         description: seedProject.description,
         ownerId: owner.id,
+        createdBy: owner.id,
+        updatedBy: owner.id,
         members: {
-          create: memberIds.map((userId) => ({ userId })),
+          create: memberIds.map((userId) => ({
+            userId,
+            createdBy: owner.id,
+            updatedBy: owner.id,
+          })),
         },
       },
     });
@@ -661,6 +714,8 @@ export async function resetAndSeedDatabase(
             seedTask.actualCompletionOffset !== undefined
               ? dateFromOffset(seedTask.actualCompletionOffset)
               : null,
+          createdBy: owner.id,
+          updatedBy: owner.id,
         },
       });
       tasksCreated += 1;
@@ -672,6 +727,8 @@ export async function resetAndSeedDatabase(
             title: subtask.title,
             isCompleted: subtask.isCompleted,
             sortOrder: index,
+            createdBy: owner.id,
+            updatedBy: owner.id,
           })),
         });
         subtasksCreated += seedTask.subtasks.length;
@@ -685,6 +742,8 @@ export async function resetAndSeedDatabase(
             userId: author.id,
             content: seedComment.content,
             createdAt: subDays(new Date(), seedComment.daysAgo),
+            createdBy: author.id,
+            updatedBy: author.id,
           },
         });
         commentsCreated += 1;
