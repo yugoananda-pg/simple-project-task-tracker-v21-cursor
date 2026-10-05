@@ -319,10 +319,11 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 4. Select PM B’s portfolio — list shows PM B’s owned Active projects; select remains on PM B.
 5. Open a peer project where PM A is assignee of a task → edit that assigned task successfully.
 6. Confirm PM A cannot Edit Project / mutate unowned admin fields on a pure peer project (read / assignee rules).
-7. With **All projects** selected, open any project hub, then use primary nav **Projects** to return to `/`. Expect the Portfolio scope and list to restore **All projects**, not flash back to **My projects**.
-7a. Still on **All projects**, click the header brand (**Simple Project Task Tracker 2.1**) → expect **All projects** restored (not **My projects**).
-7b. Enter the homepage address manually in the browser URL field (`/` or the deployed origin root) → expect **All projects** restored again.
-7c. Repeat 7–7b after selecting a peer PM portfolio (not only **All projects**).
+7. With **All projects** selected, open any project hub, then use **← Back to projects**. Expect the Portfolio scope and list to restore **All projects**.
+7a. Still on **All projects**, click the header brand (**Simple Project Task Tracker 2.1**) → expect reset to **My projects** (not All).
+7b. Set **All projects** again, then use primary nav **Projects** → expect reset to **My projects**.
+7c. Set **All projects** again, enter the homepage address manually (`/` or the deployed origin root) → expect reset to **My projects**.
+7d. Repeat step 7 after selecting a peer PM portfolio (Back restores peer; brand/Projects/typed `/` reset to My).
 8. Change scope again (e.g. All → a peer PM, or peer → All). Expect **immediate** combobox update, then clear in-page pending feedback: “Updating projects…” under the combobox **and** a dimmed list with a centred spinner pill. The Next.js Dev Tools “Rendering…” badge alone is **not** sufficient. When the new list arrives, the overlay clears and cards match the selected scope.
 
 **Steps — Assignee picker**
@@ -344,7 +345,7 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 
 | Part | Evidence |
 |------|----------|
-| Portfolio (PM A) | My / All / peer (CAND) scopes held without flash-back; peer hub read-only; assigned task editable; non-assigned task read-only; **All projects** restored after hub → Projects / brand / typed `/` (cookie + sessionStorage); scope changes show inline “Updating projects…” pending overlay |
+| Portfolio (PM A) | My / All / peer (CAND) scopes held without flash-back; peer hub read-only; assigned task editable; non-assigned task read-only; **Back to projects** restores last scope; brand / Projects / typed `/` reset to **My projects**; scope changes show inline “Updating projects…” pending overlay |
 | Assignee picker | Portal droplist immediate; roster + owning PM + Super PM; instant filter; selection persisted after refresh |
 | Member / Viewer | Member saw roster **Test Project** only; Viewer Rachel saw granted **Test Project** only with read-only notice |
 
@@ -804,7 +805,7 @@ UAT-418  | Pass | Job-assisted: UAT-418 Five-Year Purge → Purged Register COMP
 | 1.9 | 5 Oct 2026 | UAT-405C step 7: Portfolio scope session persistence; Gantt UX notes (taller scrollport, body-height markers, same-day offset) |
 | 1.10 | 6 Oct 2026 | UAT-405C step 8: Portfolio scope pending feedback; pre–Wave 4C UX polish documented holistically across companion docs |
 | 1.11 | 6 Oct 2026 | UAT-PRJ-CPID: optional Custom Project ID; Prisma migration + ER/schema docs aligned (v2.1.8) |
-| 1.12 | 6 Oct 2026 | UAT-405C steps 7a–7c: Portfolio scope restore via brand / Projects / typed `/` (cookie + server redirect); product title 2.1 |
+| 1.12 | 6 Oct 2026 | UAT-405C steps 7–7d: Back restores Portfolio scope; brand / Projects / typed `/` reset to My projects; product title 2.1; useEffect deps fix |
 
 ---
 

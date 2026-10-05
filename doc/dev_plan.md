@@ -160,7 +160,7 @@ graph TD
 ### F-2109: Smart Landing Page Views & Enhanced Project Cards
 * **Scope:** Primary application entry point (`app/page.tsx`).
 * **Capability:**
-  * Role-aware smart defaults: Super PMs and PMs default to **My projects** (owned or with tasks assigned); Members/Viewers see roster-scoped Active projects. PM / Super PM **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs). Last non-default **Portfolio scope** is restored on bare `/` (cookie + server redirect, mirrored in `sessionStorage`) for brand, **Projects** nav, **Back to projects**, and typed homepage URLs. Scope changes show an inline list pending state (“Updating projects…”) until the RSC payload arrives.
+  * Role-aware smart defaults: Super PMs and PMs default to **My projects** (owned or with tasks assigned); Members/Viewers see roster-scoped Active projects. PM / Super PM **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs). **← Back to projects** restores the last non-default scope via `/?owner=…`; brand / **Projects** / typed `/` reset to **My projects**. Scope changes show an inline list pending state (“Updating projects…”) until the RSC payload arrives.
   * **Active-only listing:** Landing page query is `lifecycleStatus = ACTIVE AND deletedAt IS NULL`.
   * Dedicated **Completed Projects** control navigating to `/projects/completed` for Super PMs, owning PMs, and accounts granted completed visibility.
   * Enhanced project cards displaying designated PM identity, real-time Status Flag pill badges, task counts, compact dual progress bars ($P_{\text{target}}$ vs. $P_{\text{actual}}$), and **open-issue count** (rose when any open issue is Critical). Cards at $100\%$ additionally show **Move to Completed Projects**.
@@ -1267,6 +1267,6 @@ Scenarios are accepted **in the wave that first makes them exercisable**. They a
 | 2.1.6 | 5 Oct 2026 | Portfolio scope session persistence on `/`; Gantt taller scrollport; Today/milestone lines end on task body; same-day milestone offset |
 | 2.1.7 | 6 Oct 2026 | Portfolio scope pending feedback; holistic pre–Wave 4C UX polish record |
 | 2.1.8 | 6 Oct 2026 | Optional Custom Project ID on Project; ER diagram + Prisma excerpts updated |
-| 2.1.9 | 6 Oct 2026 | Portfolio scope cookie + server restore on bare `/`; product title Simple Project Task Tracker 2.1 |
+| 2.1.9 | 6 Oct 2026 | Portfolio scope: Back to projects restores; brand / Projects / typed `/` reset; product title 2.1 |
 
 *End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C remains the outstanding delivery tranche. Pre–Wave 4C UX polish (landing scope memory/pending feedback; Gantt viewport and marker aesthetics) and optional Custom Project ID are accepted into the as-built baseline.*

@@ -563,12 +563,12 @@ After Wave 4B UAT acceptance, stakeholder feedback requested several landing-pag
 
 | Concern | Decision | Implementation |
 |---------|----------|----------------|
-| Returning from a project hub reset the list to **My projects** | Remember last PM/Super PM non-default scope | Dual-write `PORTFOLIO_SCOPE_STORAGE_KEY` (`sptt.portfolioScope.v1`) to `sessionStorage` **and** a `Path=/` cookie; restore via `router.replace('/?owner=…')` when `/` has no `owner` query |
-| Brand link, **Projects** nav, or typed `/` also reset to **My projects** | Server must restore before the default RSC list paints | `app/page.tsx` reads the cookie; if bare `/` and a valid saved scope exists, `redirect('/?owner=…')` |
-| Choosing **My projects** | Clear remembered non-default scope | Cookie `Max-Age=0` + `sessionStorage.removeItem` when scope draft is empty |
+| **← Back to projects** should keep the last filter | Remember non-default scope for hub → list only | `PORTFOLIO_SCOPE_STORAGE_KEY` in `sessionStorage`; `ProjectDetailView` links to `/?owner=…` via `projectsHomeHrefFromScope` |
+| Brand, **Projects** nav, or typed `/` | Reset to **My projects** | Bare `/` has no `owner` query → default list; `HomePageClient` clears sessionStorage (and any legacy cookie) on bare `/` |
+| Choosing **My projects** | Clear remembered non-default scope | `persistPortfolioScopeClient('')` when scope draft is empty |
 | Scope change felt “stuck” (only Next.js Dev Tools “Rendering…”) | Inline pending UX, not full-screen grey | Separate `useTransition` (`isScopePending`); combobox disabled + “Updating projects…” under label; list region dimmed + centred spinner pill overlay (same pattern as task-create overlay on the project hub) |
 
-**Why not instant client filter?** The landing list is server-scoped (RBAC + open-issue aggregates). Soft navigation keeps server truth; pending feedback makes the wait honest. Cookie + server redirect covers hard navigations (brand, Projects, address bar) where `sessionStorage` alone is too late.
+**Why not restore on every `/` visit?** Brand / Projects / address-bar home are intentional “start again” entries. Only **Back to projects** should carry the filter. Soft RSC navigation still loads the server-scoped list; pending feedback makes the wait honest.
 
 #### 12.4.2 Per-project Gantt aesthetics
 
@@ -584,9 +584,10 @@ Browser document title (`app/layout.tsx` metadata) and header brand (`AppHeader`
 
 #### 12.4.4 Files touched
 
-- `src/lib/project-list-scope.ts` — storage key, cookie helpers, `PROJECT_LIST_SCOPE_ALL`
-- `app/page.tsx` — cookie → `redirect('/?owner=…')` on bare `/`
-- `src/components/projects/HomePageClient.tsx` — dual-write persist / restore / `isScopePending` overlay
+- `src/lib/project-list-scope.ts` — storage key, persist/read helpers, `projectsHomeHrefFromScope`
+- `app/page.tsx` — scoped list only when `owner` query present (no cookie redirect)
+- `src/components/projects/HomePageClient.tsx` — persist on scoped URL; clear on bare `/`; `isScopePending` overlay
+- `src/components/projects/ProjectDetailView.tsx` — **Back to projects** uses remembered `/?owner=…`
 - `src/components/gantt/ProjectGanttView.tsx` — scrollport, body-height markers, same-day offset
 - `app/layout.tsx`, `src/components/layout/AppHeader.tsx` — product title 2.1
 

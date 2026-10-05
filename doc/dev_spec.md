@@ -668,7 +668,7 @@ Analytics stays in DOM but charts mount only when `chartsVisible` is true (avoid
 | Defensive | Missing/inverted dates clamped; corrupt strings skipped |
 | Project summary | Project Status Flag / Actual / Target live under the project description — not duplicated above the Gantt toolbar |
 
-> **2.1 as-built note (5–6 Oct 2026):** Today/milestone body-height markers, taller scrollport, and same-day offset ship ahead of the full `dev_spec` rewrite. Portfolio scope persistence (cookie + `sessionStorage`, server redirect on bare `/`) and **inline pending feedback** on `/` are specified in `dev_req.md` FR-UI-01 (`HomePageClient` `isScopePending` overlay). Product chrome title is **Simple Project Task Tracker 2.1** (`app/layout.tsx` / `AppHeader`).
+> **2.1 as-built note (5–6 Oct 2026):** Today/milestone body-height markers, taller scrollport, and same-day offset ship ahead of the full `dev_spec` rewrite. Portfolio scope: **Back to projects** restores via `sessionStorage` + `/?owner=…`; brand / Projects / typed `/` reset to My projects. Inline pending feedback on `/` is specified in `dev_req.md` FR-UI-01 (`HomePageClient` `isScopePending` overlay). Product chrome title is **Simple Project Task Tracker 2.1** (`app/layout.tsx` / `AppHeader`).
 
 Core math: `src/lib/gantt/date-utils.ts` (`parseTaskDate`, `getActualDateRange`, `getBarPositionPx`, `buildTimelineColumns`, …). Schedule metrics: `src/lib/analytics/weighted-progress.ts`.
 

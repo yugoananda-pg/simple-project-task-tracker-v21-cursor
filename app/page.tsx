@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import HomePageClient from "@/src/components/projects/HomePageClient";
@@ -6,10 +5,6 @@ import {
   listBrowsableProjectOwners,
   listProjects,
 } from "@/src/lib/actions/projects";
-import {
-  PORTFOLIO_SCOPE_STORAGE_KEY,
-  readPortfolioScopeFromCookieHeader,
-} from "@/src/lib/project-list-scope";
 import {
   canAccessCompletedWorkspace,
   canBrowsePeerPmPortfolios,
@@ -44,16 +39,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const ownerInQuery = Object.hasOwn(params, "owner");
   const ownerParam = ownerInQuery ? (params.owner?.trim() || "") : null;
 
-  const cookieStore = await cookies();
-  const ownerFromCookie = readPortfolioScopeFromCookieHeader(
-    cookieStore.get(PORTFOLIO_SCOPE_STORAGE_KEY)?.value,
-  );
-
-  // Bare `/` (brand, Projects nav, typed URL): restore last non-default scope.
-  if (canBrowse && !ownerInQuery && ownerFromCookie) {
-    redirect(`/?owner=${encodeURIComponent(ownerFromCookie)}`);
-  }
-
+  // Bare `/` (brand, Projects, typed URL) = My projects. Scoped list only when
+  // `owner` is present (combobox or “Back to projects”).
   const effectiveBrowseOwnerId =
     canBrowse && ownerInQuery && ownerParam ? ownerParam : null;
 

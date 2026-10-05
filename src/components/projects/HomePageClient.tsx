@@ -17,7 +17,6 @@ import {
 } from "@/src/lib/actions/projects";
 import { markProjectCompleted } from "@/src/lib/actions/project-lifecycle";
 import {
-  PORTFOLIO_SCOPE_STORAGE_KEY,
   PROJECT_LIST_SCOPE_ALL,
   persistPortfolioScopeClient,
 } from "@/src/lib/project-list-scope";
@@ -63,61 +62,19 @@ export default function HomePageClient({
   const [isScopePending, startScopeTransition] = useTransition();
   /** Optimistic select value so the control does not snap back while RSC navigates. */
   const [scopeDraft, setScopeDraft] = useState(browseOwnerId ?? "");
-  const [scopeHydrated, setScopeHydrated] = useState(!canBrowsePeerPortfolios);
 
   // Soft navigations (portfolio scope) refresh RSC props; keep local list in sync.
   useEffect(() => {
     setProjects(initialProjects);
   }, [initialProjects]);
 
+  // Mirror the URL scope into the combobox. Bare `/` clears remembered scope so
+  // brand / Projects / typed homepage reset to My projects; “Back to projects”
+  // keeps the filter by linking to `/?owner=…` instead.
   useEffect(() => {
-    // Only mirror URL → draft once we know restore is done; avoid wiping a
-    // remembered scope while bare `/` is still hydrating.
-    if (browseOwnerId != null) {
-      setScopeDraft(browseOwnerId);
-      return;
-    }
-    if (scopeHydrated) {
-      setScopeDraft("");
-    }
-  }, [browseOwnerId, scopeHydrated]);
-
-  /**
-   * Restore the last Portfolio scope when the URL has no `owner` query (e.g. nav
-   * “Projects” / brand → `/`). Server also redirects via cookie; this covers
-   * soft client navigations and keeps sessionStorage in sync.
-   */
-  useEffect(() => {
-    if (!canBrowsePeerPortfolios) {
-      setScopeHydrated(true);
-      return;
-    }
-    if (browseOwnerId != null) {
-      persistPortfolioScopeClient(browseOwnerId);
-      setScopeHydrated(true);
-      return;
-    }
-    let saved = "";
-    try {
-      saved = sessionStorage.getItem(PORTFOLIO_SCOPE_STORAGE_KEY) ?? "";
-    } catch {
-      saved = "";
-    }
-    if (saved) {
-      setScopeDraft(saved);
-      persistPortfolioScopeClient(saved);
-      startScopeTransition(() => {
-        router.replace(`/?owner=${encodeURIComponent(saved)}`);
-      });
-      return;
-    }
-    setScopeHydrated(true);
-  }, [browseOwnerId, canBrowsePeerPortfolios, router, startScopeTransition]);
-
-  useEffect(() => {
-    if (browseOwnerId != null) {
-      setScopeHydrated(true);
-    }
+    const next = browseOwnerId ?? "";
+    setScopeDraft(next);
+    persistPortfolioScopeClient(next);
   }, [browseOwnerId]);
 
   function navigatePortfolioScope(next: string) {
@@ -242,7 +199,7 @@ export default function HomePageClient({
               <select
                 id="browse-owner"
                 value={scopeDraft}
-                disabled={!scopeHydrated || isScopePending}
+                disabled={isScopePending}
                 aria-busy={isScopePending}
                 onChange={(event) => navigatePortfolioScope(event.target.value)}
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"

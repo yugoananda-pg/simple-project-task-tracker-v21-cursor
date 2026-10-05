@@ -2,9 +2,10 @@
 export const PROJECT_LIST_SCOPE_ALL = "all";
 
 /**
- * Cookie + sessionStorage key for the last Portfolio scope a PM / Super PM chose.
- * Empty / absent means “My projects”. Cookie enables server-side restore on bare `/`
- * (brand link, Projects nav, typed URL); sessionStorage mirrors for client UX.
+ * sessionStorage key for the last non-default Portfolio scope.
+ * Used only by “← Back to projects” so hub → list keeps the filter.
+ * Brand / Projects / typed `/` intentionally do **not** restore — they reset to
+ * My projects and clear this key.
  */
 export const PORTFOLIO_SCOPE_STORAGE_KEY = "sptt.portfolioScope.v1";
 
@@ -19,30 +20,44 @@ export function isValidPortfolioScope(value: string): boolean {
   return OWNER_UUID_RE.test(trimmed);
 }
 
-/** Persist scope for client navigations (sessionStorage + cookie). */
-export function persistPortfolioScopeClient(next: string): void {
+function expireLegacyPortfolioScopeCookie(): void {
   try {
-    if (!next) {
-      sessionStorage.removeItem(PORTFOLIO_SCOPE_STORAGE_KEY);
-      document.cookie = `${PORTFOLIO_SCOPE_STORAGE_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
-      return;
-    }
-    if (!isValidPortfolioScope(next)) return;
-    sessionStorage.setItem(PORTFOLIO_SCOPE_STORAGE_KEY, next);
-    document.cookie = `${PORTFOLIO_SCOPE_STORAGE_KEY}=${encodeURIComponent(next)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    document.cookie = `${PORTFOLIO_SCOPE_STORAGE_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
   } catch {
     /* private mode / blocked storage */
   }
 }
 
-export function readPortfolioScopeFromCookieHeader(
-  cookieHeaderValue: string | undefined,
-): string {
-  if (!cookieHeaderValue) return "";
+/** Persist non-default scope for “Back to projects”. Empty clears memory. */
+export function persistPortfolioScopeClient(next: string): void {
   try {
-    const decoded = decodeURIComponent(cookieHeaderValue).trim();
-    return isValidPortfolioScope(decoded) ? decoded : "";
+    expireLegacyPortfolioScopeCookie();
+    if (!next) {
+      sessionStorage.removeItem(PORTFOLIO_SCOPE_STORAGE_KEY);
+      return;
+    }
+    if (!isValidPortfolioScope(next)) return;
+    sessionStorage.setItem(PORTFOLIO_SCOPE_STORAGE_KEY, next);
+  } catch {
+    /* private mode / blocked storage */
+  }
+}
+
+/** Read remembered scope (empty = My projects). */
+export function readPortfolioScopeClient(): string {
+  try {
+    const saved = sessionStorage.getItem(PORTFOLIO_SCOPE_STORAGE_KEY) ?? "";
+    return isValidPortfolioScope(saved) ? saved : "";
   } catch {
     return "";
   }
+}
+
+/**
+ * Href for “← Back to projects”: restores last non-default scope when present.
+ * Brand / Projects should keep linking to bare `/` (My projects reset).
+ */
+export function projectsHomeHrefFromScope(saved: string): string {
+  if (!saved || !isValidPortfolioScope(saved)) return "/";
+  return `/?owner=${encodeURIComponent(saved)}`;
 }

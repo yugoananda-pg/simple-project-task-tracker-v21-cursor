@@ -146,7 +146,7 @@ The main focus of this release is to establish a mathematically rigorous **Weigh
 ### 🖥️ E. Landing Page & High-Density UI Refactoring
 
 * **Smart Landing Page Views (as-built Wave 4B):**
-  * **Super PM / PM:** Defaults to **My projects** (owned or with tasks assigned). A **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs). The last non-default scope is remembered (`sessionStorage` + cookie) so returning to `/` — via **Back to projects**, the header brand, **Projects**, or a typed homepage URL — restores the same list (server redirect on bare `/`). While a scope change is loading, the list region dims with an “Updating projects…” spinner overlay (and a matching cue under the combobox) so users are not left staring at a silent page.
+  * **Super PM / PM:** Defaults to **My projects** (owned or with tasks assigned). A **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs). **← Back to projects** restores the last non-default scope; the header brand, **Projects**, and a typed homepage URL reset to **My projects**. While a scope change is loading, the list region dims with an “Updating projects…” spinner overlay (and a matching cue under the combobox) so users are not left staring at a silent page.
   * **Member / Viewer:** Roster-scoped Active projects only (no peer portfolio browser).
   * **Exclusion rule:** The landing page shows **Active** projects only. Completed and soft-deleted projects are never listed here.
 * **Completed Projects entry point:** A dedicated control (header / landing action) labelled **Completed Projects** opens the completed workspace for authorised viewers. See Section H.
@@ -584,4 +584,4 @@ A wave that ships only libraries or migrations is incomplete. The next wave does
 | 2.1.6 | 5 Oct 2026 | Portfolio scope session persistence; Gantt viewport / Today–milestone line aesthetics and same-day offset |
 | 2.1.7 | 6 Oct 2026 | Portfolio scope pending feedback on landing; pre–Wave 4C UX polish summary aligned |
 | 2.1.8 | 6 Oct 2026 | Optional Custom Project ID; Project entity / Edit Project / hub header aligned |
-| 2.1.9 | 6 Oct 2026 | Portfolio scope cookie + server restore on bare `/`; product title 2.1 |
+| 2.1.9 | 6 Oct 2026 | Portfolio scope: Back restores; brand / Projects / typed `/` reset; product title 2.1 |

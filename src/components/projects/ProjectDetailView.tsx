@@ -39,6 +39,10 @@ import type { ProjectMemberUser } from "@/src/lib/actions/projects";
 import type { ProjectAccessLevel } from "@/src/lib/rbac";
 import { buildProgressStatusPatch } from "@/src/lib/task-defaults";
 import type { Issue, Milestone, Project, Task, TaskStatus } from "@/src/lib/types";
+import {
+  projectsHomeHrefFromScope,
+  readPortfolioScopeClient,
+} from "@/src/lib/project-list-scope";
 import { Loader2 } from "lucide-react";
 
 export type ProjectDetailViewProps = {
@@ -154,10 +158,16 @@ export default function ProjectDetailView({
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [isCreatingTask, startCreateTransition] = useTransition();
+  /** Soft-nav home keeps last Portfolio scope; brand / Projects use bare `/`. */
+  const [projectsHomeHref, setProjectsHomeHref] = useState("/");
   /** Serialize task writes so sequential date blurs cannot race and revert each other. */
   const taskMutationQueueRef = useRef(Promise.resolve());
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
+
+  useEffect(() => {
+    setProjectsHomeHref(projectsHomeHrefFromScope(readPortfolioScopeClient()));
+  }, []);
 
   // Adopt server payloads without wiping newer local edits (date blur races /
   // revalidatePath returning a slightly stale RSC snapshot).
@@ -588,7 +598,7 @@ export default function ProjectDetailView({
     return (
       <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
         <Link
-          href="/"
+          href={projectsHomeHref}
           className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
         >
           ← Back to projects
@@ -608,7 +618,7 @@ export default function ProjectDetailView({
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <Link
-        href="/"
+        href={projectsHomeHref}
         className="inline-flex text-sm font-medium text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
       >
         ← Back to projects
