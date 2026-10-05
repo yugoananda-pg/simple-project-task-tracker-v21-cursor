@@ -2,7 +2,7 @@
 
 **Document Identifier:** `doc/dev_ref.md`  
 **Status:** Approved Refinement Blueprint — Waves **4A** and **4B** as-built and UAT-accepted; Wave **4C** not yet developed  
-**Document Version:** 2.1.5  
+**Document Version:** 2.1.9  
 **Amendment:** Universal mutation audit trail; Completed Projects workspace; soft-delete / restore / purge; five-year completed retention; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE target Cursor; delivery status aligned to as-built UAT  
 **Target Platform:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Supabase PostgreSQL, Prisma ORM 7  
 **IDE Target:** Cursor (Agent / IDE browser automation for UAT)  
@@ -15,12 +15,14 @@
 * [`dev_spec.md`](./dev_spec.md) — Technical Specification (Wave 3 baseline; **deferred refresh after Wave 4C**)  
 * [`supabase-security.md`](./supabase-security.md) — RLS & Security Policy Baseline  
 
-### Programme delivery status (as-built, 5 Oct 2026)
+### Programme delivery status (as-built, 6 Oct 2026)
 
 | Wave | Build | UAT | Evidence |
 | :--- | :--- | :--- | :--- |
 | **4A — Live schedule health** | Shipped | **Accepted** (5 Oct 2026) | `doc/dev_uat.md` — UAT-401–404, UAT-411 |
 | **4B — Governed programme office** | Shipped | **Accepted** (4–5 Oct 2026; job-assisted UAT-413 / 418) | `doc/dev_uat.md` — UAT-405, 405A–D, 406–407, 412–422 |
+| **Pre–4C UX polish** | Shipped | Operator visual check | Scope memory + pending feedback; Gantt viewport / markers — `dev_proc.md` §12.4 |
+| **Custom Project ID** | Shipped | Operator check (UAT-PRJ-CPID) | `Project.customProjectId` — `dev_proc.md` §12.5 |
 | **4C — Executive visualisation** | **Not in current build** | Deferred | Do not execute UAT-408–410, 423–425, UAT-R until 4C development completes |
 
 ---
@@ -128,7 +130,8 @@ The main focus of this release is to establish a mathematically rigorous **Weigh
 ### 🛠️ D. Project Management & Milestones
 
 * **Edit Project Interface:** A dedicated menu accessible only to PMs (for their own projects) and Super PMs (for all projects).
-  * Update core details (Description, Dates).
+  * Update core details: **Name**, optional **Custom Project ID** (free-text external/programme code; max 80 characters; blank when unused), and **Description**.
+  * When Custom Project ID is set, the project hub shows it between the title and description in a smaller monospace style; when blank, that line is hidden.
   * Add, edit, or remove project members dynamically.
   * When weighted actual progress equals $100\%$, display **Move to Completed Projects**.
   * Owning PMs may **Delete project** (soft-delete with a destructive warning).
@@ -143,7 +146,7 @@ The main focus of this release is to establish a mathematically rigorous **Weigh
 ### 🖥️ E. Landing Page & High-Density UI Refactoring
 
 * **Smart Landing Page Views (as-built Wave 4B):**
-  * **Super PM / PM:** Defaults to **My projects** (owned or with tasks assigned). A **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs).
+  * **Super PM / PM:** Defaults to **My projects** (owned or with tasks assigned). A **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs). The last non-default scope is remembered (`sessionStorage` + cookie) so returning to `/` — via **Back to projects**, the header brand, **Projects**, or a typed homepage URL — restores the same list (server redirect on bare `/`). While a scope change is loading, the list region dims with an “Updating projects…” spinner overlay (and a matching cue under the combobox) so users are not left staring at a silent page.
   * **Member / Viewer:** Roster-scoped Active projects only (no peer portfolio browser).
   * **Exclusion rule:** The landing page shows **Active** projects only. Completed and soft-deleted projects are never listed here.
 * **Completed Projects entry point:** A dedicated control (header / landing action) labelled **Completed Projects** opens the completed workspace for authorised viewers. See Section H.
@@ -157,9 +160,11 @@ The main focus of this release is to establish a mathematically rigorous **Weigh
 * **Per-Project Analytics Dashboard (Wave 4C):**
   * **Schedule pane (tasks only):** S-Curve (planned vs actual realisation) and remaining-effort burn-down; Target vs Actual and project Status Flag in the header.
   * **Issue Intelligence pane (mandatory on the same Analytics tab):** reflects *every* Issue Log mutation — raise, PIC change, progress, status, dates, comments — without altering the task S-Curve. See Section J.7. Wave 4B ships the Issue Log register; these Analytics panes remain Wave 4C.
-* **Per-Project Gantt Chart Enhancements:**
+* **Per-Project Gantt Chart Enhancements (as-built Wave 4A/4B):**
   * Project-level Status Flag and Actual / Target progress live under the project description (not repeated above the Gantt toolbar).
   * Sticky left rail columns: **Task** (title wrapping for readability, task Status Flag, Kanban status, PIC without the Custom badge) then **Progress** (stacked Actual and Target badges per task), then the timeline.
+  * Moderately tall scrollport (`≈ 100vh − 200px`) so more task rows are visible.
+  * Solid red **Today** line and dashed milestone lines span the task/group body only (end on the last row). When a milestone falls on Today, the milestone line is offset slightly and hover tips disclose both markers.
   * Overlays vertical dashed lines denoting Milestones: **pending** (amber) on `updatedTarget`; **achieved** (emerald) on `actualAchieved` — the line moves to the achieved date when completed. Gantt legend shows both **Milestone (pending)** and **Milestone (achieved)**.
 * **Multi-Project Executive Portfolio Dashboard (Wave 4C — not yet in build):**
   * Housed under a dedicated route/button distinct from per-project views.
@@ -403,7 +408,7 @@ model User {
 }
 
 model Project {
-  // ... existing name / description / ownerId
+  // ... existing name / customProjectId (optional, default "") / description / ownerId
   lifecycleStatus        ProjectLifecycleStatus @default(ACTIVE)
   progressReached100At   DateTime?
   completedAt            DateTime?
@@ -576,3 +581,7 @@ A wave that ships only libraries or migrations is incomplete. The next wave does
 |---------|------|--------|
 | 2.1.4 | Prior | Refinement blueprint through Wave 4 programme design |
 | 2.1.5 | 5 Oct 2026 | IDE Target → Cursor; as-built Wave 4A/4B acceptance; Portfolio scope / Safe deletion naming; Wave 4C artefacts marked not in build; companion `dev_uat.md` |
+| 2.1.6 | 5 Oct 2026 | Portfolio scope session persistence; Gantt viewport / Today–milestone line aesthetics and same-day offset |
+| 2.1.7 | 6 Oct 2026 | Portfolio scope pending feedback on landing; pre–Wave 4C UX polish summary aligned |
+| 2.1.8 | 6 Oct 2026 | Optional Custom Project ID; Project entity / Edit Project / hub header aligned |
+| 2.1.9 | 6 Oct 2026 | Portfolio scope cookie + server restore on bare `/`; product title 2.1 |

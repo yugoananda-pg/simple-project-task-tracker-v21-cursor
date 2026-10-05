@@ -27,7 +27,7 @@ export default async function AppHeader() {
           href={isSignedIn ? "/" : "/login"}
           className="text-sm font-semibold tracking-tight text-slate-50 transition hover:text-white"
         >
-          Simple Project Task Tracker 2.0
+          Simple Project Task Tracker 2.1
         </Link>
 
         <div className="flex items-center gap-4">

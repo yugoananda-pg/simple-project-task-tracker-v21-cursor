@@ -85,7 +85,10 @@ const WEEK_COLUMN_WIDTH = 72;
 const MONTH_COLUMN_WIDTH = 88;
 const HEADER_HEIGHT_PX = 48;
 /** Must match left label + progress + right track: Tailwind `h-24`. */
+const TASK_ROW_HEIGHT_PX = 96;
 const GROUP_HEADER_HEIGHT_PX = 36;
+/** Horizontal offset (px) when a milestone lands on Today so both lines stay readable. */
+const MILESTONE_TODAY_OFFSET_PX = 4;
 const BAR_HEIGHT = 7;
 /** Sticky left rail: Task title pane + Progress column. */
 const TASK_PANE_WIDTH_CLASS = "w-[17rem] sm:w-[20rem]";
@@ -424,27 +427,40 @@ function GanttTaskRow({
   );
 }
 
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 function TodayMarker({
   columns,
   columnWidths,
-  viewportHeight,
+  bodyHeightPx,
+  colocatedMilestoneNames,
   onTipChange,
 }: {
   columns: GanttTimelineColumn[];
   columnWidths: number[];
-  /** Visible body height inside the scrollport (below sticky header). */
-  viewportHeight: number | string;
+  /** Height of task/group rows only — line ends at the table bottom, not empty chrome. */
+  bodyHeightPx: number;
+  colocatedMilestoneNames: string[];
   onTipChange: (tip: FloatingTip | null) => void;
 }) {
   const today = startOfDay(new Date());
-  if (columns.length === 0) return null;
+  if (columns.length === 0 || bodyHeightPx <= 0) return null;
 
   const rangeStart = startOfDay(columns[0]!.start);
   const rangeEnd = startOfDay(columns[columns.length - 1]!.end);
   if (today < rangeStart || today > rangeEnd) return null;
 
   const leftPx = getTimelineOffsetPx(today, columns, columnWidths);
-  const tipLabel = `We're here — ${formatAuDate(today)}`;
+  const tipLabel =
+    colocatedMilestoneNames.length > 0
+      ? `We're here — ${formatAuDate(today)} · Also: ${colocatedMilestoneNames.join(", ")}`
+      : `We're here — ${formatAuDate(today)}`;
 
   function showTip(event: MouseEvent<HTMLDivElement>) {
     onTipChange({
@@ -463,7 +479,7 @@ function TodayMarker({
     >
       <div
         className="group pointer-events-auto absolute w-4 -ml-2 cursor-default overflow-visible"
-        style={{ left: leftPx, height: viewportHeight }}
+        style={{ left: leftPx, height: bodyHeightPx }}
         onMouseEnter={showTip}
         onMouseMove={showTip}
         onMouseLeave={() => onTipChange(null)}
@@ -479,16 +495,20 @@ function MilestoneMarkers({
   milestones,
   columns,
   columnWidths,
-  viewportHeight,
+  bodyHeightPx,
+  today,
   onTipChange,
 }: {
   milestones: Milestone[];
   columns: GanttTimelineColumn[];
   columnWidths: number[];
-  viewportHeight: number | string;
+  bodyHeightPx: number;
+  today: Date;
   onTipChange: (tip: FloatingTip | null) => void;
 }) {
-  if (columns.length === 0 || milestones.length === 0) return null;
+  if (columns.length === 0 || milestones.length === 0 || bodyHeightPx <= 0) {
+    return null;
+  }
 
   const rangeStart = startOfDay(columns[0]!.start);
   const rangeEnd = startOfDay(columns[columns.length - 1]!.end);
@@ -504,13 +524,19 @@ function MilestoneMarkers({
           milestone.actualAchieved ?? milestone.updatedTarget,
         );
         if (!anchor || anchor < rangeStart || anchor > rangeEnd) return null;
-        const leftPx = getTimelineOffsetPx(anchor, columns, columnWidths);
+        const sharesToday = isSameCalendarDay(anchor, today);
+        const leftPx =
+          getTimelineOffsetPx(anchor, columns, columnWidths) -
+          (sharesToday ? MILESTONE_TODAY_OFFSET_PX : 0);
         const tipLabel = [
           milestone.name,
           achieved
             ? `Achieved ${formatAuDate(milestone.actualAchieved)}`
             : `Target ${formatAuDate(milestone.updatedTarget)}`,
-        ].join(" — ");
+          sharesToday ? "Same day as Today" : null,
+        ]
+          .filter(Boolean)
+          .join(" — ");
 
         function showTip(event: MouseEvent<HTMLDivElement>) {
           onTipChange({
@@ -524,7 +550,7 @@ function MilestoneMarkers({
           <div
             key={milestone.id}
             className="group pointer-events-auto absolute w-4 -ml-2 cursor-default overflow-visible"
-            style={{ left: leftPx, height: viewportHeight }}
+            style={{ left: leftPx, height: bodyHeightPx }}
             onMouseEnter={showTip}
             onMouseMove={showTip}
             onMouseLeave={() => onTipChange(null)}
@@ -639,8 +665,22 @@ export default function ProjectGanttView({
   const widthScale =
     rawTimelineWidth > 0 ? timelineWidth / rawTimelineWidth : 1;
   const columnWidths = rawColumnWidths.map((width) => width * widthScale);
-  // Visible strip under the sticky header inside max-h-[calc(100vh-280px)].
-  const todayViewportHeight = `calc(100vh - 280px - ${HEADER_HEIGHT_PX}px)`;
+  const today = startOfDay(new Date());
+  const bodyHeightPx = groups.reduce((sum, group) => {
+    return (
+      sum +
+      (group.label ? GROUP_HEADER_HEIGHT_PX : 0) +
+      group.tasks.length * TASK_ROW_HEIGHT_PX
+    );
+  }, 0);
+  const colocatedMilestoneNames = milestones
+    .filter((milestone) => {
+      const anchor = parseTaskDate(
+        milestone.actualAchieved ?? milestone.updatedTarget,
+      );
+      return anchor ? isSameCalendarDay(anchor, today) : false;
+    })
+    .map((milestone) => milestone.name);
 
   if (tasks.length === 0) {
     return (
@@ -702,11 +742,16 @@ export default function ProjectGanttView({
               </span>
             </>
           ) : null}
+          {colocatedMilestoneNames.length > 0 ? (
+            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Milestone on Today is offset slightly so both lines stay visible.
+            </span>
+          ) : null}
         </div>
       </div>
 
       <div
-        className={`max-h-[calc(100vh-280px)] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-700 ${paneBgClass}`}
+        className={`max-h-[calc(100vh-200px)] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-700 ${paneBgClass}`}
       >
         <div className="flex min-w-max">
           {/* Sticky left rail: Task + Progress — above scrolling date header */}
@@ -835,18 +880,20 @@ export default function ProjectGanttView({
               ))}
             </div>
 
-            {/* Today line: sticky vertically under header; pixel-aligned in month/week columns */}
+            {/* Today / milestone lines: height = table body so they end on the last row */}
             <TodayMarker
               columns={columns}
               columnWidths={columnWidths}
-              viewportHeight={todayViewportHeight}
+              bodyHeightPx={bodyHeightPx}
+              colocatedMilestoneNames={colocatedMilestoneNames}
               onTipChange={setFloatingTip}
             />
             <MilestoneMarkers
               milestones={milestones}
               columns={columns}
               columnWidths={columnWidths}
-              viewportHeight={todayViewportHeight}
+              bodyHeightPx={bodyHeightPx}
+              today={today}
               onTipChange={setFloatingTip}
             />
 

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Simple Project Task Tracker 2.0",
+  title: "Simple Project Task Tracker 2.1",
   description:
     "Multi-view project task tracker with Kanban boards and Planner-style task details.",
 };

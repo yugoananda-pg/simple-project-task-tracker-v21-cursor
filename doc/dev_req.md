@@ -2,7 +2,7 @@
 
 **Document Identifier:** `doc/dev_req.md`  
 **Product Title:** Simple Project Task Tracker 2.1 (Executive Portfolio Intelligence System)  
-**Document Version:** 2.1.5  
+**Document Version:** 2.1.9  
 **Status:** Approved Technical Requirements Specification — Waves **4A** and **4B** as-built and UAT-accepted; Wave **4C** requirements remain binding but not yet implemented  
 **Amendment:** Universal mutation audit trail; Completed Projects workspace; soft-delete / restore / five-year completed retention; Purged Project Register; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE / delivery alignment with Cursor and as-built UAT  
 **IDE Target:** Cursor (Agent / IDE browser automation for UAT)  
@@ -21,12 +21,14 @@
 * **Technical Lead:** Next.js 16 / React 19 / Prisma 7 Implementation Standards & Best Practices
 * **Senior Project Manager:** Delivery Milestones, Governance, and **per-wave** UAT Verification Matrices
 
-### Programme delivery status (as-built, 5 Oct 2026)
+### Programme delivery status (as-built, 6 Oct 2026)
 
 | Wave | Build | UAT | Evidence |
 | :--- | :--- | :--- | :--- |
 | **4A — Live schedule health** | Shipped | **Accepted** (5 Oct 2026) | `doc/dev_uat.md` — UAT-401–404, UAT-411 |
 | **4B — Governed programme office** | Shipped | **Accepted** (4–5 Oct 2026; job-assisted UAT-413 / 418) | `doc/dev_uat.md` — UAT-405, 405A–D, 406–407, 412–422 |
+| **Pre–4C UX polish** | Shipped | Operator visual check | Scope memory + pending feedback; Gantt viewport / markers — `dev_proc.md` §12.4 |
+| **Custom Project ID** | Shipped | Operator check (UAT-PRJ-CPID) | `Project.customProjectId` — `dev_proc.md` §12.5 |
 | **4C — Executive visualisation** | **Not in current build** | Deferred | Do not execute UAT-408–410, 423–425, UAT-R until 4C development completes |
 
 The dated Wave 4 windows in Chapter 8 remain the **original planned** critical path. Acceptance evidence is authoritative in `doc/dev_uat.md`.
@@ -299,7 +301,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * Super PMs possess unconditional read, write, and administrative rights across every project (absolute privileges), including opening any project by URL. The **home-page list** still uses the same scoped filters as a PM (below) so Portfolio scope is meaningful.
   * Super PMs can reassign the designated PM of any project to any **approved, active** user (PM or Super PM for ownership).
   * **PM / Super PM landing scope (default — “My projects”):** Active projects the user **owns**, or Active projects that have at least one task with `assigneeId` equal to that user. Administrative rights (`admin`) on the home card apply to owned projects; Super PM remains `admin` on every project they open.
-  * **Portfolio scope browser:** On the home page, a PM or Super PM may select **All projects** (every Active project), or another PM/Super PM’s owned Active portfolio. Edit privileges are unchanged by the list filter (owning PM / Super PM / assignee rules still apply). Peer portfolios remain read-only at project level for a non-owning PM; assignees may still mutate their own tasks.
+  * **Portfolio scope browser:** On the home page, a PM or Super PM may select **All projects** (every Active project), or another PM/Super PM’s owned Active portfolio. The last selected non-default scope shall be remembered (browser `sessionStorage` plus a same-site cookie) so returning to `/` restores the same list — including **Back to projects**, the header brand, **Projects** nav, and a typed homepage URL. Edit privileges are unchanged by the list filter (owning PM / Super PM / assignee rules still apply). Peer portfolios remain read-only at project level for a non-owning PM; assignees may still mutate their own tasks.
   * **Member:** Sees only projects where they are a `ProjectMember`. Project-level access is **read**. They may mutate **only** tasks assigned to them (and comment on those tasks). They may raise issues on member projects. They do **not** get the peer portfolio browser.
   * **Viewer:** Sees only Active projects where a Super PM or owning PM has granted them a `ProjectMember` row. Access is strictly read-only (no task mutations, no comments, no issues). They do **not** get the peer portfolio browser.
   * **Viewer grant UI (preferred — Super PM):** Settings → **Viewer project visibility** (`/settings/viewer-visibility`). The Super PM selects an approved Viewer and checks the Active programmes they may open. Saves sync that Viewer’s Active-project `ProjectMember` rows only (other roster members untouched; soft-deleted / Completed memberships left alone). This avoids asking every owning PM to edit each project after a new Viewer is approved.
@@ -339,7 +341,8 @@ UI percentages in this pane are reported to one decimal place, consistent with p
 
 * **FR-PRJ-01 [Edit Project Interface]:**
   * Project Managers (for their owned projects) and Super PMs (for all projects) shall have access to an **Edit Project** modal.
-  * Editable attributes include: Project Name, Description, and the Project Team Roster.
+  * Editable attributes include: Project Name, **Custom Project ID** (optional), Description, and the Project Team Roster.
+  * **Custom Project ID** (`customProjectId`): free-text optional field (max 80 characters after trim). The user may leave it blank. It is **not** the system UUID (`Project.id`). When non-blank, the project hub (`/projects/[id]`) shall display it between the project name and the description in a distinct, smaller style (monospace / subdued slate); when blank, the line shall be omitted entirely.
   * The interface shall provide a member selection multi-select search dropdown to dynamically add or remove `ProjectMember` records.
   * When $P_{\text{actual}_{\text{project}}} = 100\%$ and `lifecycleStatus = ACTIVE` and `deletedAt IS NULL`, the modal and the landing card shall present **Move to Completed Projects** (see FR-LFC).
   * The modal shall present **Delete project** for the owning PM (owned projects) and for Super PMs (any project), invoking the soft-delete warning in FR-LFC.
@@ -352,7 +355,8 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * When `actualAchieved` is populated, the milestone is visually marked as complete; clearing `actualAchieved` returns it to pending.
   * **`actualAchieved` shall not accept a future local calendar date** (same rule as task/issue actuals — FR-DAT-01). Planned `initialTarget` / `updatedTarget` may be future.
 * **FR-MLS-03 [Milestone Timeline Rendering]:**
-  * In the Per-Project Gantt Chart, milestones shall render as vertical dashed lines spanning across all task rows. The line is anchored to `actualAchieved` if completed, or `updatedTarget` if pending.
+  * In the Per-Project Gantt Chart, milestones shall render as vertical dashed lines spanning the **task/group body** (ending on the last row, not empty scrollport chrome). The line is anchored to `actualAchieved` if completed, or `updatedTarget` if pending.
+  * When a milestone calendar date equals **Today**, the milestone line shall be offset slightly horizontally from the solid Today line, and hover tips shall disclose both markers (Today tip lists co-located milestone names; milestone tip notes “Same day as Today”).
   * In the Executive Multi-Project Gantt Chart, milestones shall render as diamond nodes directly affixed to the project's macro bars.
 * **FR-MLS-04 [Project hub milestone UX]:**
   * On the project hub, milestones shall appear as a **compact stage-gate strip** (count, next-target summary, chips) so they do not dominate the task/issue workspace.
@@ -366,9 +370,15 @@ UI percentages in this pane are reported to one decimal place, consistent with p
 
 * **FR-UI-01 [Role-Centric Smart Default Views]:**
   * Upon visiting `/`, the project directory shall filter automatically:
-    * **Super PM / PM:** Defaults to **My projects** (owned or with tasks assigned to the session user).
+    * **Super PM / PM:** Defaults to **My projects** (owned or with tasks assigned to the session user), unless a remembered Portfolio scope exists for the tab (see persistence below).
     * **Member / Viewer:** Defaults to Active projects where they hold a `ProjectMember` row (roster-scoped).
   * PM / Super PM shall use a **Portfolio scope** combobox (not quick-filter tabs) to switch among: *My projects*, *All projects*, and *Projects owned by \<PM\>*.
+  * **Scope persistence:** The last non-default Portfolio scope chosen by a PM / Super PM shall be stored in the browser (`sessionStorage` and a `Path=/` cookie under `sptt.portfolioScope.v1`) and restored when navigating to `/` without an `owner` query — including **Back to projects**, the header brand link, the primary **Projects** nav link, and a manually entered homepage URL. On bare `/`, the server reads the cookie and redirects to `/?owner=…` before painting the default **My projects** list. Explicit selection of *My projects* clears the remembered scope (cookie + sessionStorage). Members / Viewers are unaffected.
+  * **Scope pending feedback:** Changing Portfolio scope navigates with a soft RSC refresh (`/?owner=…`). While that navigation is in flight, the UI shall give clear in-page feedback — not rely on the Next.js Dev Tools “Rendering…” badge. Required behaviour:
+    1. The combobox value updates immediately (optimistic draft) and is disabled while pending.
+    2. A short “Updating projects…” cue appears under the combobox (spinner + text, `aria-live`).
+    3. The project list/grid area dims (`opacity`), blocks interaction (`pointer-events-none`), and shows a centred pill overlay (spinner + “Updating projects…”) over the list region only — not a full-viewport modal or opaque grey wash.
+    4. Feedback clears when the new server payload arrives (`useTransition` / `isScopePending`).
   * **Landing-page exclusion (mandatory):** Only projects with `lifecycleStatus = ACTIVE` **and** `deletedAt IS NULL` shall appear. Completed and soft-deleted projects are omitted from every landing scope.
   * A dedicated **Completed Projects** control (header and/or landing action) shall be visible to Super PMs, owning PMs (for their owned completed set), and any account granted `completedProjectAccess` other than `NONE`. The control navigates to `/projects/completed`.
 * **FR-UI-02 [Enhanced Executive Project Cards]:**
@@ -393,6 +403,8 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * **Task column:** task title (wrapping / multi-line so wording is readable), the task’s 11-state Status Flag pill, Kanban status, and PIC name. The **Custom** badge for unregistered PICs shall be hidden on this surface.
   * **Progress column:** stacked Actual and Target progress badges for that task ($P_{\text{actual}}$, $P_{\text{target}}$), using the same capped target engine as elsewhere.
   * Row heights for Task, Progress, and timeline bars shall stay aligned.
+  * The Gantt scrollport shall use a moderately tall viewport (`max-height ≈ 100vh − 200px`) so more rows are visible without monopolising the screen.
+  * The solid **Today** line and dashed milestone lines shall span the task/group body height only (bottom aligned to the last table row), remaining sticky under the date header while scrolling.
 
 ---
 
@@ -882,10 +894,11 @@ model User {
 }
 
 model Project {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  description String   @default("")
-  ownerId     String   @db.Uuid
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  customProjectId String   @default("")
+  description     String   @default("")
+  ownerId         String   @db.Uuid
 
   lifecycleStatus      ProjectLifecycleStatus @default(ACTIVE)
   progressReached100At DateTime?
@@ -1282,6 +1295,7 @@ Each scenario is executed in the wave that first makes it exercisable in the run
 | **UAT-405A** | 4B | Direct Provisioning | Super PM opens Settings → Users & privileges → Create account; enters name, email, temporary password, and role Member. New user signs in immediately. Retry with the same email. | Account is `APPROVED` with `emailConfirmedAt` set; never appears in PENDING. Duplicate email shows a clear error (not a silent success). Sign-in succeeds without queue wait. |
 | **UAT-405B** | 4B | Password Reset | Approved user uses Forgot password; Super PM also resets another user’s password and copies the shown temporary password. Member opens Settings → Account and changes password. | Self-service path emails a temporary password when mail is configured (or directs to Super PM if not). Super PM path shows the password once (not emailed). Account settings update name/password; email field is read-only. Non–Super PM Settings shows Account only. |
 | **UAT-405C** | 4B | Project visibility | As PM A: default home shows owned/tasked only; select All projects then PM B; open a peer project; edit a task assigned to PM A. Change portfolio scope — the select must stay on the chosen value without flashing back. Open a task assignee picker — on focus the droplist shows team members (roster + owner + Super PM), searchable with instant filter, scrollable. As Member/Viewer: roster-only; Member edits only assigned tasks; Viewer read-only. | All/per-PM scopes filter the list; edit rights unchanged. Select UX is instant. Assignee droplist opens on focus with type-to-filter. |
+| **UAT-PRJ-CPID** | Polish | Custom Project ID | Edit Project: optional Custom Project ID between Name and Description. Save blank → hub hides the line. Save a code → hub shows it between name and description in smaller monospace. Clear again → line gone. | Optional; blank omits; non-blank distinct smaller style; persists |
 | **UAT-405D** | 4B | Viewer visibility (Super PM) | Approve a new Viewer. As Super PM open Settings → Viewer project visibility; grant Active projects A and B (not C); sign in as the Viewer. Optionally revoke B and confirm the home list updates. Confirm a non–Super PM cannot open `/settings/viewer-visibility`. | Viewer home shows only A and B (read-only). Grants persist as `ProjectMember` rows. PM/Member redirected away from the Settings page. |
 | **UAT-406** | 4B | Safe Deletion | Super PM opens Safe deletion → Review & deactivate for a PM owning 2 projects. | System blocks immediate deletion; prompts per-project ownership handover; successfully transfers projects; deactivated row shows purge due. |
 | **UAT-407** | 4B | Milestone Sync | On the project hub, confirm milestones appear as a compact strip (not a full always-on form). Add a milestone with Target `15/10/2026`; open it again and revise the updated target / mark achieved. | Strip stays minimal; `updatedTarget` mirrors `initialTarget` on create; edit persists; Gantt shows a vertical marker. |
@@ -1312,5 +1326,9 @@ Each scenario is executed in the wave that first makes it exercisable in the run
 |---------|------|--------|
 | 2.1.4-RC1 | Prior | Binding requirements through Wave 4 programme design |
 | 2.1.5 | 5 Oct 2026 | IDE Target Cursor; as-built Wave 4A/4B acceptance; Safe deletion / Portfolio scope wording; FR-AUD-06 soft-deactivate present tense; Wave 4C deferred; companion `dev_uat.md` |
+| 2.1.6 | 5 Oct 2026 | Portfolio scope session persistence; Gantt taller viewport; Today/milestone lines end on table body; same-day milestone offset + tip disclosure |
+| 2.1.7 | 6 Oct 2026 | FR-UI-01 Portfolio scope pending feedback (inline list overlay + combobox cue); pre–Wave 4C UX polish documented holistically |
+| 2.1.8 | 6 Oct 2026 | FR-PRJ-01 optional Custom Project ID (`customProjectId`); ER / Prisma Project entity updated; hub header display when non-blank |
+| 2.1.9 | 6 Oct 2026 | FR-UI-01 / FR-GOV-05 Portfolio scope cookie + server restore on bare `/` (brand, Projects, typed URL); product title 2.1 |
 
 *End of System Requirements Specification (`doc/dev_req.md`). Waves 4A and 4B are as-built and UAT-accepted; Wave 4C requirements remain binding pending development.*

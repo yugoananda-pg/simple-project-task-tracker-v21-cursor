@@ -631,6 +631,14 @@ export default function ProjectDetailView({
               </span>
             ) : null}
           </div>
+          {(project.customProjectId ?? "").trim() ? (
+            <p
+              className="mt-1.5 font-mono text-xs font-medium tracking-wide text-slate-600 dark:text-slate-300 sm:text-sm"
+              title="Custom Project ID"
+            >
+              {(project.customProjectId ?? "").trim()}
+            </p>
+          ) : null}
           {project.description ? (
             <p className="mt-2 max-w-4xl text-sm leading-relaxed text-zinc-400 md:text-base">
               {project.description}

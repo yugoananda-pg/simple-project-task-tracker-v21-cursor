@@ -365,14 +365,16 @@ Canonical persistence: `prisma/schema.prisma`. Application DTOs: `src/lib/types.
 
 | Field | Type | Constraints | Notes |
 |-------|------|-------------|-------|
-| `id` | `Uuid` | PK `@default(uuid())` | |
-| `name` | `String` | Required; app max 100 chars | |
+| `id` | `Uuid` | PK `@default(uuid())` | System identity (not shown as Custom Project ID) |
+| `name` | `String` | Required; app max 100 chars | Hub title |
+| `customProjectId` | `String` | `@default("")`; app max 80 chars after trim | Optional human-facing code; blank = hidden on hub |
 | `description` | `String` | `@default("")`; app max 500 chars | |
 | `ownerId` | `Uuid` | FK → `User` | Indexed |
 | `createdAt` / `updatedAt` | `DateTime` | Defaults / `@updatedAt` | |
 
 **Relations:** `owner`, `members` (`ProjectMember[]`), `tasks` (`Task[]`).  
-**DTO:** `permittedUserIds: string[]` derived from members in `mapProject`.
+**DTO:** `permittedUserIds: string[]` derived from members in `mapProject`.  
+**As-built (6 Oct 2026):** Migration `20261006050500_project_custom_project_id`; Edit Project field between Name and Description; hub displays non-blank values between name and description in monospace `text-xs`/`sm`.
 
 ### 4.4 `ProjectMember`
 
@@ -541,7 +543,7 @@ Helpers: `actionSuccess(data)`, `actionFailure(error)` (maps `ActionError` → e
 | `createProject` | `(input: { name; description? }) → ActionResult<Project>` | Super PM or PM | Creates project + owner membership |
 | `deleteProject` | `(projectId) → ActionResult<{ id }>` | Admin (Super PM or owning PM) | Cascade delete |
 
-**Validation:** name required ≤100; description ≤500.
+**Validation:** name required ≤100; optional `customProjectId` ≤80 (trimmed; blank allowed); description ≤500.
 
 ### 5.3A Milestone actions — `src/lib/actions/milestones.ts`
 
@@ -656,13 +658,17 @@ Analytics stays in DOM but charts mount only when `chartsVisible` is true (avoid
 | Bars | Stacked per row: **Initial** (zinc), **Updated** (sky), **Actual** (emerald) |
 | Actual open tasks | End exclusive at start of today — never past Today line |
 | Done Actual node | Circular checkmark at **right end** of Actual bar (`right-0` + half-width translate) |
-| Today | Red full-height `w-px` line under sticky header; **no** top circular node; hover tip “We're here — DD/MM/YYYY” follows cursor |
+| Today | Red `w-px` line under sticky header spanning **task/group body height** (ends on last row); **no** top circular node; hover tip “We're here — DD/MM/YYYY” (plus colocated milestone names when same day) |
+| Milestones | Dashed amber (pending) / emerald (achieved); same body height as Today; if same calendar day as Today, offset 4px left + tip/legend disclosure |
+| Scrollport | Moderately tall: `max-h-[calc(100vh-200px)]` |
 | Freeze-panes | Sticky date header (`z-30`, opaque), sticky Task + Progress rail (`z-40+`), sticky corner cells; date header stays above timeline bars while scrolling; left rail stays above date headers horizontally |
 | Geometry | Day-proportional column widths; shared pixel offsets for bars and Today; Task/Progress/timeline row heights aligned |
 | Tooltips | Portal, instant (0 ms), Initial/Updated/Actual date summaries |
 | Interaction | Click row/bar → opens `TaskDetailDrawer` |
 | Defensive | Missing/inverted dates clamped; corrupt strings skipped |
 | Project summary | Project Status Flag / Actual / Target live under the project description — not duplicated above the Gantt toolbar |
+
+> **2.1 as-built note (5–6 Oct 2026):** Today/milestone body-height markers, taller scrollport, and same-day offset ship ahead of the full `dev_spec` rewrite. Portfolio scope persistence (cookie + `sessionStorage`, server redirect on bare `/`) and **inline pending feedback** on `/` are specified in `dev_req.md` FR-UI-01 (`HomePageClient` `isScopePending` overlay). Product chrome title is **Simple Project Task Tracker 2.1** (`app/layout.tsx` / `AppHeader`).
 
 Core math: `src/lib/gantt/date-utils.ts` (`parseTaskDate`, `getActualDateRange`, `getBarPositionPx`, `buildTimelineColumns`, …). Schedule metrics: `src/lib/analytics/weighted-progress.ts`.
 

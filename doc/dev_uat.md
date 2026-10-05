@@ -28,9 +28,11 @@ Scenarios that are **not yet shippable** in the current build are labelled **DEF
 |------|-----|----------------------|-------------------|
 | Wave 4A | UAT-401–404, UAT-411 | Implemented | **PASS** (5 Oct 2026 browser session) |
 | Wave 4B | UAT-405, UAT-405A–D, UAT-406–407, UAT-412–422 | Implemented | **PASS — Wave 4B UAT complete** (5 Oct 2026; includes job-assisted UAT-413 / 418) |
+| Pre–4C UX polish | Scope memory / pending; Gantt aesthetics | Implemented | Operator visual check (5–6 Oct 2026); see UAT-405C steps 7–8 + `dev_proc.md` §12.4 |
+| Custom Project ID | UAT-PRJ-CPID | Implemented | Ready for operator check (6 Oct 2026); migration `20261006050500_project_custom_project_id` |
 | Wave 4C | UAT-408–410, UAT-423–425, UAT-R | **Not in current build** | Do not execute yet |
 
-**Browser agent default run order for this session:** Wave 4A + Wave 4B UAT are accepted. **Do not** execute Wave 4C until that wave’s development is complete.
+**Browser agent default run order for this session:** Wave 4A + Wave 4B UAT are accepted. Pre–4C UX polish is in the build. **Do not** execute Wave 4C until that wave’s development is complete.
 
 ---
 
@@ -317,6 +319,11 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 4. Select PM B’s portfolio — list shows PM B’s owned Active projects; select remains on PM B.
 5. Open a peer project where PM A is assignee of a task → edit that assigned task successfully.
 6. Confirm PM A cannot Edit Project / mutate unowned admin fields on a pure peer project (read / assignee rules).
+7. With **All projects** selected, open any project hub, then use primary nav **Projects** to return to `/`. Expect the Portfolio scope and list to restore **All projects**, not flash back to **My projects**.
+7a. Still on **All projects**, click the header brand (**Simple Project Task Tracker 2.1**) → expect **All projects** restored (not **My projects**).
+7b. Enter the homepage address manually in the browser URL field (`/` or the deployed origin root) → expect **All projects** restored again.
+7c. Repeat 7–7b after selecting a peer PM portfolio (not only **All projects**).
+8. Change scope again (e.g. All → a peer PM, or peer → All). Expect **immediate** combobox update, then clear in-page pending feedback: “Updating projects…” under the combobox **and** a dimmed list with a centred spinner pill. The Next.js Dev Tools “Rendering…” badge alone is **not** sufficient. When the new list arrives, the overlay clears and cards match the selected scope.
 
 **Steps — Assignee picker**
 
@@ -337,11 +344,28 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 
 | Part | Evidence |
 |------|----------|
-| Portfolio (PM A) | My / All / peer (CAND) scopes held without flash-back; peer hub read-only; assigned task editable; non-assigned task read-only |
+| Portfolio (PM A) | My / All / peer (CAND) scopes held without flash-back; peer hub read-only; assigned task editable; non-assigned task read-only; **All projects** restored after hub → Projects / brand / typed `/` (cookie + sessionStorage); scope changes show inline “Updating projects…” pending overlay |
 | Assignee picker | Portal droplist immediate; roster + owning PM + Super PM; instant filter; selection persisted after refresh |
 | Member / Viewer | Member saw roster **Test Project** only; Viewer Rachel saw granted **Test Project** only with read-only notice |
 
 **Fixtures created:** `UAT-405C Project A` (PM A); Test Project roster + Task A/B assignees; Rachel granted Test Project.
+
+---
+
+### UAT-PRJ-CPID — Custom Project ID (optional) — **READY** (6 Oct 2026)
+
+**Preconditions:** Owning PM or Super PM on an Active project; Edit Project available.
+
+**Steps**
+
+1. Open `/projects/[id]` → **Edit project**.
+2. Confirm field order: **Name**, **Custom Project ID** (optional hint), **Description**, then roster / owner controls.
+3. Leave Custom Project ID blank → Save → hub shows name then description only (no code line).
+4. Edit again → enter e.g. `CAPEX-2026-014` → Save.
+5. Expect hub header: project name (large) → Custom Project ID (smaller monospace, between name and description) → description.
+6. Clear Custom Project ID → Save → code line disappears again.
+
+**Pass:** Optional field; blank hides; non-blank distinct smaller style between name and description; persists after refresh.
 
 ---
 
@@ -428,6 +452,8 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 | 6 Non-manager | Member: no **+ Add**; chip opens read-only **Milestone** dialog (all fields disabled; Close only) |
 
 **Residual note:** A Next.js hydration warning overlay appeared once on the project hub during the Super PM session; it did not block create/edit/Gantt assertions.
+
+**Gantt UX polish (5 Oct 2026, pre–Wave 4C):** Chart scrollport uses `max-h-[calc(100vh-200px)]`. Today/milestone lines end on the last task/group row. When a milestone falls on Today, the milestone is offset 4px and tips/legend disclose both markers.
 
 ---
 
@@ -775,6 +801,10 @@ UAT-418  | Pass | Job-assisted: UAT-418 Five-Year Purge → Purged Register COMP
 | 1.6 | 5 Oct 2026 | Lifecycle UAT-412, 415–417 Pass; run sheet → governance UAT-406 / 414 |
 | 1.7 | 5 Oct 2026 | Governance UAT-406 / 414 Pass; Edit Project sticky Save + Safe deletion UX plurals/loading; residual → UAT-413 / 418 (job-only) |
 | 1.8 | 5 Oct 2026 | Job-assisted UAT-413 / 418 Pass; retention confirm + Running…; Purged Register plurals; Wave 4B UAT complete |
+| 1.9 | 5 Oct 2026 | UAT-405C step 7: Portfolio scope session persistence; Gantt UX notes (taller scrollport, body-height markers, same-day offset) |
+| 1.10 | 6 Oct 2026 | UAT-405C step 8: Portfolio scope pending feedback; pre–Wave 4C UX polish documented holistically across companion docs |
+| 1.11 | 6 Oct 2026 | UAT-PRJ-CPID: optional Custom Project ID; Prisma migration + ER/schema docs aligned (v2.1.8) |
+| 1.12 | 6 Oct 2026 | UAT-405C steps 7a–7c: Portfolio scope restore via brand / Projects / typed `/` (cookie + server redirect); product title 2.1 |
 
 ---
 

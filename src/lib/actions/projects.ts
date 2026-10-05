@@ -77,6 +77,17 @@ function validateProjectDescription(description: string): string {
   return trimmed;
 }
 
+function validateCustomProjectId(value: string | undefined): string {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length > 80) {
+    throw new ActionError(
+      "Custom Project ID must be 80 characters or fewer.",
+      "VALIDATION",
+    );
+  }
+  return trimmed;
+}
+
 function withAccess(
   user: SessionUser,
   project: Awaited<ReturnType<typeof loadProjectWithMembers>> & object,
@@ -370,6 +381,7 @@ export async function listDirectoryUsers(): Promise<
 export async function updateProject(input: {
   projectId: string;
   name: string;
+  customProjectId?: string;
   description?: string;
   memberUserIds: string[];
 }): Promise<
@@ -385,6 +397,7 @@ export async function updateProject(input: {
         );
       }
       const name = validateProjectName(input.name);
+      const customProjectId = validateCustomProjectId(input.customProjectId);
       const description = validateProjectDescription(input.description ?? "");
 
       const uniqueMemberIds = [
@@ -409,6 +422,7 @@ export async function updateProject(input: {
           where: { id: input.projectId },
           data: {
             name,
+            customProjectId,
             description,
             ...auditUpdate(actorId),
           },

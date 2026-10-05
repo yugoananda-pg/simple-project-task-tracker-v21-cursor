@@ -6,8 +6,8 @@
 **IDE / workspace:** Cursor (Agent + IDE browser automation for UAT)  
 **Companion documents:** [`dev_plan.md`](./dev_plan.md) · [`dev_req.md`](./dev_req.md) · [`dev_ref.md`](./dev_ref.md) · [`dev_uat.md`](./dev_uat.md) · [`dev_spec.md`](./dev_spec.md) · [`supabase-security.md`](./supabase-security.md)  
 **Repository:** `https://github.com/yugoananda-pg/simple-project-task-tracker-v21-cursor.git`  
-**Edition scope:** Project bootstrap through **Wave 4B UAT PASSED** (Governed programme office); Wave **4C** not started  
-**Last updated:** 5 October 2026  
+**Edition scope:** Project bootstrap through **Wave 4B UAT PASSED** (Governed programme office); **pre–Wave 4C UX polish** (landing scope memory/pending + Gantt aesthetics) as-built; Wave **4C** not started  
+**Last updated:** 6 October 2026  
 
 ### Programme delivery status (as-built)
 
@@ -15,6 +15,8 @@
 |------|-------|-----|----------|
 | **4A — Live schedule health** | Shipped | **Accepted** (5 Oct 2026) | §5 + `doc/dev_uat.md` |
 | **4B — Governed programme office** | Shipped | **Accepted** (4–5 Oct 2026) | §11–§12 + `doc/dev_uat.md` |
+| **Pre–4C UX polish** | Shipped | Operator visual check | §12.4–§12.4.4 |
+| **Custom Project ID** | Shipped | Operator check | §12.5 |
 | **4C — Executive visualisation** | **Not in current build** | Deferred | Do not start until 4C development completes |
 
 **Note on `dev_spec.md`:** Still reflects the Wave 3 / v2.0 baseline by stakeholder decision. Refresh after Wave 4C closes; do not treat its version banner as the as-built 2.1 stack.
@@ -437,7 +439,7 @@ User approval queue (email-confirm gated via `/auth/confirm` + `/auth/callback`)
 **How it was built (structure & practices).**
 
 1. **Server Actions as the write boundary**  
-   - `src/lib/actions/projects.ts` — `updateProject` (name/description + roster sync), `listDirectoryUsers`, landing `openIssueCount` / `criticalOpenIssueCount` via `issue.groupBy`.  
+   - `src/lib/actions/projects.ts` — `updateProject` (name / optional `customProjectId` / description + roster sync), `listDirectoryUsers`, landing `openIssueCount` / `criticalOpenIssueCount` via `issue.groupBy`.  
    - `src/lib/actions/milestones.ts` — CRUD with `updatedTarget = initialTarget` on create; admin-gated.  
    - `src/lib/actions/issues.ts` — raise / update / close / comment / delete; `IssueActivity` written in the **same transaction** as the mutation; PIC field restrictions; `revalidatePath` on project hub and `/`.  
    - Pure schedule helper kept off the `"use server"` boundary: `src/lib/analytics/issue-schedule.ts` (`computeIssueFixFlag`).
@@ -445,10 +447,11 @@ User approval queue (email-confirm gated via `/auth/confirm` + `/auth/callback`)
 2. **Domain types** in `src/lib/types.ts` (`Milestone`, `Issue`, `IssueComment`, `IssueActivity`) mapped from Prisma with soft actor UUIDs + display-name JOINs where needed.
 
 3. **UI composition (project hub)**  
-   - `EditProjectModal` — roster checkboxes (owner locked on).  
+   - `EditProjectModal` — Name, optional Custom Project ID, Description, roster checkboxes (owner locked on).  
+   - Hub header — when `customProjectId` is non-blank, show it between title and description (smaller monospace).  
    - `ProjectMilestonesPanel` — compact stage-gate strip; Add/Edit modal (name, description, updated target, achieved date, delete); View all when the chip list is long.  
    - Fifth hub tab **Issue Log**: `ProjectIssueLogView` register + `IssueDetailDrawer` (comments, activity trail, close/resolve).  
-   - `ProjectGanttView` — dashed vertical milestone markers anchored on `actualAchieved ?? updatedTarget` (amber pending / emerald achieved); Gantt legend lists both **Milestone (pending)** and **Milestone (achieved)** when any milestones exist; dates included in timeline bounds.
+   - `ProjectGanttView` — dashed vertical milestone markers anchored on `actualAchieved ?? updatedTarget` (amber pending / emerald achieved); Gantt legend lists both **Milestone (pending)** and **Milestone (achieved)** when any milestones exist; dates included in timeline bounds. Scrollport height ≈ `100vh − 200px`. Today and milestone lines use task/group body height (end on the last row). Same-day milestones offset 4px left of Today with tip/legend disclosure.
    - **FR-DAT-01:** `actualAchieved` (milestones), task/issue actual dates reject future local calendar days via `assertActualDateNotFuture`; planned targets remain free to be future.  
    - `app/projects/[id]/page.tsx` loads project, tasks, issues, milestones, and holidays in parallel.
 
@@ -552,11 +555,68 @@ The system clock was never changed. Real portfolio projects were not mutated.
 | Deleted Projects | Confirm before retention; **Running…** busy state |
 | Purged Register | Plural counts (`1 task` not `1 tasks`) |
 
-### 12.4 Explicitly not started
+### 12.4 Pre–Wave 4C UX polish (5–6 Oct 2026)
+
+After Wave 4B UAT acceptance, stakeholder feedback requested several landing-page and Gantt aesthetic improvements **before** starting Wave 4C. These are as-built in the current codebase and documented across `dev_req` / `dev_ref` / `dev_plan` / `dev_uat` / `dev_spec` (as-built notes).
+
+#### 12.4.1 Portfolio scope memory and pending feedback (`/`)
+
+| Concern | Decision | Implementation |
+|---------|----------|----------------|
+| Returning from a project hub reset the list to **My projects** | Remember last PM/Super PM non-default scope | Dual-write `PORTFOLIO_SCOPE_STORAGE_KEY` (`sptt.portfolioScope.v1`) to `sessionStorage` **and** a `Path=/` cookie; restore via `router.replace('/?owner=…')` when `/` has no `owner` query |
+| Brand link, **Projects** nav, or typed `/` also reset to **My projects** | Server must restore before the default RSC list paints | `app/page.tsx` reads the cookie; if bare `/` and a valid saved scope exists, `redirect('/?owner=…')` |
+| Choosing **My projects** | Clear remembered non-default scope | Cookie `Max-Age=0` + `sessionStorage.removeItem` when scope draft is empty |
+| Scope change felt “stuck” (only Next.js Dev Tools “Rendering…”) | Inline pending UX, not full-screen grey | Separate `useTransition` (`isScopePending`); combobox disabled + “Updating projects…” under label; list region dimmed + centred spinner pill overlay (same pattern as task-create overlay on the project hub) |
+
+**Why not instant client filter?** The landing list is server-scoped (RBAC + open-issue aggregates). Soft navigation keeps server truth; pending feedback makes the wait honest. Cookie + server redirect covers hard navigations (brand, Projects, address bar) where `sessionStorage` alone is too late.
+
+#### 12.4.2 Per-project Gantt aesthetics
+
+| Concern | Decision | Implementation |
+|---------|----------|----------------|
+| Chart box too short | Moderately taller scrollport | `max-h-[calc(100vh-200px)]` on `ProjectGanttView` |
+| Today / milestone lines extended into empty chrome | Lines end on last task/group row | Marker height = `bodyHeightPx` (task + group header rows only) |
+| Milestone on Today covered by red Today line | Keep both markers readable | Milestone offset 4px left; hover tips + legend note when colocated |
+
+#### 12.4.3 Product title 2.1 (6 Oct 2026)
+
+Browser document title (`app/layout.tsx` metadata) and header brand (`AppHeader`) use **Simple Project Task Tracker 2.1** (was still labelled 2.0).
+
+#### 12.4.4 Files touched
+
+- `src/lib/project-list-scope.ts` — storage key, cookie helpers, `PROJECT_LIST_SCOPE_ALL`
+- `app/page.tsx` — cookie → `redirect('/?owner=…')` on bare `/`
+- `src/components/projects/HomePageClient.tsx` — dual-write persist / restore / `isScopePending` overlay
+- `src/components/gantt/ProjectGanttView.tsx` — scrollport, body-height markers, same-day offset
+- `app/layout.tsx`, `src/components/layout/AppHeader.tsx` — product title 2.1
+
+### 12.5 Custom Project ID (6 Oct 2026)
+
+| Item | Detail |
+|------|--------|
+| Column | `Project.customProjectId` `TEXT NOT NULL DEFAULT ''` |
+| Migration | `prisma/migrations/20261006050500_project_custom_project_id` |
+| Edit Project | Optional field between Name and Description; max 80 characters |
+| Hub header | Shown only when non-blank; between name and description; monospace, smaller than title |
+| Server Action | `updateProject({ …, customProjectId? })` via `validateCustomProjectId` |
+
+### 12.6 Explicitly not started
 
 - Wave 4C: high-density grid polish, Schedule / Issue Intelligence charts, `/portfolio`, macro Gantt, About modal.  
-- `dev_spec.md` refresh to 2.1 (stakeholder-deferred until programme close).
+- `dev_spec.md` full rewrite to 2.1 (stakeholder-deferred until programme close; as-built Gantt/landing/Custom Project ID notes may be patched in place).
 
 ---
 
-*Wave 4B UAT accepted 5 October 2026. Pause before Wave 4C development.*
+### 12.7 As-built programme summary (through Custom Project ID)
+
+| Tranche | What shipped | UAT / status |
+|---------|--------------|--------------|
+| **Wave 4A** | Working-day weights, Punctuality Score, 11 Status Flags, Actual/Target progress on List / Kanban / Gantt / drawer / landing | **Accepted** 5 Oct 2026 |
+| **Wave 4B** | Governance (approvals, provision, password/account, privilege matrix), Portfolio scope, Edit Project / roster, milestones, Issue Log, Completed / soft-delete / retention / purge, Viewer grants | **Accepted** 4–5 Oct 2026 (job-assisted UAT-413 / 418) |
+| **Pre–4C UX** | Scope session memory + pending feedback; taller Gantt; Today/milestone geometry; same-day offset | Documented 5–6 Oct 2026; awaiting operator visual check |
+| **Custom Project ID** | Optional `Project.customProjectId`; Edit Project + hub header | Shipped 6 Oct 2026 (`20261006050500_project_custom_project_id`) |
+| **Wave 4C** | Executive `/portfolio`, macro Gantt, Schedule/Issue Intelligence charts, About | **Not started** |
+
+---
+
+*Wave 4B UAT accepted 5 October 2026. Pre–Wave 4C UX polish and Custom Project ID recorded through 6 October 2026. Pause before Wave 4C development.*

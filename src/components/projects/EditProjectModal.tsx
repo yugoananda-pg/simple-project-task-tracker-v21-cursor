@@ -37,6 +37,9 @@ export default function EditProjectModal({
   onSaved,
 }: EditProjectModalProps) {
   const [name, setName] = useState(project.name);
+  const [customProjectId, setCustomProjectId] = useState(
+    project.customProjectId ?? "",
+  );
   const [description, setDescription] = useState(project.description);
   const [ownerId, setOwnerId] = useState(project.ownerId);
   const [selectedIds, setSelectedIds] = useState<string[]>(
@@ -50,6 +53,7 @@ export default function EditProjectModal({
   useEffect(() => {
     if (!open) return;
     setName(project.name);
+    setCustomProjectId(project.customProjectId ?? "");
     setDescription(project.description);
     setOwnerId(project.ownerId);
     setSelectedIds(memberUsers.map((member) => member.id));
@@ -106,6 +110,7 @@ export default function EditProjectModal({
       const result = await updateProject({
         projectId: project.id,
         name,
+        customProjectId,
         description,
         memberUserIds: rosterIds,
       });
@@ -163,6 +168,21 @@ export default function EditProjectModal({
                 className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
                 required
               />
+            </label>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Custom Project ID
+              <input
+                value={customProjectId ?? ""}
+                onChange={(event) => setCustomProjectId(event.target.value)}
+                disabled={isPending}
+                maxLength={80}
+                placeholder="Optional — e.g. CAPEX-2026-014"
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                autoComplete="off"
+              />
+              <span className="mt-1 block text-xs font-normal text-zinc-500">
+                Optional. Leave blank if you do not use an external project code.
+              </span>
             </label>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Description

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 
 import { useToast } from "@/src/components/providers/ToastProvider";
 import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
@@ -16,7 +16,11 @@ import {
   type ProjectListItem,
 } from "@/src/lib/actions/projects";
 import { markProjectCompleted } from "@/src/lib/actions/project-lifecycle";
-import { PROJECT_LIST_SCOPE_ALL } from "@/src/lib/project-list-scope";
+import {
+  PORTFOLIO_SCOPE_STORAGE_KEY,
+  PROJECT_LIST_SCOPE_ALL,
+  persistPortfolioScopeClient,
+} from "@/src/lib/project-list-scope";
 
 type HomePageClientProps = {
   initialProjects: ProjectListItem[];
@@ -56,8 +60,10 @@ export default function HomePageClient({
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [isScopePending, startScopeTransition] = useTransition();
   /** Optimistic select value so the control does not snap back while RSC navigates. */
   const [scopeDraft, setScopeDraft] = useState(browseOwnerId ?? "");
+  const [scopeHydrated, setScopeHydrated] = useState(!canBrowsePeerPortfolios);
 
   // Soft navigations (portfolio scope) refresh RSC props; keep local list in sync.
   useEffect(() => {
@@ -65,16 +71,65 @@ export default function HomePageClient({
   }, [initialProjects]);
 
   useEffect(() => {
-    setScopeDraft(browseOwnerId ?? "");
+    // Only mirror URL → draft once we know restore is done; avoid wiping a
+    // remembered scope while bare `/` is still hydrating.
+    if (browseOwnerId != null) {
+      setScopeDraft(browseOwnerId);
+      return;
+    }
+    if (scopeHydrated) {
+      setScopeDraft("");
+    }
+  }, [browseOwnerId, scopeHydrated]);
+
+  /**
+   * Restore the last Portfolio scope when the URL has no `owner` query (e.g. nav
+   * “Projects” / brand → `/`). Server also redirects via cookie; this covers
+   * soft client navigations and keeps sessionStorage in sync.
+   */
+  useEffect(() => {
+    if (!canBrowsePeerPortfolios) {
+      setScopeHydrated(true);
+      return;
+    }
+    if (browseOwnerId != null) {
+      persistPortfolioScopeClient(browseOwnerId);
+      setScopeHydrated(true);
+      return;
+    }
+    let saved = "";
+    try {
+      saved = sessionStorage.getItem(PORTFOLIO_SCOPE_STORAGE_KEY) ?? "";
+    } catch {
+      saved = "";
+    }
+    if (saved) {
+      setScopeDraft(saved);
+      persistPortfolioScopeClient(saved);
+      startScopeTransition(() => {
+        router.replace(`/?owner=${encodeURIComponent(saved)}`);
+      });
+      return;
+    }
+    setScopeHydrated(true);
+  }, [browseOwnerId, canBrowsePeerPortfolios, router, startScopeTransition]);
+
+  useEffect(() => {
+    if (browseOwnerId != null) {
+      setScopeHydrated(true);
+    }
   }, [browseOwnerId]);
 
   function navigatePortfolioScope(next: string) {
     setScopeDraft(next);
-    if (!next) {
-      router.push("/");
-      return;
-    }
-    router.push(`/?owner=${encodeURIComponent(next)}`);
+    persistPortfolioScopeClient(next);
+    startScopeTransition(() => {
+      if (!next) {
+        router.push("/");
+        return;
+      }
+      router.push(`/?owner=${encodeURIComponent(next)}`);
+    });
   }
 
   function openModal() {
@@ -187,8 +242,10 @@ export default function HomePageClient({
               <select
                 id="browse-owner"
                 value={scopeDraft}
+                disabled={!scopeHydrated || isScopePending}
+                aria-busy={isScopePending}
                 onChange={(event) => navigatePortfolioScope(event.target.value)}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
               >
                 <option value="">
                   My projects (owned or with tasks assigned to me)
@@ -202,14 +259,21 @@ export default function HomePageClient({
                     </option>
                   ))}
               </select>
-              {scopeDraft && scopeDraft !== PROJECT_LIST_SCOPE_ALL ? (
+              {isScopePending ? (
+                <p
+                  className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300"
+                  aria-live="polite"
+                >
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  Updating projects…
+                </p>
+              ) : scopeDraft && scopeDraft !== PROJECT_LIST_SCOPE_ALL ? (
                 <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                   Peer portfolios are read-only for a non-owning PM. If a task is
                   assigned to you, you can still update that task. Super PM
                   retains full edit rights.
                 </p>
-              ) : null}
-              {scopeDraft === PROJECT_LIST_SCOPE_ALL ? (
+              ) : scopeDraft === PROJECT_LIST_SCOPE_ALL ? (
                 <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                   Showing every Active project. Edit rights are unchanged (own
                   projects for PMs; Super PM retains absolute privileges).
@@ -230,7 +294,25 @@ export default function HomePageClient({
         ) : null}
       </div>
 
-      <div className="mt-8">
+      <div className="relative mt-8 min-h-[12rem]">
+        {isScopePending ? (
+          <div
+            className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-white/55 backdrop-blur-[1px] dark:bg-zinc-950/50"
+            aria-busy="true"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+              Updating projects…
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          className={
+            isScopePending ? "pointer-events-none opacity-50" : undefined
+          }
+        >
         {!isSignedIn ? (
           <div className="rounded-xl border border-zinc-200 bg-white px-6 py-12 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900/60">
             <p className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -337,6 +419,7 @@ export default function HomePageClient({
                   <Link
                     href={`/projects/${project.id}`}
                     className="block flex-1 p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:focus-visible:outline-zinc-100"
+                    tabIndex={isScopePending ? -1 : undefined}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -412,6 +495,7 @@ export default function HomePageClient({
             ))}
           </ul>
         )}
+        </div>
       </div>
 
       {modalOpen ? (

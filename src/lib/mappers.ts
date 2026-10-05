@@ -47,6 +47,7 @@ export function mapProject(
   return {
     id: project.id,
     name: project.name,
+    customProjectId: project.customProjectId ?? "",
     description: project.description,
     ownerId: project.ownerId,
     permittedUserIds: project.members?.map((member) => member.userId) ?? [],

@@ -69,6 +69,7 @@ function createSeedStore(): AppStore {
     {
       id: projectId,
       name: "Website Redesign",
+      customProjectId: "",
       description:
         "Refresh the marketing site layout, copy, and call-to-action flow.",
       ownerId,
@@ -275,6 +276,8 @@ function isValidProject(value: unknown): value is Project {
   return (
     typeof project.id === "string" &&
     typeof project.name === "string" &&
+    (typeof project.customProjectId === "string" ||
+      project.customProjectId === undefined) &&
     typeof project.description === "string" &&
     typeof project.ownerId === "string" &&
     Array.isArray(project.permittedUserIds) &&
@@ -415,7 +418,13 @@ function loadStoreFromDisk(): AppStore {
       persistStore(seeded);
       return seeded;
     }
-    return parsed;
+    return {
+      ...parsed,
+      projects: parsed.projects.map((project) => ({
+        ...project,
+        customProjectId: project.customProjectId ?? "",
+      })),
+    };
   } catch {
     const seeded = createSeedStore();
     try {

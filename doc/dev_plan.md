@@ -2,7 +2,7 @@
 
 **Document Identifier:** `doc/dev_plan.md`  
 **Product Title:** Simple Project Task Tracker 2.1 (Executive Portfolio Intelligence System)  
-**Version:** 2.1.5  
+**Version:** 2.1.9  
 **Status:** Canonical Master Plan (North Star) — Waves **4A** and **4B** implemented and UAT-accepted; Wave **4C** not yet developed  
 **Amendment:** Universal mutation audit trail; Completed Projects (not Archive); soft-delete / restore / purge; five-year completed retention; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE target Cursor; delivery status aligned to as-built UAT (`doc/dev_uat.md`)  
 **Target Platform:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Supabase PostgreSQL, Prisma ORM 7  
@@ -16,12 +16,14 @@
 * [`dev_uat.md`](./dev_uat.md) — Executable User Acceptance Testing pack (wave exit evidence)
 * [`supabase-security.md`](./supabase-security.md) — Row-Level Security (RLS) Baseline
 
-### Programme delivery status (as-built, 5 Oct 2026)
+### Programme delivery status (as-built, 6 Oct 2026)
 
 | Wave | Build | UAT | Evidence |
 | :--- | :--- | :--- | :--- |
 | **4A — Live schedule health** | Shipped | **Accepted** (5 Oct 2026) | `doc/dev_uat.md` — UAT-401–404, UAT-411 |
 | **4B — Governed programme office** | Shipped | **Accepted** (4–5 Oct 2026; job-assisted UAT-413 / 418 included) | `doc/dev_uat.md` — UAT-405, 405A–D, 406–407, 412–422 |
+| **Pre–4C UX polish** | Shipped | Operator visual check | Scope memory + pending feedback; Gantt viewport / markers — `dev_proc.md` §12.4 |
+| **Custom Project ID** | Shipped | Operator check (UAT-PRJ-CPID) | `Project.customProjectId` — `dev_proc.md` §12.5 |
 | **4C — Executive visualisation** | **Not in current build** | Deferred | Do not execute UAT-408–410, 423–425, UAT-R until 4C development completes |
 
 The dated work-package table in Section 8 remains the **original planned** critical path (12 Sep–12 Oct 2026). Actual engineering and UAT calendars slipped relative to that plan; acceptance evidence is authoritative in `doc/dev_uat.md`, not the planned Sep UAT windows alone.
@@ -129,7 +131,7 @@ graph TD
 
 ### F-2107: Project Lifecycle & Dynamic Roster Editor
 * **Scope:** Project administration modal accessible to owning PMs and Super PMs.
-* **Capability:** Inline updating of project metadata (Name, Description) and dynamic team roster composition (adding or removing `ProjectMember` records). When weighted actual progress is $100\%$, exposes **Move to Completed Projects**. Exposes **Delete project** (soft-delete with a blocking warning). Notes that Super PMs may also grant Viewers under Settings → Viewer project visibility.
+* **Capability:** Inline updating of project metadata (Name, optional Custom Project ID, Description) and dynamic team roster composition (adding or removing `ProjectMember` records). When weighted actual progress is $100\%$, exposes **Move to Completed Projects**. Exposes **Delete project** (soft-delete with a blocking warning). Notes that Super PMs may also grant Viewers under Settings → Viewer project visibility.
 
 ### F-2108: Project Milestone Tracking Engine
 * **Scope:** High-level contractual deliverable and stage-gate tracking (`ProjectMilestonesPanel.tsx`, `milestones.ts`).
@@ -158,7 +160,7 @@ graph TD
 ### F-2109: Smart Landing Page Views & Enhanced Project Cards
 * **Scope:** Primary application entry point (`app/page.tsx`).
 * **Capability:**
-  * Role-aware smart defaults: Super PMs and PMs default to **My projects** (owned or with tasks assigned); Members/Viewers see roster-scoped Active projects. PM / Super PM **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs).
+  * Role-aware smart defaults: Super PMs and PMs default to **My projects** (owned or with tasks assigned); Members/Viewers see roster-scoped Active projects. PM / Super PM **Portfolio scope** combobox switches among My projects, All projects, and per-PM owned portfolios (not quick-filter tabs). Last non-default **Portfolio scope** is restored on bare `/` (cookie + server redirect, mirrored in `sessionStorage`) for brand, **Projects** nav, **Back to projects**, and typed homepage URLs. Scope changes show an inline list pending state (“Updating projects…”) until the RSC payload arrives.
   * **Active-only listing:** Landing page query is `lifecycleStatus = ACTIVE AND deletedAt IS NULL`.
   * Dedicated **Completed Projects** control navigating to `/projects/completed` for Super PMs, owning PMs, and accounts granted completed visibility.
   * Enhanced project cards displaying designated PM identity, real-time Status Flag pill badges, task counts, compact dual progress bars ($P_{\text{target}}$ vs. $P_{\text{actual}}$), and **open-issue count** (rose when any open issue is Critical). Cards at $100\%$ additionally show **Move to Completed Projects**.
@@ -338,6 +340,7 @@ erDiagram
     Project {
         uuid id PK
         string name
+        string customProjectId
         string description
         uuid ownerId FK
         ProjectLifecycleStatus lifecycleStatus
@@ -568,10 +571,11 @@ model User {
 }
 
 model Project {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  description String   @default("")
-  ownerId     String   @db.Uuid
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  customProjectId String   @default("")
+  description     String   @default("")
+  ownerId         String   @db.Uuid
 
   lifecycleStatus      ProjectLifecycleStatus @default(ACTIVE)
   progressReached100At DateTime?
@@ -822,7 +826,7 @@ type ActionResult<T> =
 * `reassignProjectOwner` — Super PM project ownership transfer with email (Wave 4B).
 
 ### 4.3 Project Lifecycle & Milestone Actions (`src/lib/actions/projects.ts` & `milestones.ts`)
-* `updateProjectDetails(input: { projectId: string; name: string; description: string }): Promise<ActionResult<Project>>`
+* `updateProjectDetails(input: { projectId: string; name: string; customProjectId?: string; description: string }): Promise<ActionResult<Project>>`
   * *Authorization:* Project Admin (owning PM) or Super PM.
 * `updateProjectRoster(input: { projectId: string; memberUserIds: string[] }): Promise<ActionResult<void>>`
   * *Authorization:* Project Admin or Super PM. Synchronises `ProjectMember` join records.
@@ -1260,5 +1264,9 @@ Scenarios are accepted **in the wave that first makes them exercisable**. They a
 |---------|------|--------|
 | 2.1.4 | Prior | North Star plan through Wave 4 programme design (agile UAT gates) |
 | 2.1.5 | 5 Oct 2026 | IDE Target → Cursor; companion `dev_uat.md`; as-built Wave 4A/4B acceptance vs planned schedule; User `purgeDueAt` / `purgeWarningSentAt`; retention job return shape + user pass; Safe deletion naming aligned to UI |
+| 2.1.6 | 5 Oct 2026 | Portfolio scope session persistence on `/`; Gantt taller scrollport; Today/milestone lines end on task body; same-day milestone offset |
+| 2.1.7 | 6 Oct 2026 | Portfolio scope pending feedback; holistic pre–Wave 4C UX polish record |
+| 2.1.8 | 6 Oct 2026 | Optional Custom Project ID on Project; ER diagram + Prisma excerpts updated |
+| 2.1.9 | 6 Oct 2026 | Portfolio scope cookie + server restore on bare `/`; product title Simple Project Task Tracker 2.1 |
 
-*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C remains the outstanding delivery tranche.*
+*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C remains the outstanding delivery tranche. Pre–Wave 4C UX polish (landing scope memory/pending feedback; Gantt viewport and marker aesthetics) and optional Custom Project ID are accepted into the as-built baseline.*

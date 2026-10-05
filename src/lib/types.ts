@@ -1,5 +1,5 @@
 /**
- * Domain types for Simple Project Task Tracker 2.0
+ * Domain types for Simple Project Task Tracker 2.1
  * Canonical models — aligned with doc/dev_plan.md Section 3.
  */
 
@@ -76,6 +76,8 @@ export interface User {
 export interface Project {
   id: string;
   name: string;
+  /** Optional human-facing code (blank when unused). */
+  customProjectId: string;
   description: string;
   ownerId: string;
   permittedUserIds: string[];
