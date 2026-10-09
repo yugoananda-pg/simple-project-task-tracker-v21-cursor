@@ -90,10 +90,27 @@ const GROUP_HEADER_HEIGHT_PX = 36;
 /** Horizontal offset (px) when a milestone lands on Today so both lines stay readable. */
 const MILESTONE_TODAY_OFFSET_PX = 4;
 const BAR_HEIGHT = 7;
-/** Sticky left rail: Task title pane + Progress column. */
+/** Only the Task column stays frozen while the chart scrolls sideways. */
 const TASK_PANE_WIDTH_CLASS = "w-[17rem] sm:w-[20rem]";
 const PROGRESS_PANE_WIDTH_CLASS = "w-[6.75rem]";
-const LEFT_RAIL_WIDTH_CLASS = "w-[23.75rem] sm:w-[26.75rem]";
+
+const BUCKET_RANK: Record<TaskBucket, number> = {
+  initiating: 0,
+  planning: 1,
+  executing: 2,
+  monitoring: 3,
+  closing: 4,
+};
+
+/** Same order as the List table: process group, then the saved row order. */
+function compareListOrder(a: Task, b: Task): number {
+  const bucketDelta = BUCKET_RANK[a.bucket] - BUCKET_RANK[b.bucket];
+  if (bucketDelta !== 0) return bucketDelta;
+  if (a.listSortOrder !== b.listSortOrder) {
+    return a.listSortOrder - b.listSortOrder;
+  }
+  return a.title.localeCompare(b.title);
+}
 
 const paneBgClass = "bg-white dark:bg-zinc-900";
 const gridColBorder = "border-r border-zinc-200 dark:border-zinc-700/60";
@@ -153,9 +170,7 @@ function buildGroups(tasks: Task[], mode: GanttGroupMode): GanttGroup[] {
     .map((bucket) => ({
       id: bucket,
       label: PROCESS_GROUP_LABELS[bucket],
-      tasks: [...(buckets.get(bucket) ?? [])].sort((a, b) =>
-        a.title.localeCompare(b.title),
-      ),
+      tasks: [...(buckets.get(bucket) ?? [])].sort(compareListOrder),
     }));
 }
 
@@ -754,11 +769,10 @@ export default function ProjectGanttView({
         className={`max-h-[calc(100vh-200px)] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-700 ${paneBgClass}`}
       >
         <div className="flex min-w-max">
-          {/* Sticky left rail: Task + Progress — above scrolling date header */}
-          <div
-            className={`sticky left-0 z-40 flex shrink-0 border-r border-zinc-200 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:shadow-[2px_0_6px_rgba(0,0,0,0.35)] ${LEFT_RAIL_WIDTH_CLASS} ${paneBgClass}`}
-          >
-            <div className={`flex shrink-0 flex-col ${TASK_PANE_WIDTH_CLASS}`}>
+          {/* Frozen Task column. Progress scrolls with the timeline. */}
+            <div
+              className={`sticky left-0 z-40 flex shrink-0 flex-col border-r border-zinc-200 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:shadow-[2px_0_6px_rgba(0,0,0,0.35)] ${TASK_PANE_WIDTH_CLASS} ${paneBgClass}`}
+            >
               <div
                 className={`sticky top-0 left-0 z-50 flex h-12 items-center border-b border-r border-zinc-200 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 ${paneBgClass}`}
               >
@@ -815,7 +829,7 @@ export default function ProjectGanttView({
               className={`flex shrink-0 flex-col ${PROGRESS_PANE_WIDTH_CLASS}`}
             >
               <div
-                className={`sticky top-0 z-50 flex h-12 items-center justify-center border-b border-zinc-200 px-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 sm:text-xs ${paneBgClass}`}
+                className={`sticky top-0 z-20 flex h-12 items-center justify-center border-b border-zinc-200 px-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 sm:text-xs ${paneBgClass}`}
               >
                 Progress
               </div>
@@ -855,7 +869,6 @@ export default function ProjectGanttView({
                 </div>
               ))}
             </div>
-          </div>
 
           <div className="relative z-0 overflow-visible" style={{ width: timelineWidth }}>
             {/* Sticky top date scale — above bars, below left-rail Progress header */}

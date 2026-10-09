@@ -14,6 +14,7 @@ import {
   SYSTEM_ACTOR_EMAIL,
   SYSTEM_ACTOR_ID,
 } from "@/src/lib/audit-display";
+import { privilegeDefaultsForRole } from "@/src/lib/dashboard-access";
 
 /** Fixed UUIDs so UAT docs and re-seeds stay reproducible (not tied to Supabase Auth). */
 export const SEED_USER_IDS = {
@@ -225,6 +226,9 @@ async function ensureDummyUsers(prisma: PrismaClient): Promise<number> {
         approvedAt: new Date(),
         completedProjectAccess:
           definition.globalRole === "super_pm" ? "ALL" : "NONE",
+        dashboardAccess: privilegeDefaultsForRole(definition.globalRole)
+          .dashboardAccess,
+        projectVisibilityMode: "SELECTED",
         createdBy: definition.id,
         updatedBy: definition.id,
       },
@@ -702,6 +706,7 @@ export async function resetAndSeedDatabase(
                 ? 1
                 : 0,
           sortOrder,
+          listSortOrder: sortOrder,
           initialStartDate: dateFromOffset(seedTask.initialStartOffset),
           initialDueDate: dateFromOffset(seedTask.initialDueOffset),
           updatedStartDate: dateFromOffset(seedTask.initialStartOffset),

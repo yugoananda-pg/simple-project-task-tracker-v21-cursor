@@ -3,6 +3,16 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --sptt-chart-axis: #3f3f46;
+  --sptt-chart-grid: rgba(113, 113, 122, 0.22);
+  --sptt-chart-track: rgba(113, 113, 122, 0.12);
+  --sptt-card-bg: #ffffff;
+  --sptt-card-border: #e4e4e7;
+  --sptt-card-border-hover: #c7c7ce;
+  --sptt-card-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
+  --sptt-card-shadow-hover: 0 10px 24px -14px rgba(24, 24, 27, 0.28);
+  --sptt-surface-muted: #f6f6f7;
+  --sptt-focus: #0d9488;
 }
 
 @theme inline {
@@ -16,6 +26,16 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --sptt-chart-axis: #d4d4d8;
+    --sptt-chart-grid: rgba(228, 228, 231, 0.12);
+    --sptt-chart-track: rgba(228, 228, 231, 0.07);
+    --sptt-card-bg: #101012;
+    --sptt-card-border: #26262a;
+    --sptt-card-border-hover: #3d3d44;
+    --sptt-card-shadow: none;
+    --sptt-card-shadow-hover: 0 14px 30px -16px rgba(0, 0, 0, 0.9);
+    --sptt-surface-muted: #17171a;
+    --sptt-focus: #2dd4bf;
   }
 }
 
@@ -23,6 +43,29 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--sptt-focus) 30%, transparent);
+}
+
+@layer base {
+  /* One focus ring for the whole app, in the same teal as the accent colour. */
+  :where(button, a, [role="tab"], [tabindex]):focus-visible {
+    outline: 2px solid var(--sptt-focus);
+    outline-offset: 2px;
+  }
+
+  /* Colour-only transitions keep hover smooth without moving layout. */
+  :where(button, a, [role="tab"]) {
+    transition:
+      color 150ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      opacity 150ms ease;
+  }
 }
 
 @keyframes sptt-view-fade {
@@ -38,4 +81,65 @@ body {
 
 .sptt-view-fade {
   animation: sptt-view-fade 220ms ease-out;
+}
+
+@layer components {
+  /* Analytics and Issue Log surfaces. Border and shadow ease on hover. */
+  .sptt-card {
+    background: var(--sptt-card-bg);
+    border: 1px solid var(--sptt-card-border);
+    border-radius: 1rem;
+    box-shadow: var(--sptt-card-shadow);
+    transition:
+      border-color 200ms ease,
+      box-shadow 200ms ease,
+      transform 200ms ease;
+  }
+
+  .sptt-card:hover {
+    border-color: var(--sptt-card-border-hover);
+    box-shadow: var(--sptt-card-shadow-hover);
+  }
+
+  .sptt-card-lift:hover {
+    transform: translateY(-1px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sptt-card {
+      transition: none;
+    }
+    .sptt-card-lift:hover {
+      transform: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sptt-view-fade {
+    animation: none;
+  }
+}
+
+/* The calendar button is the control. Hide the browser glyph so it does not
+   cover that button. */
+.sptt-date-input::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+
+/* Series colour stays on the swatch. The words stay dark on light, light on dark. */
+.sptt-chart .recharts-legend-item-text {
+  color: #27272a !important;
+  font-size: 12px;
+}
+
+.sptt-chart .recharts-surface {
+  overflow: visible;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sptt-chart .recharts-legend-item-text {
+    color: #f4f4f5 !important;
+  }
 }

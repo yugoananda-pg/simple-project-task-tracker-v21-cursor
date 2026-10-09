@@ -30,9 +30,13 @@ Scenarios that are **not yet shippable** in the current build are labelled **DEF
 | Wave 4B | UAT-405, UAT-405A–D, UAT-406–407, UAT-412–422 | Implemented | **PASS — Wave 4B UAT complete** (5 Oct 2026; includes job-assisted UAT-413 / 418) |
 | Pre–4C UX polish | Scope memory / pending; Gantt aesthetics | Implemented | Operator visual check (5–6 Oct 2026); see UAT-405C steps 7–8 + `dev_proc.md` §12.4 |
 | Custom Project ID | UAT-PRJ-CPID | Implemented | Ready for operator check (6 Oct 2026); migration `20261006050500_project_custom_project_id` |
-| Wave 4C | UAT-408–410, UAT-423–425, UAT-R | **Not in current build** | Do not execute yet |
+| Wave 4C-1b | UAT-IMP | Implemented | Ready for operator check |
+| Wave 4C-2a | UAT-408, UAT-423–425 | Implemented 8 Oct 2026 | Ready for operator check; not yet accepted |
+| Wave 4C-2b | UAT-426–427 | Implemented 9 Oct 2026 | Ready for operator check; not yet accepted |
+| Wave 4C-3 | UAT-409–410 | Implemented 9 Oct 2026 | Ready for operator check; not yet accepted |
+| Wave 4C remainder | UAT-R, PDF export | **Not in current build** | Do not execute yet |
 
-**Browser agent default run order for this session:** Wave 4A + Wave 4B UAT are accepted. Pre–4C UX polish is in the build. **Do not** execute Wave 4C until that wave’s development is complete.
+**Browser agent default run order for this session:** Wave 4A + Wave 4B UAT are accepted. Wave 4C-2a is in the build and ready for UAT-408 and UAT-423–425. Wave 4C-2b is in the build and ready for UAT-426–427. Wave 4C-3 is in the build and ready for UAT-409 and UAT-410. PDF export and UAT-R are still out of scope.
 
 ---
 
@@ -45,7 +49,7 @@ Scenarios that are **not yet shippable** in the current build are labelled **DEF
 | App | Next.js App Router + Supabase Auth + Prisma / PostgreSQL |
 | Dev server | `npm run dev` → `http://localhost:3000` |
 | Auth | Email + password; approved accounts only |
-| Dates in UI | Prefer `dd/mm/yyyy` display; date inputs often use `yyyy-mm-dd` |
+| Dates in UI | Prefer `dd/mm/yyyy` display; date inputs store `yyyy-mm-dd`. Every date field has a calendar button at the right end. The button opens an in-page month grid; previous and next month do not change the stored date until a day is chosen. |
 
 ### 3.2 Role accounts (typical local tenant)
 
@@ -77,7 +81,7 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 | Header | App title; Projects; Completed (when entitled); user dropdown |
 | Settings hub | `/settings` — Account for all; Super PM also Users, Viewer visibility, Holidays, Deleted, Purged |
 | Home | `/` — project cards; PM/Super PM portfolio scope select (My / All / per-PM) |
-| Project hub | `/projects/[id]` — title, milestone strip, view tabs: List / Kanban / Gantt / Analytics / Issue Log |
+| Project hub | `/projects/[id]` — title, milestone strip, view tabs: List / Kanban / Gantt / Issue Log / Analytics |
 | Task drawer | Opens from List/Kanban; Assignee (PIC) combobox |
 | Milestone strip | Compact “Milestones” row with chips; **+ Add** / chip → modal |
 
@@ -107,7 +111,9 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 | UAT-417 | 4B | Hard-delete project | Deleted Projects → purge |
 | UAT-418 | 4B | Five-year purge | Retention job + clock (not pure UI) |
 | UAT-419–422 | 4B | Issue Log | Issue Log tab + drawer |
-| UAT-408–410, 423–425 | 4C | Analytics / portfolio / About | **DEFERRED** |
+| UAT-408, 423–425 | 4C-2a | Per-project Analytics | Project hub Analytics tab |
+| UAT-426–427 | 4C-2b | Dashboard access and Viewer All Active | Privilege matrix, `/settings/viewer-visibility`, project hub |
+| UAT-409–410 | 4C-3 | Portfolio, macro timeline, About | `/portfolio`, account menu → About |
 | UAT-R | 4C | Full regression | **DEFERRED** |
 
 ---
@@ -697,19 +703,102 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 
 ---
 
-## 7. Wave 4C pack — **DEFERRED** (do not execute on current build)
+## 6A. Excel task import — UAT-IMP (Wave 4C-1b)
+
+**Preconditions:** Signed in as a PM or Super PM who can create projects. A Member or Viewer session is available for the negative check.
+
+**Steps**
+
+1. On a project hub, confirm there is no **Import from Excel** button.
+2. On the projects page, choose **+ New Project**, then **From Excel**. Download the template. Confirm A1 is `Project Name:`, and row 2 is Process Group, Task, Progress, Initial Start Date, Initial End Date, Updated Start Date, Updated Finish Date, Actual Start Date, Actual End Date. There is no Status or PIC column.
+3. Fill B1 and two tasks from row 3 in different process groups, with blank progress and blank actuals. Upload and preview. **Create project** is enabled only when the file has no errors. Submit. A new project opens with those tasks as To Do at 0%, unassigned, and updated dates copied from the initial dates. The project also appears on the projects page.
+4. As a Member or Viewer, confirm **+ New Project** is absent, so the Excel path is unavailable.
+5. Add a row with Actual finish tomorrow, or progress 100% with no actual end. Preview shows an error and **Create project** stays disabled. No project is created.
+6. Add a second sheet row with the same task title in the same process group. Preview errors on the duplicate. **Create project** stays disabled.
+
+**Pass:** Preview writes nothing; a valid file creates one new project whose tasks match the preview; an invalid file creates nothing.
+
+---
+
+## 6B. Per-project Analytics — UAT-408, UAT-423–425 (Wave 4C-2a)
+
+**Preconditions:** Super PM (or a user whose privilege matrix includes Per-project Analytics). One Active project with tasks and, for UAT-423, at least one issue. A second project with no issues for UAT-425.
+
+**Steps**
+
+1. Open the project hub. Confirm the tab order is List, Kanban, Gantt, Issue Log, Analytics.
+2. Open **Analytics**. Confirm the project note and key takeaways sit above the charts. Confirm Schedule Intelligence shows the S-curve, task status doughnut, effort by process group, overdue list, and milestone table (UAT-408).
+3. Confirm Issue Intelligence shows KPI figures, three chart rows, and an activity stream of recent issue changes (UAT-423, UAT-424).
+4. Open a project with no issues. Confirm the copy *No issues have been logged for this project* and **Open Issue Log** (UAT-425).
+
+**Pass:** The pane loads only while Analytics is selected. Figures match the project’s tasks and issues. These scenarios are not yet accepted.
+
+---
+
+## 6C. Dashboard access — UAT-426–427 (Wave 4C-2b)
+
+**Preconditions:** Super PM session. One approved Member and one approved Viewer. Restore both accounts to their previous role, ticks, and visibility mode when finished.
+
+### UAT-426 — Analytics tab follows Per-project Analytics
+
+1. Open **Settings → Users & privileges → Privilege matrix**. Expand the Member.
+2. Change the role dropdown to **PM**, then back to **Member**, without saving yet. Confirm the ticks refill: PM shows all three; Member shows only **Per-project Analytics**.
+3. Clear **Per-project Analytics** and save. Open a project that Member can already see (sign in as that Member, or confirm as Super PM that the Member’s stored scopes no longer include `PROJECT`).
+4. As that Member, open the project hub. The **Analytics** tab is absent. Reloading the project URL does not reveal Analytics figures.
+5. As Super PM, restore the Member’s role and ticks, including **Per-project Analytics**, and save.
+
+**Pass:** Without `PROJECT`, the tab is hidden and the server does not return the analytics series. Restoring the tick brings the tab back. Super PM ticks stay locked on.
+
+### UAT-427 — Viewer All Active
+
+1. Open **Settings → Viewer project visibility**. Select the Viewer.
+2. Choose **All Active projects**. Confirm a success message and that the checklist remains (it is not wiped).
+3. Sign in as that Viewer. The home list includes Active projects that were not ticked. A completed project does not appear because of this mode. Opening an Active project is read-only. The Analytics tab appears only when that Viewer still has **Per-project Analytics**.
+4. As Super PM, set the Viewer back to **Selected projects**. The previous checklist still decides which Active projects they can open.
+
+**Pass:** All Active widens only non-deleted Active projects, keeps the checklist, and does not grant PM Portfolio or Total Company.
+
+---
+
+## 6D. Portfolio, macro timeline and About — UAT-409, UAT-410 (Wave 4C-3)
+
+**Preconditions:** A PM holding **PM Portfolio** and **Total Company** (the UAT PM `uat.pm.4c2b@tracker.local` does), a Super PM, and a Member and a Viewer who hold only **Per-project Analytics**. At least two PMs each own an Active project, and one project has milestones and an issue. **Before the run, correct any task whose actual dates sit outside 2000–2100** (the build ignores such dates on the charts but does not edit them). Restore any account you change when finished.
+
+### UAT-409 — Executive macro timeline and `/portfolio`
+
+1. Sign in as the PM. The header shows **Projects, Portfolio, Completed** (Completed only with Completed visibility). Open **Portfolio**.
+2. **By PM** is selected. A **Project Manager** picker lists only PMs who own a visible Active project. Choose another PM. The six KPI cards, the macro timeline and every block below change to that PM.
+3. In the macro timeline each project shows three bars (initial plan grey, updated plan blue, actual green or amber, hatched while still running to the red **Today** line), plus Target, Actual and Status Flag. Names wrap to two lines.
+4. Hover a milestone diamond, then Tab to another one. A card opens at once (no delay) with name, project, target, achieved date and variance. Scroll the page while it is open; the card stays with its diamond.
+5. Switch to **All projects**. A **Comparison by PM** table appears. Use the project filter to tick fewer projects; the KPIs, timeline and charts follow. The key takeaways cite the figures used.
+6. Scroll: S-curve, burn-down, task status, effort by process group, overdue tasks (with a **Project** column), milestones, and Issue Intelligence (recent activity names the project). Compare one project’s score with its hub Analytics tab; a portfolio of one project gives the same percentage.
+7. **Notes.** On All projects, choose **Edit** on the note, enter a sentence, **Save**. The note shows “Updated by <you> · date time”. Reload; it persists. As a PM on another PM’s By PM view, there is no **Edit**. As Super PM, **Edit** is present on every PM’s note and on All projects.
+8. **Completed cohort.** As Super PM, switch **Include Completed projects** on. Completed projects join with a Completed badge. As a PM without Completed visibility `ALL`, the switch is absent.
+9. **Entry points.** On `/`, the scope control shows **Analytics for this scope →** and it opens the matching view. On a project hub, “Project Manager: <name>” links to that PM’s portfolio for someone holding PM Portfolio.
+10. **Gate.** Sign in as the Member (no portfolio tick): no **Portfolio** link, and typing `/portfolio` returns to `/`. Repeat for the Viewer. Then, as Super PM, tick **PM Portfolio** and **Total Company** for the Viewer and sign in again: the Viewer’s portfolio contains only the projects they could already open (the checklist, or every Active project on **All Active**) and the note shows no **Edit**. Restore the Viewer’s ticks.
+11. **Look and feel.** Repeat steps 2 to 5 in light and dark themes. At a 390 px wide window the header fits without sideways scrolling and the timeline scrolls inside its own card.
+12. **Date guard.** On a List row, type an actual start with the year `0227`. The save is refused with *Please enter a valid date between the years 2000 and 2100.* and the portfolio axis is unaffected.
+
+**Pass:** The page opens only with a portfolio tick; each view shows the data scope the person already has; figures match the hub; tooltips are immediate; notes obey the D3 rules and stamp the author; no project outside the person’s scope appears anywhere on the page.
+
+### UAT-410 — About modal
+
+1. Signed in as any approved user, open the account menu and choose **About**.
+2. The dialog shows **v2.1.4-executive-intel**, a **Database** line (Connected, latency in ms, time checked), the **Runtime stack** (Node.js, Next.js, React, Prisma, Supabase JS, Recharts, Tailwind CSS, PostgreSQL) and **Architectural credits**: **Yugo Ananda**, Grand Designer and Chief Solution Architect.
+3. Press **Escape** (or **Close**). The dialog closes and focus returns to the account button. Tab never leaves the dialog while it is open.
+
+**Pass:** All items appear for a Member and a Viewer as well as a PM. No error text, host name or credential appears in the dialog.
+
+---
+
+## 7. Wave 4C remainder — **DEFERRED** (do not execute on current build)
 
 | ID | Title | Why deferred |
 |----|-------|--------------|
-| UAT-408 | Schedule S-Curve realisation | Analytics Schedule Intelligence / charts not fully shipped as 4C increment |
-| UAT-409 | Executive macro Gantt `/portfolio` | Portfolio surface Wave 4C |
-| UAT-410 | About / credits modal | Wave 4C |
-| UAT-423 | Issue Intelligence live progress | Issue Intelligence pane Wave 4C |
-| UAT-424 | Issue Intelligence activity stream | Wave 4C |
-| UAT-425 | Issue Intelligence empty state | Wave 4C |
-| UAT-R | Full 4A+4B regression on 4C build | Requires 4C integration gate |
+| PDF export | Executive PDF of the three dashboards | Wave 4C-4 |
+| UAT-R | Full 4A+4B regression on 4C build | Requires the 4C close-out gate |
 
-Agents must report these as **Deferred — Wave 4C**, not Fail.
+Agents must report these as **Deferred — Wave 4C**, not Fail. UAT-408, UAT-409, UAT-410 and UAT-423–427 are in the build; run §6B, §6C and §6D. They are not yet accepted.
 
 ---
 
@@ -757,7 +846,9 @@ Execute in order; skip accepted/deferred as marked.
 | — | UAT-412, 415–417 | **Done — PASS** (5 Oct 2026) |
 | — | UAT-406, 414 | **Done — PASS** (5 Oct 2026) |
 | — | UAT-413, 418 | **Done — PASS** (5 Oct 2026, job-assisted) |
-| — | Wave 4C | **Deferred** — do not execute until Wave 4C development completes |
+| — | UAT-408, 423–427 | **Ready** — not yet accepted (§6B, §6C) |
+| — | UAT-409, 410 | **Ready** — not yet accepted (§6D) |
+| — | UAT-R | **Deferred** — requires PDF export and close-out |
 
 ### Result log (this session)
 
@@ -806,6 +897,19 @@ UAT-418  | Pass | Job-assisted: UAT-418 Five-Year Purge → Purged Register COMP
 | 1.10 | 6 Oct 2026 | UAT-405C step 8: Portfolio scope pending feedback; pre–Wave 4C UX polish documented holistically across companion docs |
 | 1.11 | 6 Oct 2026 | UAT-PRJ-CPID: optional Custom Project ID; Prisma migration + ER/schema docs aligned (v2.1.8) |
 | 1.12 | 6 Oct 2026 | UAT-405C steps 7–7d: Back restores Portfolio scope; brand / Projects / typed `/` reset to My projects; product title 2.1; useEffect deps fix |
+| 1.13 | 6 Oct 2026 | W4C-1 high-density List table shipped (process-group No., WD, inline edit, DnD); UAT pack for 4C charts still deferred |
+| 1.14 | 6 Oct 2026 | List polish: sticky header + Task column, wrapping titles, WD floor max(1,…) (same-day = 1) |
+| 1.15 | 6 Oct 2026 | List freeze bleed/Status crop; process-group + Insert stay in freeze rail on H-scroll; dismissible action errors |
+| 1.16 | 6 Oct 2026 | List: one Add row per process group; hover + inserts between tasks; group header is a label only |
+| 1.17 | 6 Oct 2026 | List: gap-hover +, draft rows, inline delete, empty five-group table, date keyboard entry |
+| 1.18 | 6 Oct 2026 | Retest: gap hover uses JS state (thick line +); date inputs uncontrolled while focused (year typing) |
+| 1.19 | 6 Oct 2026 | Actual finish→Done confirm; Project PS above List; centre WD; grid-edge insert (no spacer) |
+| 1.20 | 8 Oct 2026 | Schedule Intelligence adds task status, effort by process group, and overdue tasks (FR-ANL-11). UAT-423–425 still not accepted. |
+| 1.21 | 8 Oct 2026 | Task status doughnut; high-contrast chart hover cards; Issue KPI explanations; issue charts in three rows. UAT-423–425 still not accepted. |
+| 1.22 | 8 Oct 2026 | In-page date calendar; Issue Log inline title, PIC, and updated dates; hub tabs end with Issue Log then Analytics. UAT-423–425 still not accepted. |
+| 1.23 | 8 Oct 2026 | Issue Log rows are one line and vertically centred. Analytics visual refresh checked in light and dark and at 640 px wide. UAT-423–425 still not accepted. |
+| 1.24 | 9 Oct 2026 | UAT-408 and UAT-423–425 are executable (Analytics is in the build). UAT-426–427 cover the Analytics-tab gate and Viewer All Active. None of these are accepted. UAT-409, UAT-410, and UAT-R stay deferred. |
+| 1.25 | 9 Oct 2026 | UAT-409 and UAT-410 are executable (§6D, Wave 4C-3 is in the build) and not yet accepted. Developer browser check of By PM, All projects, tooltips, notes, About, entry points and the Member gate on 9 Oct 2026 is recorded in `dev_proc.md` §12.13 and is not a UAT result. UAT-R stays deferred until PDF export ships. |
 
 ---
 

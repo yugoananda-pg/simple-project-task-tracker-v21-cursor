@@ -8,13 +8,14 @@ import {
   ActionError,
   type ActionResult,
 } from "@/src/lib/actions/errors";
-import { auditCreate, withAuditSession } from "@/src/lib/audit";
+import { auditCreate, auditUpdate, withAuditSession } from "@/src/lib/audit";
 import { prisma } from "@/src/lib/prisma";
 import {
   activeApprovedUserWhere,
   requireApprovedSessionUser,
   type SessionUser,
 } from "@/src/lib/rbac";
+import type { ProjectVisibilityMode } from "@/src/lib/types";
 
 export type ViewerDirectoryRow = {
   id: string;
@@ -22,6 +23,7 @@ export type ViewerDirectoryRow = {
   email: string;
   /** Count of Active (non-deleted) projects currently granted via ProjectMember. */
   grantedActiveCount: number;
+  projectVisibilityMode: ProjectVisibilityMode;
 };
 
 export type ViewerGrantProjectRow = {
@@ -80,6 +82,7 @@ export async function listViewerVisibilityDirectory(): Promise<
         id: true,
         name: true,
         email: true,
+        projectVisibilityMode: true,
         projectMembers: {
           where: {
             project: {
@@ -99,6 +102,7 @@ export async function listViewerVisibilityDirectory(): Promise<
         name: row.name,
         email: row.email,
         grantedActiveCount: row.projectMembers.length,
+        projectVisibilityMode: row.projectVisibilityMode,
       })),
     );
   } catch (error) {
@@ -152,6 +156,38 @@ export async function listViewerProjectGrants(
         granted: granted.has(project.id),
       })),
     );
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+/**
+ * Switch a Viewer between a saved checklist and every Active project.
+ * Membership rows are left in place so Selected can be restored.
+ */
+export async function setViewerProjectVisibilityMode(input: {
+  viewerUserId: string;
+  mode: ProjectVisibilityMode;
+}): Promise<ActionResult<{ viewerUserId: string; mode: ProjectVisibilityMode }>> {
+  try {
+    return await withAuditSession(async ({ actorId, user }) => {
+      requireSuperPm(user!);
+      if (input.mode !== "SELECTED" && input.mode !== "ALL_ACTIVE") {
+        throw new ActionError("Choose Selected or All Active.", "VALIDATION");
+      }
+      const viewer = await requireActiveViewer(input.viewerUserId);
+      await prisma.user.update({
+        where: { id: viewer.id },
+        data: {
+          projectVisibilityMode: input.mode,
+          ...auditUpdate(actorId),
+        },
+      });
+      revalidatePath("/");
+      revalidatePath("/projects/completed");
+      revalidatePath("/settings/viewer-visibility");
+      return actionSuccess({ viewerUserId: viewer.id, mode: input.mode });
+    });
   } catch (error) {
     return actionFailure(error);
   }

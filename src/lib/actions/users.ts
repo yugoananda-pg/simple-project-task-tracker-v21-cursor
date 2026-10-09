@@ -17,6 +17,10 @@ import {
   type ActionResult,
 } from "@/src/lib/actions/errors";
 import { auditCreate, auditUpdate, withAuditSession } from "@/src/lib/audit";
+import {
+  privilegeDefaultsForRole,
+  sanitizeDashboardScopes,
+} from "@/src/lib/dashboard-access";
 import { SYSTEM_ACTOR_ID } from "@/src/lib/audit-display";
 import { DUPLICATE_EMAIL_PROVISION_MESSAGE } from "@/src/lib/auth-messages";
 import { normaliseEmail } from "@/src/lib/email";
@@ -112,12 +116,6 @@ type PmRecipientBucket = {
   recipientEmail: string;
   items: Map<string, { projectName: string; taskTitles: string[] }>;
 };
-
-const ALL_DASHBOARD_SCOPES: DashboardScope[] = [
-  "PROJECT",
-  "PM_PORTFOLIO",
-  "TOTAL_COMPANY",
-];
 
 function requireSuperPm(user: SessionUser): void {
   if (user.globalRole !== "super_pm") {
@@ -233,28 +231,6 @@ export async function countPendingApprovals(): Promise<number> {
   });
 }
 
-function privilegeDefaultsForRole(role: GlobalRole): {
-  dashboardAccess: DashboardScope[];
-  completedProjectAccess: CompletedProjectAccess;
-} {
-  if (role === "super_pm") {
-    return {
-      dashboardAccess: [...ALL_DASHBOARD_SCOPES],
-      completedProjectAccess: "ALL",
-    };
-  }
-  if (role === "viewer") {
-    return {
-      dashboardAccess: [],
-      completedProjectAccess: "NONE",
-    };
-  }
-  return {
-    dashboardAccess: ["PROJECT", "PM_PORTFOLIO"],
-    completedProjectAccess: "NONE",
-  };
-}
-
 /**
  * Super PM provisions a known person into an immediately usable account.
  * Bypasses self-service email confirmation and the approval queue (FR-GOV-07).
@@ -351,6 +327,7 @@ export async function provisionUserBySuperPm(input: {
             approvedBy: actorId,
             dashboardAccess: privileges.dashboardAccess,
             completedProjectAccess: privileges.completedProjectAccess,
+            projectVisibilityMode: "SELECTED",
             ...auditCreate(actorId),
           },
         });
@@ -548,15 +525,11 @@ export async function approveUser(input: {
         );
       }
 
+      const defaults = privilegeDefaultsForRole(input.globalRole);
       const completedProjectAccess =
         input.globalRole === "super_pm"
           ? "ALL"
           : target.completedProjectAccess;
-
-      const dashboardAccess =
-        input.globalRole === "super_pm"
-          ? ([...ALL_DASHBOARD_SCOPES] as DashboardScope[])
-          : undefined;
 
       const updated = await prisma.user.update({
         where: { id: input.userId },
@@ -566,7 +539,8 @@ export async function approveUser(input: {
           approvedBy: actorId,
           globalRole: input.globalRole,
           completedProjectAccess,
-          ...(dashboardAccess ? { dashboardAccess } : {}),
+          dashboardAccess: defaults.dashboardAccess,
+          projectVisibilityMode: "SELECTED",
           ...auditUpdate(actorId),
         },
       });
@@ -739,7 +713,7 @@ export async function updateUserPrivileges(input: {
 
       const scopes =
         input.globalRole === "super_pm"
-          ? ([...ALL_DASHBOARD_SCOPES] as DashboardScope[])
+          ? privilegeDefaultsForRole("super_pm").dashboardAccess
           : sanitizeDashboardScopes(input.dashboardAccess);
       const completedAccess =
         input.globalRole === "super_pm"
@@ -763,6 +737,9 @@ export async function updateUserPrivileges(input: {
           dashboardAccess: scopes,
           completedProjectAccess:
             input.globalRole === "super_pm" ? "ALL" : completedAccess,
+          ...(input.globalRole === "viewer" && target.globalRole !== "viewer"
+            ? { projectVisibilityMode: "SELECTED" as const }
+            : {}),
           ...auditUpdate(actorId),
         },
       });
@@ -1726,13 +1703,6 @@ function assertMutableTarget(userId: string, actorId: string): void {
   if (userId === SYSTEM_ACTOR_ID) {
     throw new ActionError("The System actor cannot be modified.", "VALIDATION");
   }
-}
-
-function sanitizeDashboardScopes(scopes: DashboardScope[]): DashboardScope[] {
-  const unique = [...new Set(scopes)].filter((scope) =>
-    ALL_DASHBOARD_SCOPES.includes(scope),
-  );
-  return unique;
 }
 
 function isGlobalRole(value: string): value is GlobalRole {

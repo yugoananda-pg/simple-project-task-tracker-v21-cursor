@@ -3,6 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import AboutDialog from "@/src/components/layout/AboutDialog";
 import NotificationBadge from "@/src/components/ui/NotificationBadge";
 import { signOutAction } from "@/src/lib/actions/auth";
 import { createClient } from "@/src/lib/supabase/client";
@@ -23,8 +24,10 @@ export default function UserDropdownMenu({
   pendingApprovalCount = 0,
 }: UserDropdownMenuProps) {
   const [open, setOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [isSigningOut, startSignOut] = useTransition();
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const showApprovalCue =
     globalRole === "super_pm" && pendingApprovalCount > 0;
 
@@ -68,6 +71,7 @@ export default function UserDropdownMenu({
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         disabled={isSigningOut}
@@ -75,7 +79,7 @@ export default function UserDropdownMenu({
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <span className="max-w-[10rem] truncate">{name}</span>
+        <span className="max-w-[5.5rem] truncate sm:max-w-[10rem]">{name}</span>
         {showApprovalCue ? (
           <NotificationBadge count={pendingApprovalCount} tone="onDark" />
         ) : null}
@@ -119,6 +123,17 @@ export default function UserDropdownMenu({
                 />
               ) : null}
             </a>
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-700/60 dark:hover:bg-zinc-800"
+              onClick={() => {
+                setOpen(false);
+                setAboutOpen(true);
+              }}
+            >
+              About
+            </button>
           </div>
 
           <div className="border-t border-slate-700/80 px-2 py-2 dark:border-zinc-700">
@@ -133,6 +148,15 @@ export default function UserDropdownMenu({
             </button>
           </div>
         </div>
+      ) : null}
+      {aboutOpen ? (
+        <AboutDialog
+          onClose={() => {
+            setAboutOpen(false);
+            // The menu item that opened the dialog is gone, so hand focus back.
+            triggerRef.current?.focus();
+          }}
+        />
       ) : null}
     </div>
   );

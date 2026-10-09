@@ -124,6 +124,10 @@ export function countWorkingDaysInclusive(
 /**
  * Planned duration D_planned = max(1, working days inclusive).
  * Missing dates → 0 (caller may fall back to equal weights).
+ *
+ * Same calendar start/due always yields at least 1 (including when that day
+ * is a weekend or holiday). Use this for List WD columns and weight maths —
+ * never show 0 / "—" when both endpoints are present.
  */
 export function plannedWorkingDuration(
   start: LocalDateString | null | undefined,

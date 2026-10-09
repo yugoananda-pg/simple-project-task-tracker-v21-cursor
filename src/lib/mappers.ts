@@ -116,6 +116,7 @@ export function mapTask(
     actualCompletionDate: toDateString(task.actualCompletionDate),
     progress: task.progress,
     sortOrder: task.sortOrder,
+    listSortOrder: task.listSortOrder,
     createdAt: toIso(task.createdAt),
     createdBy: task.createdBy,
     createdByName: resolveActorDisplayName(

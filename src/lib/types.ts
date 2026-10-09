@@ -15,6 +15,8 @@ export type DashboardScope = "PROJECT" | "PM_PORTFOLIO" | "TOTAL_COMPANY";
 
 export type CompletedProjectAccess = "NONE" | "ASSIGNED" | "ALL";
 
+export type ProjectVisibilityMode = "SELECTED" | "ALL_ACTIVE";
+
 export type TaskStatus = "todo" | "in_progress" | "done";
 
 export type TaskPriority = "urgent" | "important" | "medium" | "low";
@@ -154,6 +156,8 @@ export interface Task {
   progress: number;
   /** Order within a Kanban status column. */
   sortOrder: number;
+  /** Order within a process group on the high-density List table. */
+  listSortOrder: number;
   createdAt: string;
   /** Actor UUID (persisted). */
   createdBy: string;

@@ -76,7 +76,7 @@ export default function CompletedProjectsClient({
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+    <section className="mx-auto w-full px-4 py-10 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <Link

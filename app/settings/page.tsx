@@ -15,8 +15,9 @@ export default async function SettingsPage() {
         Settings
       </h1>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Manage your account
-        {isSuperPm ? " and platform administration" : ""}.
+        {isSuperPm
+          ? "Manage your account and platform administration."
+          : "Manage your account."}
       </p>
 
       <ul className="mt-8 divide-y divide-zinc-200 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-700 dark:bg-zinc-900">
@@ -74,8 +75,8 @@ export default async function SettingsPage() {
                     Viewer project visibility
                   </p>
                   <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    Grant Viewers read-only access across Active projects without
-                    per-project roster edits by each PM
+                    Choose Selected projects or every Active project. Access
+                    stays read-only.
                   </p>
                 </div>
                 <span className="text-sm text-zinc-400" aria-hidden>

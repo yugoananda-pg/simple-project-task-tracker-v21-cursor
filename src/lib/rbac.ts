@@ -1,7 +1,17 @@
 import "server-only";
 
-import type { ApprovalStatus, CompletedProjectAccess, GlobalRole } from "@/src/lib/types";
-import type { Project } from "@prisma/client";
+import {
+  effectiveDashboardScopes,
+  viewerSeesEveryActiveProject,
+} from "@/src/lib/dashboard-access";
+import type {
+  ApprovalStatus,
+  CompletedProjectAccess,
+  DashboardScope,
+  GlobalRole,
+  ProjectVisibilityMode,
+} from "@/src/lib/types";
+import type { Prisma, Project } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { ActionError } from "@/src/lib/actions/errors";
@@ -23,6 +33,8 @@ export type SessionUser = {
   globalRole: GlobalRole;
   approvalStatus: ApprovalStatus;
   completedProjectAccess: CompletedProjectAccess;
+  dashboardAccess: DashboardScope[];
+  projectVisibilityMode: ProjectVisibilityMode;
 };
 
 export type ProjectAccessLevel = "none" | "read" | "write" | "admin";
@@ -170,8 +182,9 @@ export async function bootstrapUserProfile(input: {
         completedProjectAccess: globalRole === "super_pm" ? "ALL" : "NONE",
         dashboardAccess:
           globalRole === "super_pm"
-            ? (["PROJECT", "PM_PORTFOLIO", "TOTAL_COMPANY"] as const)
-            : undefined,
+            ? ["PROJECT", "PM_PORTFOLIO", "TOTAL_COMPANY"]
+            : ["PROJECT"],
+        projectVisibilityMode: "SELECTED",
         ...auditCreate(input.id),
       },
     });
@@ -194,17 +207,23 @@ function toSessionUser(row: {
   globalRole: string;
   approvalStatus: string;
   completedProjectAccess: string;
+  dashboardAccess: string[];
+  projectVisibilityMode: string;
 }): SessionUser {
+  const globalRole = row.globalRole as GlobalRole;
   return {
     id: row.id,
     email: row.email,
     name: row.name,
-    globalRole: row.globalRole as GlobalRole,
+    globalRole,
     approvalStatus: row.approvalStatus as ApprovalStatus,
     completedProjectAccess:
-      row.globalRole === "super_pm"
+      globalRole === "super_pm"
         ? "ALL"
         : (row.completedProjectAccess as CompletedProjectAccess),
+    dashboardAccess: effectiveDashboardScopes(globalRole, row.dashboardAccess),
+    projectVisibilityMode:
+      row.projectVisibilityMode === "ALL_ACTIVE" ? "ALL_ACTIVE" : "SELECTED",
   };
 }
 
@@ -316,7 +335,14 @@ export function getProjectAccess(
   }
 
   if (user.globalRole === "viewer") {
-    // Visibility is granted via ProjectMember (Settings → Viewer visibility or Edit Project).
+    // All Active opens every live programme. Selected uses ProjectMember only.
+    if (
+      viewerSeesEveryActiveProject(user) &&
+      !project.deletedAt &&
+      project.lifecycleStatus === "ACTIVE"
+    ) {
+      return "read";
+    }
     return isMember ? "read" : "none";
   }
 
@@ -523,10 +549,39 @@ export function projectsVisibilityFilter(
     };
   }
 
-  // Member / Viewer: only projects where Super PM (or owning PM) granted membership.
+  if (viewerSeesEveryActiveProject(user)) {
+    return lifecycle;
+  }
+
+  // Member, and a Viewer on Selected: only granted memberships.
   return {
     ...lifecycle,
     members: { some: { userId: user.id } },
+  };
+}
+
+/**
+ * Data scope for `/portfolio`. A dashboard only aggregates projects the caller
+ * could open anyway: every Active project for a PM or Super PM, memberships for
+ * a Member, and memberships or every Active project for a Viewer. The Completed
+ * cohort is opt-in and needs `completedProjectAccess = ALL` (a Super PM always
+ * holds it).
+ */
+export function portfolioProjectsFilter(
+  user: SessionUser,
+  options: { ownerId?: string | null; includeCompleted?: boolean } = {},
+): Prisma.ProjectWhereInput {
+  const active = projectsVisibilityFilter(user, {
+    browseOwnerId: PROJECT_LIST_SCOPE_ALL,
+  });
+  const cohorts: Prisma.ProjectWhereInput[] = [active];
+  if (options.includeCompleted && user.completedProjectAccess === "ALL") {
+    cohorts.push({ lifecycleStatus: "COMPLETED" as const, deletedAt: null });
+  }
+  return {
+    deletedAt: null,
+    ...(options.ownerId ? { ownerId: options.ownerId } : {}),
+    OR: cohorts,
   };
 }
 

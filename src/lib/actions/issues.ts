@@ -11,6 +11,11 @@ import {
 } from "@/src/lib/actions/errors";
 import { assertActualDateNotFuture } from "@/src/lib/actions/date-validation";
 import { auditCreate, auditUpdate, withAuditSession } from "@/src/lib/audit";
+import {
+  normaliseCustomAssigneeName,
+  rememberCustomAssignee,
+} from "@/src/lib/custom-assignees";
+import { formatIssueId, ISSUE_STATUS_LABEL } from "@/src/lib/issue-labels";
 import { resolveActorDisplayName } from "@/src/lib/audit-display";
 import { prisma } from "@/src/lib/prisma";
 import {
@@ -22,6 +27,7 @@ import {
 import {
   clampProgress,
   dbDateToLocalDateString,
+  isPlausibleLocalDate,
   localDateStringToDbDate,
   toLocalDateString,
 } from "@/src/lib/task-defaults";
@@ -40,10 +46,6 @@ type IssueRow = Prisma.IssueGetPayload<{
     activities: true;
   };
 }>;
-
-function formatIssueId(issueNumber: number): string {
-  return `ISS-${String(issueNumber).padStart(3, "0")}`;
-}
 
 function mapComment(row: {
   id: string;
@@ -155,8 +157,11 @@ function parseOptionalDate(
 ): Date | null | undefined {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-    throw new ActionError(`Please enter a valid ${label}.`, "VALIDATION");
+  if (!isPlausibleLocalDate(value)) {
+    throw new ActionError(
+      `Please enter a valid ${label} between the years 2000 and 2100.`,
+      "VALIDATION",
+    );
   }
   return localDateStringToDbDate(value.trim());
 }
@@ -194,6 +199,26 @@ function progressFromIssueStatus(
     default:
       return clampProgress(currentProgress);
   }
+}
+
+async function resolveIssuePic(
+  projectId: string,
+  actorId: string,
+  picId: string | null,
+  picName: string | null | undefined,
+): Promise<{ picId: string | null; picName: string }> {
+  if (picId) {
+    return { picId, picName: await assertPicAllowed(projectId, picId) };
+  }
+  const name = normaliseCustomAssigneeName(picName ?? "");
+  if (name.length > 120) {
+    throw new ActionError(
+      "PIC name must be 120 characters or fewer.",
+      "VALIDATION",
+    );
+  }
+  if (name) await rememberCustomAssignee(actorId, name);
+  return { picId: null, picName: name };
 }
 
 async function assertPicAllowed(
@@ -323,6 +348,7 @@ export async function createIssue(input: {
   category?: IssueCategory;
   severity?: IssueSeverity;
   picId?: string | null;
+  picName?: string | null;
   initialStartDate?: string | null;
   initialDueDate?: string | null;
   impactSummary?: string;
@@ -357,8 +383,12 @@ export async function createIssue(input: {
           "VALIDATION",
         );
       }
-      const picId = input.picId ?? null;
-      const picName = await assertPicAllowed(input.projectId, picId);
+      const pic = await resolveIssuePic(
+        input.projectId,
+        user.id,
+        input.picId ?? null,
+        input.picName,
+      );
 
       const issue = await prisma.$transaction(async (tx) => {
         const aggregate = await tx.issue.aggregate({
@@ -377,8 +407,8 @@ export async function createIssue(input: {
             category: input.category ?? "technical",
             severity: input.severity ?? "medium",
             status: "open",
-            picId,
-            picName,
+            picId: pic.picId,
+            picName: pic.picName,
             raisedBy: actorId,
             initialStartDate: initialStart ?? null,
             initialDueDate: initialDue ?? null,
@@ -402,7 +432,7 @@ export async function createIssue(input: {
               title,
               severity: created.severity,
               category: created.category,
-              picId,
+              picId: pic.picId,
             },
             createdBy: actorId,
           },
@@ -429,6 +459,7 @@ export async function updateIssue(input: {
   status?: IssueStatus;
   progress?: number;
   picId?: string | null;
+  picName?: string | null;
   updatedStartDate?: string | null;
   updatedDueDate?: string | null;
   actualStartDate?: string | null;
@@ -518,11 +549,16 @@ export async function updateIssue(input: {
         }
       }
 
-      const picId = input.picId !== undefined ? input.picId : existing.picId;
-      const picName =
-        input.picId !== undefined
-          ? await assertPicAllowed(existing.projectId, picId)
-          : existing.picName;
+      const picTouched =
+        input.picId !== undefined || input.picName !== undefined;
+      const pic = picTouched
+        ? await resolveIssuePic(
+            existing.projectId,
+            actorId,
+            input.picId !== undefined ? input.picId : existing.picId,
+            input.picName !== undefined ? input.picName : existing.picName,
+          )
+        : { picId: existing.picId, picName: existing.picName };
 
       const updatedStart = parseOptionalDate(
         input.updatedStartDate,
@@ -568,7 +604,7 @@ export async function updateIssue(input: {
               : nextStatus === "cancelled"
                 ? "CANCELLED"
                 : "STATUS_CHANGED",
-          summary: `Status changed from ${existing.status} to ${nextStatus}`,
+          summary: `Status changed from ${ISSUE_STATUS_LABEL[existing.status as IssueStatus]} to ${ISSUE_STATUS_LABEL[nextStatus]}`,
           payloadJson: { from: existing.status, to: nextStatus },
           createdBy: actorId,
         });
@@ -583,13 +619,21 @@ export async function updateIssue(input: {
           createdBy: actorId,
         });
       }
-      if (input.picId !== undefined && picId !== existing.picId) {
+      if (
+        picTouched &&
+        (pic.picId !== existing.picId || pic.picName !== existing.picName)
+      ) {
         activities.push({
           projectId: existing.projectId,
           issueId: existing.id,
           eventType: "PIC_CHANGED",
-          summary: `PIC changed to ${picName || "Unassigned"}`,
-          payloadJson: { from: existing.picId, to: picId },
+          summary: `PIC changed to ${pic.picName || "Unassigned"}`,
+          payloadJson: {
+            from: existing.picId,
+            to: pic.picId,
+            fromName: existing.picName,
+            toName: pic.picName,
+          },
           createdBy: actorId,
         });
       }
@@ -632,8 +676,8 @@ export async function updateIssue(input: {
             severity: input.severity,
             status: nextStatus,
             progress: nextProgress,
-            picId,
-            picName,
+            picId: pic.picId,
+            picName: pic.picName,
             updatedStartDate:
               updatedStart === undefined ? undefined : updatedStart,
             updatedDueDate: updatedDue === undefined ? undefined : updatedDue,

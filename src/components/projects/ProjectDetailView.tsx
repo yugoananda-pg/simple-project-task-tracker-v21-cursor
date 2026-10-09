@@ -1,12 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import KanbanBoard from "@/src/components/kanban/KanbanBoard";
 import TaskDetailDrawer from "@/src/components/kanban/TaskDetailDrawer";
-import ProjectAnalyticsView from "@/src/components/analytics/ProjectAnalyticsView";
+import type { ProjectAnalyticsBundle } from "@/src/lib/actions/analytics";
 import ProjectGanttView from "@/src/components/gantt/ProjectGanttView";
 import ProjectIssueLogView from "@/src/components/issues/ProjectIssueLogView";
 import ProjectMilestonesPanel from "@/src/components/milestones/ProjectMilestonesPanel";
@@ -29,6 +37,7 @@ import {
   createTask,
   deleteTask,
   reorderTasks,
+  reorderTasksInList,
   toggleSubtask,
   updateTaskFields,
   updateTaskStatus,
@@ -37,13 +46,16 @@ import { computeProjectScheduleHealth } from "@/src/lib/analytics/weighted-progr
 import { canDeleteTaskUi } from "@/src/lib/permissions";
 import type { ProjectMemberUser } from "@/src/lib/actions/projects";
 import type { ProjectAccessLevel } from "@/src/lib/rbac";
-import { buildProgressStatusPatch } from "@/src/lib/task-defaults";
-import type { Issue, Milestone, Project, Task, TaskStatus } from "@/src/lib/types";
+import {
+  actualDateRangeError,
+  buildProgressStatusPatch,
+} from "@/src/lib/task-defaults";
+import type { Issue, Milestone, Project, Task, TaskBucket, TaskStatus } from "@/src/lib/types";
 import {
   projectsHomeHrefFromScope,
   readPortfolioScopeClient,
 } from "@/src/lib/project-list-scope";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 export type ProjectDetailViewProps = {
   projectId: string;
@@ -59,6 +71,14 @@ export type ProjectDetailViewProps = {
   currentUserId: string | null;
   canReassignOwner?: boolean;
   memberUsers: ProjectMemberUser[];
+  /** Owning PM, shown under the title. */
+  ownerName?: string | null;
+  /** Set when the viewer may open that PM’s portfolio. */
+  ownerPortfolioHref?: string | null;
+  customAssigneeNames?: string[];
+  analytics?: ProjectAnalyticsBundle | null;
+  /** Per-project Analytics capability. The tab stays hidden without it. */
+  canViewProjectAnalytics?: boolean;
   loadError?: string | null;
 };
 
@@ -68,9 +88,45 @@ const VIEW_OPTIONS: ReadonlyArray<{ id: ViewMode; label: string }> = [
   { id: "list", label: "List View" },
   { id: "kanban", label: "Kanban Board" },
   { id: "gantt", label: "Gantt Chart" },
-  { id: "analytics", label: "Analytics" },
   { id: "issues", label: "Issue Log" },
+  { id: "analytics", label: "Analytics" },
 ];
+
+/**
+ * The Analytics pane carries Recharts and the series maths. It loads on first
+ * use (or when the tab is hovered), and it is mounted only while visible, so
+ * List, Kanban, Gantt, and Issue Log edits never pay for it.
+ */
+const loadAnalyticsView = () =>
+  import("@/src/components/analytics/ProjectAnalyticsView");
+
+function AnalyticsSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading analytics">
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[0, 1, 2].map((key) => (
+          <div
+            key={key}
+            className="sptt-card h-28 animate-pulse bg-zinc-100 dark:bg-zinc-900/60"
+          />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {[0, 1].map((key) => (
+          <div
+            key={key}
+            className="sptt-card h-80 animate-pulse bg-zinc-100 dark:bg-zinc-900/60"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const ProjectAnalyticsView = dynamic(loadAnalyticsView, {
+  ssr: false,
+  loading: AnalyticsSkeleton,
+});
 
 /** Place a task above every card currently in the destination column. */
 function sortOrderAtTopOfColumn(
@@ -133,6 +189,11 @@ export default function ProjectDetailView({
   currentUserId,
   canReassignOwner = false,
   memberUsers: initialMemberUsers,
+  ownerName = null,
+  ownerPortfolioHref = null,
+  customAssigneeNames = [],
+  analytics = null,
+  canViewProjectAnalytics = false,
   loadError = null,
 }: ProjectDetailViewProps) {
   const router = useRouter();
@@ -146,6 +207,19 @@ export default function ProjectDetailView({
   const [milestones, setMilestones] = useState(initialMilestones);
   const [holidayDateKeys, setHolidayDateKeys] = useState(initialHolidayDateKeys);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const viewOptions = useMemo(
+    () =>
+      VIEW_OPTIONS.filter(
+        (option) => canViewProjectAnalytics || option.id !== "analytics",
+      ),
+    [canViewProjectAnalytics],
+  );
+  const [focusIssueId, setFocusIssueId] = useState<string | null>(null);
+  const openIssueLog = useCallback(() => setViewMode("issues"), []);
+  const openIssueFromAnalytics = useCallback((issueId: string) => {
+    setFocusIssueId(issueId);
+    setViewMode("issues");
+  }, []);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -154,12 +228,19 @@ export default function ProjectDetailView({
   const [isCompleting, setIsCompleting] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
   const [actionError, setActionError] = useState<string | null>(loadError);
+  const actionErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [isCreatingTask, startCreateTransition] = useTransition();
   /** Soft-nav home keeps last Portfolio scope; brand / Projects use bare `/`. */
   const [projectsHomeHref, setProjectsHomeHref] = useState("/");
+  /** Confirm: actual finish while task is not yet Done / 100%. */
+  const [pendingActualFinish, setPendingActualFinish] = useState<{
+    taskId: string;
+    date: string;
+  } | null>(null);
+  const [dateResetToken, setDateResetToken] = useState(0);
   /** Serialize task writes so sequential date blurs cannot race and revert each other. */
   const taskMutationQueueRef = useRef(Promise.resolve());
   const tasksRef = useRef(tasks);
@@ -168,6 +249,35 @@ export default function ProjectDetailView({
   useEffect(() => {
     setProjectsHomeHref(projectsHomeHrefFromScope(readPortfolioScopeClient()));
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (actionErrorTimerRef.current) {
+        clearTimeout(actionErrorTimerRef.current);
+      }
+    };
+  }, []);
+
+  function clearActionError() {
+    if (actionErrorTimerRef.current) {
+      clearTimeout(actionErrorTimerRef.current);
+      actionErrorTimerRef.current = null;
+    }
+    setActionError(null);
+  }
+
+  function reportActionError(message: string) {
+    if (actionErrorTimerRef.current) {
+      clearTimeout(actionErrorTimerRef.current);
+    }
+    setActionError(message);
+    showToast(message, "error");
+    // Banner auto-clears; toast also auto-dismisses with its own close control.
+    actionErrorTimerRef.current = setTimeout(() => {
+      setActionError(null);
+      actionErrorTimerRef.current = null;
+    }, 7000);
+  }
 
   // Adopt server payloads without wiping newer local edits (date blur races /
   // revalidatePath returning a slightly stale RSC snapshot).
@@ -262,34 +372,43 @@ export default function ProjectDetailView({
     action: () => Promise<ActionResult<Task>>,
     optimisticPatch?: { taskId: string; patch: Partial<Task> },
   ) {
-    let snapshot: Task[] | null = null;
+    // Capture before setState — React may defer the updater, so reading
+    // `snapshot` only inside the updater can leave it null on failure.
+    const snapshot = optimisticPatch ? tasksRef.current : null;
 
     if (optimisticPatch) {
-      setTasks((current) => {
-        snapshot = current;
-        return current.map((task) =>
-          task.id === optimisticPatch.taskId
-            ? { ...task, ...optimisticPatch.patch }
-            : task,
-        );
-      });
+      tasksRef.current = tasksRef.current.map((task) =>
+        task.id === optimisticPatch.taskId
+          ? { ...task, ...optimisticPatch.patch }
+          : task,
+      );
+      setTasks(tasksRef.current);
     }
 
     taskMutationQueueRef.current = taskMutationQueueRef.current
       .catch(() => undefined)
       .then(async () => {
-        const result = await action();
-        if (!result.success) {
+        try {
+          const result = await action();
+          if (!result.success) {
+            if (optimisticPatch && snapshot) {
+              tasksRef.current = snapshot;
+              setTasks(snapshot);
+            }
+            reportActionError(
+              result.error ?? "Something went wrong. Please try again.",
+            );
+            return;
+          }
+          syncTask(result.data);
+          clearActionError();
+        } catch {
           if (optimisticPatch && snapshot) {
+            tasksRef.current = snapshot;
             setTasks(snapshot);
           }
-          setActionError(
-            result.error ?? "Something went wrong. Please try again.",
-          );
-          return;
+          reportActionError("Something went wrong. Please try again.");
         }
-        syncTask(result.data);
-        setActionError(null);
       });
   }
 
@@ -324,7 +443,7 @@ export default function ProjectDetailView({
           : task,
       );
     });
-    setActionError(null);
+    clearActionError();
 
     return new Promise((resolve) => {
       taskMutationQueueRef.current = taskMutationQueueRef.current
@@ -333,7 +452,7 @@ export default function ProjectDetailView({
           const result = await updateTaskStatus(taskId, newStatus);
           if (!result.success) {
             setTasks(snapshot);
-            setActionError(
+            reportActionError(
               result.error ?? "Something went wrong. Please try again.",
             );
             resolve(false);
@@ -370,7 +489,7 @@ export default function ProjectDetailView({
       }));
       const others = nextTasks.filter((task) => task.status !== input.sourceStatus);
       setTasks([...others, ...reordered]);
-      setActionError(null);
+      clearActionError();
 
       void reorderTasks({
         projectId,
@@ -379,7 +498,7 @@ export default function ProjectDetailView({
       }).then((result) => {
         if (!result.success) {
           setTasks(snapshot);
-          setActionError(result.error ?? "Unable to reorder tasks.");
+          reportActionError(result.error ?? "Unable to reorder tasks.");
         }
       });
       return;
@@ -406,7 +525,7 @@ export default function ProjectDetailView({
         task.status !== input.destinationStatus,
     );
     setTasks([...others, ...sourceReordered, ...destReordered]);
-    setActionError(null);
+    clearActionError();
 
     void Promise.all([
       reorderTasks({
@@ -427,16 +546,34 @@ export default function ProjectDetailView({
           : !destResult.success
             ? destResult.error
             : null;
-        setActionError(message ?? "Unable to move and reorder tasks.");
+        reportActionError(message ?? "Unable to move and reorder tasks.");
       }
     });
   }
 
-  function handleTaskChange(taskId: string, patch: Partial<Task>) {
-    const target = tasks.find((task) => task.id === taskId);
-    if (!target || !canEditTask(target)) return;
+  function applyTaskChange(taskId: string, patch: Partial<Task>) {
     const current = tasksRef.current.find((task) => task.id === taskId);
     if (!current) return;
+
+    if (
+      patch.actualStartDate !== undefined ||
+      patch.actualCompletionDate !== undefined
+    ) {
+      const nextStart =
+        patch.actualStartDate !== undefined
+          ? patch.actualStartDate
+          : current.actualStartDate;
+      const nextFinish =
+        patch.actualCompletionDate !== undefined
+          ? patch.actualCompletionDate
+          : current.actualCompletionDate;
+      const rangeError = actualDateRangeError(nextStart, nextFinish);
+      if (rangeError) {
+        reportActionError(rangeError);
+        setDateResetToken((n) => n + 1);
+        return;
+      }
+    }
 
     const synced = buildProgressStatusPatch(current, patch);
     const nextStatus = synced.status ?? current.status;
@@ -456,15 +593,62 @@ export default function ProjectDetailView({
       updatedAt: touchedAt,
     };
 
-    // Keep the ref ahead of the next blur so chained date edits see each other.
-    tasksRef.current = tasksRef.current.map((task) =>
-      task.id === taskId ? { ...task, ...optimistic } : task,
-    );
-
     runTaskMutation(() => updateTaskFields(taskId, optimistic), {
       taskId,
       patch: optimistic,
     });
+  }
+
+  function handleTaskChange(taskId: string, patch: Partial<Task>) {
+    const target = tasks.find((task) => task.id === taskId);
+    if (!target || !canEditTask(target)) return;
+    const current = tasksRef.current.find((task) => task.id === taskId);
+    if (!current) return;
+
+    const finishOnly =
+      patch.actualCompletionDate != null &&
+      patch.status === undefined &&
+      patch.progress === undefined &&
+      (current.status !== "done" || current.progress < 100);
+
+    if (finishOnly) {
+      const nextStart =
+        patch.actualStartDate !== undefined
+          ? patch.actualStartDate
+          : current.actualStartDate;
+      const rangeError = actualDateRangeError(
+        nextStart ?? null,
+        patch.actualCompletionDate ?? null,
+      );
+      if (rangeError) {
+        reportActionError(rangeError);
+        setDateResetToken((n) => n + 1);
+        return;
+      }
+      setPendingActualFinish({
+        taskId,
+        date: patch.actualCompletionDate!,
+      });
+      return;
+    }
+
+    applyTaskChange(taskId, patch);
+  }
+
+  function confirmActualFinishToDone() {
+    if (!pendingActualFinish) return;
+    const { taskId, date } = pendingActualFinish;
+    setPendingActualFinish(null);
+    applyTaskChange(taskId, {
+      actualCompletionDate: date,
+      status: "done",
+      progress: 100,
+    });
+  }
+
+  function cancelActualFinishToDone() {
+    setPendingActualFinish(null);
+    setDateResetToken((n) => n + 1);
   }
 
   function handleToggleSubtask(
@@ -493,38 +677,105 @@ export default function ProjectDetailView({
         status,
       });
       if (!result.success) {
-        setActionError(result.error ?? "Unable to create task.");
+        reportActionError(result.error ?? "Unable to create task.");
         return;
       }
       syncTask(result.data);
       setSelectedTaskId(result.data.id);
       setDrawerOpen(true);
-      setActionError(null);
+      clearActionError();
+    });
+  }
+
+  async function handleCreateTaskInList(input: {
+    bucket: TaskBucket;
+    listIndex: number;
+    title: string;
+    initialStartDate: string;
+    initialDueDate: string;
+  }): Promise<{ success: boolean; data?: Task; error?: string }> {
+    if (!canWriteTasks) {
+      return { success: false, error: "You do not have permission to add tasks." };
+    }
+
+    const result = await createTask({
+      projectId,
+      title: input.title,
+      status: "todo",
+      bucket: input.bucket,
+      listIndex: input.listIndex,
+      initialStartDate: input.initialStartDate,
+      initialDueDate: input.initialDueDate,
+    });
+    if (!result.success) {
+      reportActionError(result.error ?? "Unable to create task.");
+      return { success: false, error: result.error };
+    }
+    syncTask(result.data);
+    clearActionError();
+    return { success: true, data: result.data };
+  }
+
+  function handleReorderInList(
+    groups: Array<{ bucket: TaskBucket; orderedTaskIds: string[] }>,
+  ) {
+    if (!canWriteTasks) return;
+    const snapshot = tasks;
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    const touched = new Set<string>();
+    const next: Task[] = [];
+
+    for (const group of groups) {
+      group.orderedTaskIds.forEach((taskId, index) => {
+        const current = byId.get(taskId);
+        if (!current) return;
+        touched.add(taskId);
+        next.push({
+          ...current,
+          bucket: group.bucket,
+          listSortOrder: index,
+        });
+      });
+    }
+
+    for (const task of tasks) {
+      if (!touched.has(task.id)) next.push(task);
+    }
+
+    setTasks(next);
+    clearActionError();
+
+    void reorderTasksInList({ projectId, groups }).then((result) => {
+      if (!result.success) {
+        setTasks(snapshot);
+        reportActionError(result.error ?? "Unable to reorder the task list.");
+      }
     });
   }
 
   async function handleDeleteTask(taskId: string) {
-    if (
-      !canDeleteTaskUi(canManageProject, currentUserId, selectedTask) ||
-      isDeletingTask
-    ) {
+    const target =
+      tasks.find((task) => task.id === taskId) ??
+      (selectedTask?.id === taskId ? selectedTask : null);
+    if (!canDeleteTaskUi(canManageProject, currentUserId, target) || isDeletingTask) {
       return;
     }
 
     setIsDeletingTask(true);
-    setActionError(null);
+    clearActionError();
 
     const result = await deleteTask(taskId);
     if (!result.success) {
       setIsDeletingTask(false);
-      setActionError(result.error ?? "Unable to delete this task.");
-      showToast(result.error ?? "Unable to delete this task.", "error");
+      reportActionError(result.error ?? "Unable to delete this task.");
       return;
     }
 
     setTasks((current) => current.filter((task) => task.id !== taskId));
     setIsDeletingTask(false);
-    closeDrawer();
+    if (selectedTaskId === taskId) {
+      closeDrawer();
+    }
     showToast("Task deleted successfully.");
   }
 
@@ -532,13 +783,12 @@ export default function ProjectDetailView({
     if (!canManageProject || isDeletingProject) return;
 
     setIsDeletingProject(true);
-    setActionError(null);
+    clearActionError();
 
     const result = await deleteProject(projectId);
     if (!result.success) {
       setIsDeletingProject(false);
-      setActionError(result.error ?? "Unable to delete this project.");
-      showToast(result.error ?? "Unable to delete this project.", "error");
+      reportActionError(result.error ?? "Unable to delete this project.");
       return;
     }
 
@@ -596,7 +846,7 @@ export default function ProjectDetailView({
 
   if (!project) {
     return (
-      <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+      <section className="mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">
         <Link
           href={projectsHomeHref}
           className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -616,9 +866,10 @@ export default function ProjectDetailView({
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+    <section className="mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">
       <Link
         href={projectsHomeHref}
+        suppressHydrationWarning
         className="inline-flex text-sm font-medium text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
       >
         ← Back to projects
@@ -656,6 +907,23 @@ export default function ProjectDetailView({
           ) : (
             <p className="mt-2 text-sm italic text-zinc-400">No description</p>
           )}
+          {ownerName ? (
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              Project Manager:{" "}
+              {ownerPortfolioHref ? (
+                <Link
+                  href={ownerPortfolioHref}
+                  className="font-medium text-slate-700 underline-offset-2 hover:underline dark:text-slate-200"
+                >
+                  {ownerName}
+                </Link>
+              ) : (
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                  {ownerName}
+                </span>
+              )}
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <StatusFlagBadge flag={scheduleHealth.statusFlag} />
             <ProgressPairBadges
@@ -723,10 +991,14 @@ export default function ProjectDetailView({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-baseline gap-3">
             <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              {viewMode === "issues" ? "Issues" : "Tasks"}
-            </h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
               {viewMode === "issues"
+                ? "Issues"
+                : viewMode === "analytics"
+                  ? "Analytics"
+                  : "Tasks"}
+            </h2>
+            <p className="whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
+              {viewMode === "issues" || viewMode === "analytics"
                 ? null
                 : tasks.length === 1
                   ? "1 task"
@@ -737,9 +1009,9 @@ export default function ProjectDetailView({
           <div
             role="tablist"
             aria-label="Project view switcher"
-            className="inline-flex flex-wrap rounded-lg border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-700 dark:bg-zinc-900"
+            className="inline-flex flex-wrap gap-0.5 rounded-xl border border-zinc-200 bg-zinc-100/80 p-1 dark:border-zinc-800 dark:bg-zinc-900/70"
           >
-            {VIEW_OPTIONS.map((option) => {
+            {viewOptions.map((option) => {
               const isActive = viewMode === option.id;
               return (
                 <button
@@ -747,6 +1019,16 @@ export default function ProjectDetailView({
                   type="button"
                   role="tab"
                   aria-selected={isActive}
+                  onPointerEnter={
+                    option.id === "analytics"
+                      ? () => void loadAnalyticsView()
+                      : undefined
+                  }
+                  onFocus={
+                    option.id === "analytics"
+                      ? () => void loadAnalyticsView()
+                      : undefined
+                  }
                   onClick={() => {
                     setViewMode(option.id);
                     // Avoid a stale task drawer overlay when switching to Issue Log / Analytics.
@@ -756,10 +1038,10 @@ export default function ProjectDetailView({
                     }
                   }}
                   className={[
-                    "rounded-md px-3 py-1.5 text-sm font-semibold transition",
+                    "rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-[color,background-color,box-shadow] duration-150",
                     isActive
-                      ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                      : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+                      ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/5 dark:bg-zinc-800 dark:text-zinc-50 dark:ring-white/10"
+                      : "text-zinc-600 hover:bg-white/60 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100",
                   ].join(" ")}
                 >
                   {option.label}
@@ -770,12 +1052,25 @@ export default function ProjectDetailView({
         </div>
 
         {actionError ? (
-          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
-            {actionError}
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200"
+          >
+            <p className="min-w-0 flex-1">{actionError}</p>
+            <button
+              type="button"
+              onClick={clearActionError}
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-red-700 opacity-80 transition hover:bg-red-100 hover:opacity-100 dark:text-red-200 dark:hover:bg-red-900/50"
+              aria-label="Dismiss error"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
           </div>
         ) : null}
 
-        {isReadOnly ? <ReadOnlyAccessNotice /> : null}
+        {isReadOnly && viewMode !== "analytics" ? (
+          <ReadOnlyAccessNotice includeAnalytics={canViewProjectAnalytics} />
+        ) : null}
 
         <div className="relative min-h-[28rem]">
           {isCreatingTask ? (
@@ -815,9 +1110,21 @@ export default function ProjectDetailView({
             <TaskListView
               tasks={tasks}
               metricsById={scheduleHealth.byId}
-              onTaskClick={openTask}
+              projectPs={scheduleHealth.projectPs}
+              holidayDateKeys={holidayDateKeys}
+              readOnly={!canWriteTasks}
+              canEditTask={canEditTask}
+              canDeleteTask={(task) =>
+                canDeleteTaskUi(canManageProject, currentUserId, task)
+              }
+              onTaskChange={handleTaskChange}
               onStatusChange={handleStatusChange}
-              canChangeStatus={canEditTask}
+              onReorderInList={canWriteTasks ? handleReorderInList : undefined}
+              onCreateTask={canWriteTasks ? handleCreateTaskInList : undefined}
+              onDeleteTask={canWriteTasks ? handleDeleteTask : undefined}
+              onOpenDetails={openTask}
+              onValidationError={reportActionError}
+              dateResetToken={dateResetToken}
             />
           </div>
 
@@ -838,19 +1145,6 @@ export default function ProjectDetailView({
 
           <div
             role="tabpanel"
-            aria-hidden={viewMode !== "analytics"}
-            className={viewMode === "analytics" ? "block" : "hidden"}
-          >
-            <ProjectAnalyticsView
-              tasks={tasks}
-              onTaskClick={openTask}
-              readOnly={isReadOnly}
-              chartsVisible={viewMode === "analytics"}
-            />
-          </div>
-
-          <div
-            role="tabpanel"
             aria-hidden={viewMode !== "issues"}
             className={viewMode === "issues" ? "block" : "hidden"}
           >
@@ -858,6 +1152,7 @@ export default function ProjectDetailView({
               projectId={projectId}
               initialIssues={initialIssues}
               memberUsers={memberUsers}
+              customAssigneeNames={customAssigneeNames}
               milestones={milestones}
               holidayDateKeys={holidayDateKeys}
               canRaise={
@@ -867,7 +1162,33 @@ export default function ProjectDetailView({
                 canManageProject && project.lifecycleStatus === "ACTIVE"
               }
               currentUserId={currentUserId}
+              focusIssueId={focusIssueId}
             />
+          </div>
+
+          <div
+            role="tabpanel"
+            aria-hidden={viewMode !== "analytics"}
+            className={viewMode === "analytics" ? "block" : "hidden"}
+          >
+            {canViewProjectAnalytics && viewMode === "analytics" ? (
+              <ProjectAnalyticsView
+                projectId={projectId}
+                tasks={tasks}
+                issues={initialIssues}
+                milestones={milestones}
+                holidayDateKeys={holidayDateKeys}
+                events={analytics?.events ?? []}
+                activities={analytics?.activities ?? []}
+                noteHtml={analytics?.noteHtml ?? ""}
+                noteUpdatedAt={analytics?.noteUpdatedAt ?? null}
+                noteUpdatedByName={analytics?.noteUpdatedByName ?? null}
+                canEditNote={canManageProject}
+                chartsVisible
+                onOpenIssueLog={openIssueLog}
+                onOpenIssue={openIssueFromAnalytics}
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -897,6 +1218,8 @@ export default function ProjectDetailView({
         onDeleteTask={canDeleteSelectedTask ? handleDeleteTask : undefined}
         isDeletePending={isDeletingTask}
         memberUsers={memberUsers}
+        customAssigneeNames={customAssigneeNames}
+        dateResetToken={dateResetToken}
       />
 
       {project ? (
@@ -913,6 +1236,17 @@ export default function ProjectDetailView({
           }}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={pendingActualFinish != null}
+        title="Mark task as Done?"
+        message="Entering an actual finish date will set Status to Done and Actual progress to 100%. Project and task punctuality scores will recalculate. Continue?"
+        confirmLabel="Mark as Done"
+        cancelLabel="Cancel"
+        tone="primary"
+        onCancel={cancelActualFinishToDone}
+        onConfirm={confirmActualFinishToDone}
+      />
 
       <ConfirmDialog
         open={deleteProjectDialogOpen}

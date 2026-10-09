@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition, type FormEvent } from "react";
 
 import SettingsPageHeader from "@/src/components/settings/SettingsPageHeader";
 import ConfirmDialog from "@/src/components/ui/ConfirmDialog";
+import DateField from "@/src/components/ui/DateField";
 import {
   createHoliday,
   deleteHoliday,
@@ -128,8 +129,7 @@ export default function HolidayCalendarClient({
             <span className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
               Date
             </span>
-            <input
-              type="date"
+            <DateField
               required
               value={date}
               onChange={(event) => setDate(event.target.value)}

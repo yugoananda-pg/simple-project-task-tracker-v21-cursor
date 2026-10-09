@@ -17,6 +17,10 @@ Migration `20260901170000_enable_rls_harden_public_schema`:
 
 No permissive RLS policies are added. Direct API access is denied; the Next.js server continues to use Prisma as the `postgres` role, which **bypasses RLS**.
 
+### Tables added after the first migration
+
+Every table created later must enable RLS in the migration that creates it. An audit on 9 Oct 2026 found that `AnalyticsNote`, `TaskProgressEvent` and `CustomAssignee` (Wave 4C) had RLS off, which left them reachable through the Supabase anon REST API. Migration `20261009130000_portfolio_notes_and_rls_hardening` enables RLS on those three and on the new `PortfolioNote`. No policies are added, so direct API access stays denied and Prisma (the `postgres` role) is unaffected. Check this on each release with the Supabase Security Advisor, or with `select relname from pg_class where relkind = 'r' and not relrowsecurity` for the `public` schema, which should return no application table.
+
 ### Development impact
 
 - `npm run dev`, Server Actions, migrations, and `npx prisma db seed` — **unchanged**.

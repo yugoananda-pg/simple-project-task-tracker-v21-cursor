@@ -14,20 +14,27 @@ import type { ProjectMemberUser } from "@/src/lib/actions/projects";
 import {
   getTaskPicDisplayName,
   isCustomPic,
+  type TaskPicInfo,
 } from "@/src/lib/assignee-display";
 import type { Task } from "@/src/lib/types";
 import PicLabel from "@/src/components/tasks/PicLabel";
 
+type PicRecord = Pick<Task, "id" | "assigneeId" | "assigneeName">;
+
 type AssigneePicFieldProps = {
-  task: Task;
+  task: PicRecord;
   members: ProjectMemberUser[];
+  /** Names used before without a user account. */
+  suggestions?: string[];
   disabled?: boolean;
+  label?: string;
+  hideHint?: boolean;
   labelClassName: string;
   fieldClassName: string;
   onCommit: (patch: Pick<Task, "assigneeId" | "assigneeName">) => void;
 };
 
-function displayNameForTask(task: Task): string {
+function displayNameForTask(task: TaskPicInfo): string {
   const name = getTaskPicDisplayName(task);
   return name === "Unassigned" ? "" : name;
 }
@@ -59,7 +66,10 @@ function menuPositionFor(input: HTMLInputElement): CSSProperties {
 export default function AssigneePicField({
   task,
   members,
+  suggestions = [],
   disabled = false,
+  label = "Assignee (PIC)",
+  hideHint = false,
   labelClassName,
   fieldClassName,
   onCommit,
@@ -95,6 +105,22 @@ export default function AssigneePicField({
     );
   }, [members, query]);
 
+  const suggestionMatches = useMemo(() => {
+    const memberNames = new Set(
+      members.map((member) => member.name.trim().toLowerCase()),
+    );
+    const needle = query.trim().toLowerCase();
+    return suggestions
+      .map((name) => name.trim().replace(/\s+/g, " "))
+      .filter((name) => {
+        const key = name.toLowerCase();
+        if (!key || memberNames.has(key)) return false;
+        if (!needle) return true;
+        return key.includes(needle);
+      })
+      .slice(0, 20);
+  }, [members, query, suggestions]);
+
   useLayoutEffect(() => {
     if (!open || !inputRef.current) return;
 
@@ -112,7 +138,7 @@ export default function AssigneePicField({
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
     };
-  }, [open, filtered.length, query]);
+  }, [open, filtered.length, suggestionMatches.length, query]);
 
   useEffect(() => {
     if (!open) return;
@@ -178,7 +204,7 @@ export default function AssigneePicField({
   if (disabled) {
     return (
       <div className="w-full min-w-0 max-w-full">
-        <p className={labelClassName}>Assignee (PIC)</p>
+        <p className={labelClassName}>{label}</p>
         <div className="mt-1 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-100">
           <PicLabel task={task} />
         </div>
@@ -247,10 +273,48 @@ export default function AssigneePicField({
             </li>
           );
         })}
+        {suggestionMatches.length > 0 ? (
+          <li className="border-t border-zinc-100 px-3 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            Previously used
+          </li>
+        ) : null}
+        {suggestionMatches.map((name) => {
+          const selected =
+            !task.assigneeId &&
+            task.assigneeName.trim().toLowerCase() === name.toLowerCase();
+          return (
+            <li key={name.toLowerCase()}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={[
+                  "flex w-full px-3 py-2 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900",
+                  selected ? "bg-slate-50 dark:bg-slate-900/40" : "",
+                ].join(" ")}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  skipBlurCommit.current = true;
+                }}
+                onClick={() => {
+                  clearBlurTimer();
+                  commitCustomOrClear(name);
+                  setOpen(false);
+                }}
+              >
+                {name}
+                {selected ? " · current" : ""}
+              </button>
+            </li>
+          );
+        })}
         {query.trim() &&
         !members.some(
           (member) =>
             member.name.toLowerCase() === query.trim().toLowerCase(),
+        ) &&
+        !suggestionMatches.some(
+          (name) => name.toLowerCase() === query.trim().toLowerCase(),
         ) ? (
           <li>
             <button
@@ -281,7 +345,7 @@ export default function AssigneePicField({
   return (
     <div ref={rootRef} className="relative w-full min-w-0 max-w-full">
       <label htmlFor={`assignee-${task.id}`} className={labelClassName}>
-        Assignee (PIC)
+        {label}
       </label>
       <input
         ref={inputRef}
@@ -322,6 +386,13 @@ export default function AssigneePicField({
               commitRegistered(exact);
               return;
             }
+            const exactSuggestion = suggestionMatches.find(
+              (name) => name.toLowerCase() === query.trim().toLowerCase(),
+            );
+            if (exactSuggestion) {
+              commitCustomOrClear(exactSuggestion);
+              return;
+            }
             setQuery(displayNameForTask(task));
           }, 150);
         }}
@@ -336,6 +407,14 @@ export default function AssigneePicField({
               );
               if (exact) {
                 commitRegistered(exact);
+                return;
+              }
+              const exactSuggestion = suggestionMatches.find(
+                (name) => name.toLowerCase() === needle,
+              );
+              if (exactSuggestion) {
+                commitCustomOrClear(exactSuggestion);
+                setOpen(false);
                 return;
               }
               if (filtered.length === 1) {
@@ -365,11 +444,13 @@ export default function AssigneePicField({
 
       {listbox ? createPortal(listbox, document.body) : null}
 
-      <p className="mt-1 break-words text-[11px] text-zinc-500 dark:text-zinc-400">
-        {isCustomPic(task)
-          ? "Custom unregistered PIC — press Enter to save typed names."
-          : "Click the field to see the full team. Type to filter the list instantly."}
-      </p>
+      {hideHint ? null : (
+        <p className="mt-1 break-words text-[11px] text-zinc-500 dark:text-zinc-400">
+          {isCustomPic(task)
+            ? "Custom unregistered PIC — press Enter to save typed names."
+            : "Click the field to see the full team and previously used names. Type to filter, then press Enter to save a new name."}
+        </p>
+      )}
     </div>
   );
 }

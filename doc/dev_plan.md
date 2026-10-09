@@ -2,8 +2,8 @@
 
 **Document Identifier:** `doc/dev_plan.md`  
 **Product Title:** Simple Project Task Tracker 2.1 (Executive Portfolio Intelligence System)  
-**Version:** 2.1.9  
-**Status:** Canonical Master Plan (North Star) — Waves **4A** and **4B** implemented and UAT-accepted; Wave **4C** not yet developed  
+**Version:** 2.1.27  
+**Status:** Canonical Master Plan (North Star) — Waves **4A** and **4B** UAT-accepted; **Wave 4C-1** (high-density List) as-built; **Wave 4C-1b** (Excel task import) as-built; **Wave 4C-2a** (per-project Analytics) as-built 8 Oct 2026, UAT not yet accepted; **Wave 4C-2b** (dashboard access) as-built 9 Oct 2026, UAT not yet accepted; **Wave 4C-3** (portfolio, macro timeline, About) as-built 9 Oct 2026, UAT not yet accepted; Wave **4C-4 onward** not yet developed  
 **Amendment:** Universal mutation audit trail; Completed Projects (not Archive); soft-delete / restore / purge; five-year completed retention; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE target Cursor; delivery status aligned to as-built UAT (`doc/dev_uat.md`)  
 **Target Platform:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Supabase PostgreSQL, Prisma ORM 7  
 **IDE Target:** Cursor (Agent / IDE browser automation for UAT)  
@@ -141,7 +141,7 @@ graph TD
 * **Scope:** Unplanned impediment register inside each project workspace (`ProjectIssueLogView.tsx`, `IssueDetailDrawer.tsx`).
 * **Nomenclature:** **Issue Log** (PMBOK / Australian PM practice). Not a Task list, not a risk register, not a Kanban column.
 * **Capability:**
-  * Fifth hub tab: List, Kanban, Gantt, Analytics, **Issue Log**.
+  * Hub tabs, in order: List, Kanban, Gantt, **Issue Log**, Analytics.
   * Sequential `ISS-001` identifiers per project.
   * Classification: category, severity, status (`open` → `in_progress` → `blocked` | `resolved` → `closed`, plus `cancelled`).
   * PIC (`picId` / `picName`) using the same badge pattern as tasks.
@@ -166,12 +166,20 @@ graph TD
   * Enhanced project cards displaying designated PM identity, real-time Status Flag pill badges, task counts, compact dual progress bars ($P_{\text{target}}$ vs. $P_{\text{actual}}$), and **open-issue count** (rose when any open issue is Critical). Cards at $100\%$ additionally show **Move to Completed Projects**.
 * **Wave split:** Status Flag and dual progress bars ship in **Wave 4A** (usable schedule health). Active-only listing, Completed control, Portfolio scope, and **Move to Completed Projects** ship in **Wave 4B**. Open-issue count ships in **Wave 4B** with the Issue Log.
 
-### F-2110: High-Density Tabular Workspace — **Wave 4C increment (partial base already in 4A/4B)**
+### F-2110: High-Density Tabular Workspace — **Wave 4C-1 (as-built 6 Oct 2026)**
 * **Scope:** Workspace data presentation layer (`TaskListView.tsx`).
-* **Capability:** High-density enterprise data grid presenting task order, title, process group, priority, relative weight ($W_i$), multi-dates (initial, updated, actual), PIC badge, status, and progress. Supports inline cell editing for rapid status, priority, and progress updates without opening the task drawer. The project hub also hosts the Issue Log grid (F-2119) as a peer view, not a replacement for this task table.
-* **As-built note:** Wave 4A already surfaces $W_i$, progress, and Status Flags on the existing List. Wave 4C still owns the full high-density inline-edit grid polish specified here.
+* **Capability:** Process-group schedule table with Australian English column headers: **No.** (1.x–5.x by process group), **Task**, **Status**, **Actual %**, **Target %**, **Initial start / due / WD**, **Updated start / due / WD** (schedule baseline for PS), **Actual start / finish / WD**, **PS**, **Status flag**. Working-day durations exclude weekends and registered holidays and use $D_{\text{planned}}=\max(1,\ldots)$ (same-day = 1 WD). Tasks group under Initiating → Closing; list order uses `listSortOrder` (independent of Kanban `sortOrder`). Inline edit for title, status, actual %, and dates; PS / Status flag / Target % / WD columns are computed read-only. Drag-and-drop reorders within or across process groups. The process-group header is a label only. Each group has one **Add row** at the bottom (freeze rail). Hovering a horizontal grid line shows a single **+** that opens an instant local draft (title + initial dates required before persist). Empty projects keep the five-group table. Inline delete with confirm uses `deleteTask`. List dates use uncontrolled inputs for keyboard entry. A quiet **Details** control opens the existing drawer for PIC, priority, checklist, and comments (fields not on the grid). The table scrollport freezes the column header, process-group headers, and the Task (plus No./drag) columns with opaque panes and a scroll-aware freeze edge; long titles wrap. Transient mutation errors (including future actual dates) auto-dismiss (~7s) and are manually closable via toast/banner.
+* **As-built note:** Wave 4A already surfaces $W_i$, progress, and Status Flags on the prior card list. Wave 4C-1 replaces that list with the high-density table above (sticky / freeze polish 6 Oct 2026).
 
-### F-2111: Per-Project Analytics — Schedule Visualisations & Issue Intelligence — **Wave 4C (not yet in build)**
+### F-2120: Excel task import — **Wave 4C-1b**
+* **Why:** Programme tracking still lives in Excel. Re-keying every task blocks adoption. A well-formed workbook copies schedule cells into the project so the PM can leave the spreadsheet.
+* **Who:** Owning PM and Super PM, on an Active project (`requireAdminProject`). Members and Viewers cannot import.
+* **Behaviour:** Download a template, upload `.xlsx`, review a preview (create / update / untouched / errors / warnings), then commit. Matched rows update; unmatched existing tasks are kept and appended. Nothing is deleted. Re-import is safe.
+* **Match:** One existing task with the same title (case-insensitive, trimmed) is updated and may move process group. Several tasks sharing that title match only inside the sheet’s process group; otherwise the row is an error.
+* **Format:** Agreed starter in FR-IMP-01 (`dev_req.md`). Column labels may be tightened during the operational trial without a new wave.
+* **Dates and progress:** Actual % is authoritative when present. Actual dates are copied from the sheet and are never invented. Future actuals, finish-without-start, finish before start, progress without the dates it implies, and inverted planned spans are row errors and block commit.
+
+### F-2111: Per-Project Analytics — Schedule Visualisations & Issue Intelligence — **Wave 4C-2a (as-built 8 Oct 2026)**
 * **Scope:** Analytical engine inside `ProjectAnalyticsView.tsx`, with planned `IssueIntelligencePane.tsx` and `src/lib/analytics/issue-intelligence.ts` (Wave 4B ships Issue Log only; Analytics Issue Intelligence remains 4C).
 * **Capability:**
   * **Two labelled panes on the same Analytics hub tab** (not a sixth tab), stacked vertically:
@@ -180,10 +188,10 @@ graph TD
   * **Schedule S-Curve:** Renders cumulative planned baseline ($P_{\text{target}}(t)$) versus cumulative actual achievement ($P_{\text{actual}}(t)$) over the project calendar duration using **task** weights $W_i$ only.
   * **Task burn-down:** Visualises remaining working-day *task* effort over time against an ideal linear burn-down trajectory.
   * **Schedule header:** Aggregate Punctuality Score ($\text{Project PS}$), Target vs. Actual progress divergence ($\Delta P$), overall project Status Flag. Issue counts do not appear here.
-  * **Issue Intelligence header:** Non-cancelled total; cancelled count; status counts; critical-and-active; overdue; $\bar{P}_{\text{issue}}$ over the active set; mean **Issue PS** (em dash when none active); closure rate; last activity (actor, `ISS-nnn`, time).
+  * **Issue Intelligence header:** Non-cancelled total; cancelled count; status counts; critical-and-active; overdue; $\bar{P}_{\text{issue}}$ over the active set; mean **Issue PS** (em dash when none active); closure rate; last activity (actor, `ISS-nnn`, time). Hovering a figure explains it immediately.
   * **Issue Fix Realisation:** Duration-weighted among non-cancelled issues using $W_j^{\text{issue}}$ (equal weight fallback). Target from issue working-day elapsed/planned dates; actual as a step function of `progress` from `IssueActivity`. Chart title **Issue Fix Realisation** — never an unqualified “S-Curve”.
   * **Issue burn-down:** Remaining active issues versus calendar, against an ideal linear close-out when dates exist.
-  * **Breakdowns:** Status, severity, and category stacks; Fix schedule flag histogram; PIC load (active issues, *Unassigned* grouped).
+  * **Breakdowns:** Three rows — realisation and burn-down; status, severity, and PIC load; category and fix-schedule flag. The five count charts are horizontal bars. PIC load is active issues, *Unassigned* grouped.
   * **Activity stream:** Twenty most recent `IssueActivity` events; selecting a row opens the Issue drawer.
   * **Live coupling:** `getProjectIssueAnalytics(projectId)` reads the same Prisma rows as the Issue Log. Every Issue Log Server Action writes `IssueActivity` in the same transaction and `revalidatePath`s the workspace. No warehouse that can lag.
   * **Empty state:** *No issues have been logged for this project*, with a control to switch to Issue Log. Schedule pane still renders.
@@ -191,16 +199,16 @@ graph TD
   * Issues **never** enter task $W_i$, Project PS, Schedule S-Curve, or task burn-down.
 * **Wave 4C increment:** This entire visualisation pane is the Wave 4C usable increment. Wave 4B UAT confirms the Issue Log register without requiring these charts.
 
-### F-2112: Multi-Project Executive Portfolio Dashboard — **Wave 4C (not yet in build)**
+### F-2112: Multi-Project Executive Portfolio Dashboard — **Wave 4C-3 (as-built 9 Oct 2026; UAT not yet accepted)**
 * **Scope:** Dedicated enterprise routing under `/portfolio`.
-* **Capability:** Provides three analytical scopes accessible based on user privileges:
-  1. *Analytics by Project:* Comparative deep-dive across selected projects.
-  2. *Analytics by PM:* Aggregated portfolio performance and resource allocation under a designated PM.
-  3. *Total Company Projects:* Macro enterprise capital investment overview across all **active** corporate programmes (Completed excluded unless the viewer is authorised and explicitly includes that cohort).
+* **Capability:** Two views, per decision D6. Per-project analytics stay on the project hub. The page opens only for a person holding the `PM_PORTFOLIO` or `TOTAL_COMPANY` tick:
+  1. *By PM* (`PM_PORTFOLIO`): aggregated portfolio performance for the Active projects one Project Manager owns, with a PM picker.
+  2. *All projects* (`TOTAL_COMPANY`): every Active project the caller may see, with a project filter and a comparison by PM. Completed projects join only when the caller holds `completedProjectAccess = ALL` and switches **Include Completed projects** on.
+* **Data scope:** The server limits the rows to what the caller could open anyway (PM and Super PM: every Active project; Member: memberships; Viewer: memberships, or every Active project on `ALL_ACTIVE`). A Viewer on `ALL_ACTIVE` still needs a portfolio tick to open the page.
 
-### F-2113: Macro Executive Gantt Chart — **Wave 4C (not yet in build)**
-* **Scope:** Top-level visual timeline on `/portfolio`.
-* **Capability:** Three uncluttered horizontal timeline bars per project: Initial Planned Span (zinc), Updated Planned Span (sky), and Actual Realisation Span (emerald/amber). Milestone diamond nodes overlaid directly on the bars with instant 0ms hover tooltips detailing milestone achievements and variances.
+### F-2113: Macro Executive Gantt Chart — **Wave 4C-3 (as-built 9 Oct 2026; UAT not yet accepted)**
+* **Scope:** Top-level visual timeline on `/portfolio` (`MacroTimeline.tsx`, pure engine in `src/lib/analytics/portfolio.ts`).
+* **Capability:** Three uncluttered horizontal timeline bars per project: Initial Planned Span (grey), Updated Planned Span (blue), and Actual Realisation Span (green at 95% punctuality or better, amber below, hatched while still running to Today). Milestone diamond nodes sit on the bars (achieved, achieved late, past target, upcoming) with instant tooltips (no delay, on hover or keyboard focus) giving the milestone, project, target, achieved date and variance in working days. Target, Actual and Status Flag columns sit beside each row. A date outside 2000 to 2100 is ignored when the axis is drawn.
 
 ### F-2114: Global Settings Console & System About Modal
 * **Scope:** Platform administration and governance console.
@@ -211,8 +219,8 @@ graph TD
   * Holiday Calendar
   * **Deleted Projects** (restore / permanently delete)
   * **Purged Project Register** (read-only tombstones)
-* System About modal displaying version `v2.1.4-executive-intel`, runtime stack details, and formal architectural credits recognising **Yugo Ananda** as the Grand Designer and Chief Solution Architect — **Wave 4C (not yet in build)**.
-* **Wave split:** Holiday Calendar ships in **Wave 4A**. Approvals, privilege matrix, Safe User Deletion, Viewer project visibility, Account settings, Deleted Projects, and the Purged Project Register ship in **Wave 4B** (as-built). The About modal ships in **Wave 4C**.
+* System About modal displaying version `v2.1.4-executive-intel`, runtime stack details (Node.js, Next.js, React, Prisma, Supabase JS, Recharts, Tailwind CSS, PostgreSQL), database status, and formal architectural credits recognising **Yugo Ananda** as the Grand Designer and Chief Solution Architect — **Wave 4C-3 (as-built 9 Oct 2026; UAT not yet accepted)**. It opens from the account menu for any approved user.
+* **Wave split:** Holiday Calendar ships in **Wave 4A**. Approvals, privilege matrix, Safe User Deletion, Viewer project visibility, Account settings, Deleted Projects, and the Purged Project Register ship in **Wave 4B** (as-built). The About modal ships in **Wave 4C-3**.
 
 ### F-2115: Completed Projects Workspace
 * **Scope:** Label-only completion of programmes that have reached $100\%$ weighted actual progress.
@@ -438,6 +446,7 @@ erDiagram
         date actualCompletionDate
         int progress
         int sortOrder
+        int listSortOrder
         float weightOverride
         timestamptz createdAt
         uuid createdBy
@@ -543,8 +552,9 @@ model User {
   approvalStatus  ApprovalStatus   @default(PENDING)
   approvedAt      DateTime?
   approvedBy      String?          @db.Uuid
-  dashboardAccess          DashboardScope[]         @default([PROJECT, PM_PORTFOLIO])
+  dashboardAccess          DashboardScope[]         @default([PROJECT])
   completedProjectAccess   CompletedProjectAccess   @default(NONE)
+  projectVisibilityMode    ProjectVisibilityMode    @default(SELECTED)
   emailConfirmedAt DateTime?
   deactivatedAt   DateTime?
   deactivatedBy   String?          @db.Uuid
@@ -665,6 +675,7 @@ model Task {
   
   progress             Int          @default(0)
   sortOrder            Int          @default(0)
+  listSortOrder        Int          @default(0)
   weightOverride       Float?
 
   createdAt            DateTime     @default(now())
@@ -679,9 +690,8 @@ model Task {
 
   @@index([projectId])
   @@index([projectId, status, sortOrder])
+  @@index([projectId, bucket, listSortOrder])
 }
-
-model Issue {
   id                   String        @id @default(uuid()) @db.Uuid
   projectId            String        @db.Uuid
   issueNumber          Int
@@ -852,9 +862,9 @@ type ActionResult<T> =
   * *Authorization:* Owning PM or Super PM. ConfirmDialog required. Cascades comments and activity. `revalidatePath` so Issue Intelligence drops the issue.
 * `addIssueComment(input: { issueId: string; content: string }): Promise<ActionResult<IssueComment>>`
   * *Authorization:* Any project member, owning PM, or Super PM. Writes `COMMENTED` activity and `revalidatePath`.
-* `getProjectIssueAnalytics(projectId: string): Promise<ActionResult<IssueIntelligenceDto>>` — **Wave 4C (not yet in build)**
-  * *Authorization:* Any user with read access to the project (same gate as the Analytics tab).
-  * *Returns:* Section 3.7 / F-2111 KPIs, Fix Realisation and burn-down series, breakdown stacks, and the twenty most recent `IssueActivity` rows. Computed by planned `src/lib/analytics/issue-intelligence.ts` from live Prisma rows. Must not consult a warehouse.
+* `loadProjectAnalytics(projectId: string): Promise<ProjectAnalyticsBundle | null>` — **as built (W4C-2a/2b); replaces the planned `getProjectIssueAnalytics`**
+  * *Authorization:* Any user with read access to the project who also holds the `PROJECT` dashboard scope (same gate as the Analytics tab). Returns `null` otherwise.
+  * *Returns:* progress events, issue activity rows (the latest 2,000, newest first), and the sanitised project note with its stamp. Section 3.7 / F-2111 KPIs, Fix Realisation and burn-down series, and breakdown stacks are computed client-side by `src/lib/analytics/issue-intelligence.ts` from these live Prisma rows. Must not consult a warehouse.
 * Internal helper `recordIssueActivity(...)` is **not** a public Server Action; Issue Log actions call it inside their write transaction.
 
 ### 4.3A Project Completion, Soft-Delete & Purge Actions (`src/lib/actions/project-lifecycle.ts`)
@@ -882,11 +892,17 @@ type ActionResult<T> =
   * *Authorization:* Project Member with `canEdit: true`, Project Admin, or Super PM.
   * *Side Effect:* Synchronises bidirectional progress/status rules and recalculates punctuality flags.
 
-### 4.5 Executive Portfolio Actions (`src/lib/actions/portfolio.ts`) — **Wave 4C (not yet in build)**
-* `getPortfolioSummary(scope: DashboardScope, filterPmId?: string): Promise<ActionResult<PortfolioSummaryDto>>`
-  * *Authorization:* Session user must hold the requested `DashboardScope` in their `dashboardAccess` array.
-  * *Returns:* Aggregate active projects, portfolio punctuality score, portfolio weighted target vs. actual progress, status flag breakdown, and macro Gantt project span items.
-  * *Status:* Planned for Wave 4C. Privilege matrix may already expose dashboard scopes; the `/portfolio` route and this action module are not shipped yet.
+### 4.5 Executive Portfolio Actions (`src/lib/actions/portfolio.ts`) — **Wave 4C-3 (as-built 9 Oct 2026)**
+* `getPortfolioSummary(input?: { scope?: "pm" | "all" | null; pmId?: string | null; includeCompleted?: boolean }): Promise<ActionResult<PortfolioDto>>`
+  * *Authorization:* An approved session user who holds `PM_PORTFOLIO` (By PM) or `TOTAL_COMPANY` (All projects). A request for a view the caller does not hold falls back to the one they do hold, or fails with `FORBIDDEN`. Super PM holds both.
+  * *Data scope:* `portfolioProjectsFilter` in `rbac.ts`. The Completed cohort is added only when `completedProjectAccess = ALL` and `includeCompleted` is true.
+  * *Returns:* Project rows with task, milestone and issue inputs, PM options, the stored note and who may edit it, plus compact progress history. The page computes the figures in the browser with the viewer’s own “today”, using the same `computeProjectScheduleHealth` as the project hub.
+  * *Payload control:* progress events keep the last event per task per day; issue history rows carry no summary; the recent-activity stream takes the latest 200 rows.
+* `savePortfolioNote(target: { scope: "all" } | { scope: "pm"; pmId: string }, html: string): Promise<ActionResult<PortfolioNoteDto>>`
+  * *Authorization (D3):* All projects: any PM and any Super PM who holds `TOTAL_COMPANY`. Per PM: that PM when they hold `PM_PORTFOLIO`, and any Super PM. Last save wins; the stamp shows who saved.
+  * *Integrity:* HTML passes the allow-list `sanitizeNoteHtml`; at most 20,000 characters (server check plus a database CHECK); the note is keyed by `scopeKey` (`ALL` or `PM:<uuid>`).
+* `getAboutInfo(): Promise<ActionResult<AboutInfo>>` (`src/lib/actions/about.ts`)
+  * *Authorization:* any approved user. Returns release, credits, runtime versions and database state (connected, latency, PostgreSQL version). A failed probe reports only “not connected”; error text is never returned.
 
 ---
 
@@ -1073,7 +1089,7 @@ These rules override any reading of the waves as “engines first, screens later
 | :--- | :--- | :--- |
 | **4A — Live schedule health** | Super PM; owning PM; members on existing projects | Super PM maintains the holiday calendar. PMs see working-day weights, capped target progress (max $100\%$), Punctuality Score, 11 Status Flags, and audit stamps on List, Kanban, Gantt, the task drawer, and landing cards. |
 | **4B — Governed programme office** | Super PM; owning PM; members; unapproved candidates | Super PM approves users, delegates privileges, hands over departing accounts, restores or purges deleted work, and inspects the Purged Project Register. PMs edit roster and milestones, maintain the Issue Log, move finished programmes to Completed Projects, and soft-delete with a warning. |
-| **4C — Executive visualisation** | Super PM; PM; delegated portfolio viewers | PMs use the high-density task grid and the full Analytics tab (Schedule Intelligence and Issue Intelligence). Executives use `/portfolio` and the macro Gantt. Anyone can open the About modal. |
+| **4C — Executive visualisation** | Super PM; PM; delegated portfolio viewers | PMs use the high-density task grid and the full Analytics tab (Schedule Intelligence and Issue Intelligence). Executives with a portfolio tick use `/portfolio` (By PM and All projects) and the macro timeline. Anyone can open the About modal. |
 
 > **Note on visualisation:** A Mermaid `gantt` diagram is not used here. The Cursor / VS Code Markdown preview rejects that diagram type (task metadata commas, `after` tags, and `axisFormat` tokens all surface as “Mermaid Syntax Error”). The schedule is therefore given as a dependency flowchart (flowchart syntax is proven in Section 2 of this document) plus an explicit dated work-package table.
 
@@ -1102,11 +1118,14 @@ flowchart TD
     BU --> GateB{{Wave 4B UAT accepted}}
     GateB --> C1
     subgraph W4C[Wave 4C Executive visualisation]
-        C1["W4C-1 High-density tabular workspace<br/>01 to 03 Oct 2026 - 3d"]
-        C2["W4C-2 Per-project Analytics Schedule and Issue Intelligence<br/>04 to 06 Oct 2026 - 3d"]
-        C3["W4C-3 Portfolio, macro Gantt, About modal<br/>07 to 09 Oct 2026 - 3d"]
-        CU["W4C-U Wave 4C UAT plus regression<br/>10 to 12 Oct 2026 - 3d"]
-        C1 --> C2 --> C3 --> CU
+        C1["W4C-1 High-density tabular workspace — as-built"]
+        C1b["W4C-1b Excel task import"]
+        C2a["W4C-2a Per-project Analytics core"]
+        C2b["W4C-2b Dashboard access realignment"]
+        C3["W4C-3 Portfolio, macro timeline, About"]
+        C4["W4C-4 PDF export"]
+        CU["W4C-U Wave 4C UAT plus regression"]
+        C1 --> C1b --> C2a --> C2b --> C3 --> C4 --> CU
     end
     CU --> Done([Release 2.1 accepted 12 Oct 2026])
 ```
@@ -1124,10 +1143,13 @@ flowchart TD
 | **W4B-3** | 4B | Roster, milestones, Issue Log | 23 Sep 2026 | 25 Sep 2026 | 3d | W4B-2 | Edit Project modal; Milestone CRUD and Gantt markers; Issue Log register, drawer, `IssueActivity`; landing open-issue count |
 | **W4B-4** | 4B | Lifecycle, retention and purge | 26 Sep 2026 | 28 Sep 2026 | 3d | W4B-3 | Completed Projects; soft-delete / restore; `runProjectRetentionJob` (incl. user retention); Purged Project Register; Completed control on landing |
 | **W4B-U** | 4B | **Wave 4B UAT** | 29 Sep 2026 *(planned)* | 30 Sep 2026 | 2d | W4B-4 | UAT-405, UAT-405A–D, UAT-406 to UAT-407, UAT-412 to UAT-422 — **accepted 4–5 Oct 2026** (`doc/dev_uat.md`; UAT-413/418 job-assisted) |
-| **W4C-1** | 4C | High-density tabular workspace | 01 Oct 2026 | 03 Oct 2026 | 3d | W4B-U | Inline-edit task grid with weight and multi-date columns — **not started** |
-| **W4C-2** | 4C | Per-project Analytics | 04 Oct 2026 | 06 Oct 2026 | 3d | W4C-1 | Schedule Intelligence; Issue Intelligence pane; `issue-intelligence.ts`; `getProjectIssueAnalytics` — **not started** |
-| **W4C-3** | 4C | Executive portfolio and About | 07 Oct 2026 | 09 Oct 2026 | 3d | W4C-2 | `/portfolio`; three scopes; macro Gantt; About modal `v2.1.4-executive-intel` — **not started** |
-| **W4C-U** | 4C | **Wave 4C UAT + regression** | 10 Oct 2026 | 12 Oct 2026 | 3d | W4C-3 | UAT-408 to UAT-410, UAT-423 to UAT-425; pack **UAT-R** — **deferred until 4C ships** |
+| **W4C-1** | 4C | High-density tabular workspace | 01 Oct 2026 | 03 Oct 2026 | 3d | W4B-U | Process-group schedule table; `listSortOrder`; inline edit; DnD — **as-built 6 Oct 2026** |
+| **W4C-1b** | 4C | Excel task import | 08 Oct 2026 | 08 Oct 2026 | 1d | W4C-1 | FR-IMP-01 template, preview, create project — **as-built** |
+| **W4C-2a** | 4C | Per-project Analytics core | 08 Oct 2026 | 08 Oct 2026 | 4d | W4C-1b | `TaskProgressEvent`; Schedule + Issue Intelligence; report-style project note with popup editor; rule-based takeaways; export-ready layout — **as-built; UAT not yet accepted** |
+| **W4C-2b** | 4C | Dashboard access realignment | 09 Oct 2026 | 09 Oct 2026 | 1.5d | W4C-2a | `PROJECT` gates the Analytics tab; Viewer `projectVisibilityMode`; privilege defaults D2 — **as-built; UAT not yet accepted** |
+| **W4C-3** | 4C | Portfolio, macro timeline, About | 09 Oct 2026 | 09 Oct 2026 | 4d | W4C-2b | `/portfolio` By PM and All projects; three-bar timeline with milestone diamonds; rolled-up Schedule and Issue Intelligence; portfolio notes; PM comparison; About modal; `PortfolioNote` with row-level security — **as-built; UAT not yet accepted** |
+| **W4C-4** | 4C | Executive PDF export | — | — | 2d | W4C-3 | Print routes + server PDF for all three dashboards; inside Release 2.1 — **next package; not started** |
+| **W4C-U** | 4C | **Wave 4C UAT + regression** | — | — | 3d | W4C-4 | UAT-408–410, 423–425, 426–428, UAT-IMP, pack **UAT-R** — **deferred until 4C-4 ships** |
 
 **Wave roll-up**
 
@@ -1135,7 +1157,7 @@ flowchart TD
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | **4A — Live schedule health** | 12–18 Sep 2026 | 7 | Holidays and schedule health in the running app | Wave 4A UAT pack accepted | **Shipped + UAT accepted** |
 | **4B — Governed programme office** | 19–30 Sep 2026 | 12 | Approvals, Issue Log, Completed/Deleted/Purged operable | Wave 4B UAT pack accepted | **Shipped + UAT accepted** |
-| **4C — Executive visualisation** | 01–12 Oct 2026 | 12 | Analytics, portfolio, high-density grid, About | Wave 4C UAT pack + UAT-R accepted | **Not started** |
+| **4C — Executive visualisation** | 01 Oct 2026 onward | — | List, Excel import, Analytics, portfolio, PDF, About | Wave 4C UAT pack + UAT-R accepted | **4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 as-built; 4C-4 onward not started** |
 | **Programme** | 12 Sep–12 Oct 2026 | **31** | Release 2.1 accepted | All three wave packs green | **Blocked on Wave 4C** |
 
 No parallel tracks are authorised on the critical path above. A later wave must not start while its predecessor’s UAT pack still has open priority-1 defects.
@@ -1188,9 +1210,9 @@ W4A-1|--|
 * **Stakeholder-usable deliverables:**
   1. High-density inline-edit task grid.
   2. Per-project Analytics: Schedule Intelligence and Issue Intelligence (`IssueIntelligencePane.tsx`, `issue-intelligence.ts`, `getProjectIssueAnalytics`).
-  3. `/portfolio` with three scopes, macro Gantt, and the System About modal.
-* **UAT pack:** UAT-408, UAT-409, UAT-410, UAT-423, UAT-424, UAT-425, plus **UAT-R** (full re-run of Wave 4A and Wave 4B packs on the integrated build) — **deferred** until this wave is implemented.
-* **Exit criteria:** Wave 4C UAT pack and UAT-R accepted. Release 2.1 is accepted only when all three wave packs are green. **Not met** — Wave 4C development has not started.
+  3. `/portfolio` with two views (By PM and All projects), the macro timeline, rolled-up analytics and notes, and the System About modal.
+* **UAT pack:** UAT-408, UAT-409, UAT-410, UAT-423 to UAT-427, plus **UAT-R** (full re-run of Wave 4A and Wave 4B packs on the integrated build). UAT-408 and UAT-423–427 are executable and not yet accepted. UAT-409 and UAT-410 are executable on the 4C-3 build and not yet accepted. UAT-R waits for 4C-4 and close-out.
+* **Exit criteria:** Wave 4C UAT pack and UAT-R accepted. Release 2.1 is accepted only when all three wave packs are green. **Not met** — 4C-1 through 4C-3 are as-built; 4C-4 (PDF) and the 4C UAT pack are still open.
 
 ---
 
@@ -1247,9 +1269,9 @@ Scenarios are accepted **in the wave that first makes them exercisable**. They a
 18. **UAT-421 (Issue close):** Non-PIC member cannot close; owning PM closes with `resolutionSummary`.
 19. **UAT-422 (Issue excluded from weights):** One 10-day task plus an 8-day issue — task weight remains $100\%$; issue absent from Gantt task rows.
 
-#### Wave 4C pack (`W4C-U` — planned 10–12 October 2026; **deferred — Wave 4C not in build**)
+#### Wave 4C pack (`W4C-U` — planned 10–12 October 2026; **in progress — 4C-1 to 4C-3 executable, PDF and close-out pending**)
 20. **UAT-408 (S-Curve Realisation):** Schedule S-Curve plots cumulative target against actual *task* progress realisation.
-21. **UAT-409 (Macro Executive Gantt):** `/portfolio` renders three clean macro bars per project with interactive milestone diamond nodes.
+21. **UAT-409 (Macro Executive Gantt):** `/portfolio` renders three clean macro bars per project with interactive milestone diamond nodes and instant tooltips. By PM and All projects both load for a person holding the matching tick; a Member without a tick is sent to the home page.
 22. **UAT-410 (Credits Modal):** System About modal renders version `v2.1.4-executive-intel` and official architectural credits.
 23. **UAT-423 (Issue Intelligence live progress):** After PIC sets ISS-001 to $40\%$, Analytics Issue Intelligence shows $40\%$ mean progress and Fix Realisation actual; Schedule S-Curve is unchanged.
 24. **UAT-424 (Issue Intelligence activity stream):** A comment on ISS-001 appears as `COMMENTED` in the Analytics activity stream with actor and timestamp; Last activity KPI matches.
@@ -1268,5 +1290,51 @@ Scenarios are accepted **in the wave that first makes them exercisable**. They a
 | 2.1.7 | 6 Oct 2026 | Portfolio scope pending feedback; holistic pre–Wave 4C UX polish record |
 | 2.1.8 | 6 Oct 2026 | Optional Custom Project ID on Project; ER diagram + Prisma excerpts updated |
 | 2.1.9 | 6 Oct 2026 | Portfolio scope: Back to projects restores; brand / Projects / typed `/` reset; product title 2.1 |
+| 2.1.10 | 6 Oct 2026 | W4C-1 high-density List table (process-group No., WD columns, inline edit, DnD, `listSortOrder`) |
+| 2.1.11 | 6 Oct 2026 | List freeze-panes (header + Task), wrapping titles, WD columns use `plannedWorkingDuration` (same-day = 1) |
+| 2.1.12 | 6 Oct 2026 | List freeze bleed/Status crop; process-group + Insert freeze-rail; dismissible action errors |
+| 2.1.13 | 6 Oct 2026 | List: one Add row per process group; hover + inserts between tasks |
+| 2.1.14 | 6 Oct 2026 | List: gap-hover +, draft rows, inline delete, empty-table, date typing |
+| 2.1.15 | 6 Oct 2026 | List gap hover: JS `hot` state (tr group-hover unreliable); dates: uncontrolled while focused |
+| 2.1.16 | 6 Oct 2026 | Actual finish confirm→Done/100%; Project PS above List; centre WD; grid-edge insert |
+| 2.1.17 | 8 Oct 2026 | Stakeholder decisions D1–D6; F-2120 Excel task import (W4C-1b); Wave 4C restated as 1b → 2a → 2b → 3 → 4 → U. Decisions may be adjusted after the operational trial. |
+| 2.1.18 | 8 Oct 2026 | W4C-2a as-built: TaskProgressEvent with labelled backfill, Schedule and Issue Intelligence, milestone table, plain project note, rule-based takeaways. UAT-423–425 not yet accepted. Portfolio notes follow in W4C-3. |
+| 2.1.20 | 8 Oct 2026 | Date fields use a right-hand calendar button that opens the native picker. |
+| 2.1.21 | 8 Oct 2026 | Project note is report prose. Editing is a popup with a short rich-text toolbar. |
+| 2.1.22 | 8 Oct 2026 | Schedule Intelligence adds a task-status pie, planned-effort bars by process group, and an overdue task list. |
+| 2.1.23 | 8 Oct 2026 | Task status doughnut; high-contrast chart hover cards; immediate Issue Intelligence figure explanations; issue charts in three rows. |
+| 2.1.24 | 8 Oct 2026 | In-page date calendar so month arrows do not commit a date. Issue Log register edits title, PIC, and updated dates. Analytics tab follows Issue Log. |
+| 2.1.25 | 8 Oct 2026 | One-line Issue Log rows. Analytics visual refresh (palette, cards, hover, responsive layout) and a cheaper Analytics pane (code-split, mounted only while visible, memoised charts). |
+| 2.1.26 | 9 Oct 2026 | W4C-2b as-built: Analytics tab requires `PROJECT`; Viewer Selected or All Active; role defaults D2. Portfolio page remains W4C-3. |
+| 2.1.27 | 9 Oct 2026 | W4C-3 as-built: `/portfolio` (By PM, All projects), macro timeline, rolled-up Schedule and Issue Intelligence, PM comparison, project filter, optional Completed cohort, portfolio notes (D3), About modal, entry points. `PortfolioNote` added; row-level security enabled on the three tables that lacked it. Task, issue, milestone and import dates are limited to 2000–2100. Next package is W4C-4 (PDF). |
 
-*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C remains the outstanding delivery tranche. Pre–Wave 4C UX polish (landing scope memory/pending feedback; Gantt viewport and marker aesthetics) and optional Custom Project ID are accepted into the as-built baseline.*
+### 8.3 Wave 4C restatement (binding from 8 Oct 2026)
+
+Stakeholder decisions recorded 8 Oct 2026. They may be adjusted after a few weeks of operational trial.
+
+| ID | Decision |
+| :--- | :--- |
+| **D1** | Append-only `TaskProgressEvent` so Schedule S-Curve actuals are historical, not guessed. Backfill older tasks from actual dates as an approximation and label that. |
+| **D2** | Default dashboard scopes: Super PM all three (locked); PM all three; Member `PROJECT` only; Viewer `PROJECT` only. Super PM may revoke or grant per user. |
+| **D3** | The All-projects note may be edited by any PM and any Super PM. Last save wins; stamps show who. Per-project note: owning PM and Super PM. Per-PM note: that PM and Super PM. |
+| **D4** | Viewer data scope and dashboard capability stay separate. New `projectVisibilityMode`: `SELECTED` (checklist) or `ALL_ACTIVE`. |
+| **D5** | PDF export ships inside Release 2.1 as **W4C-4**. |
+| **D6** | `/portfolio` has two scopes only: **By PM** and **All projects**. Per-project analytics stay on the project hub. A filter on All projects covers comparison. |
+
+**Dashboards**
+
+1. **Per project** — project hub → Analytics. Schedule Intelligence (S-curve, burn-down, task-status doughnut, effort by process group, overdue list), Issue Intelligence, milestone table, notes, rule-based summary and key takeaways.
+2. **Per PM** — `/portfolio?scope=pm&pm=<id>`. Header, macro timeline (three bars per project: Initial = earliest initial start → latest initial due; Updated = earliest updated start → latest updated due; Actual = earliest actual start → latest actual finish, hatched to Today when work has started and not finished), milestone diamonds, Target / Actual / Status Flag per project, then the same analytical blocks rolled up, notes, takeaways.
+3. **All projects** — `/portfolio?scope=all`. Same as By PM across Active projects, plus a By-PM comparison. Completed projects appear only when the caller has `completedProjectAccess = ALL` and turns the cohort on.
+
+**Entry points (as-built 4C-3):** header **Portfolio** (only with `PM_PORTFOLIO` or `TOTAL_COMPANY`); landing scope control link “Analytics for this scope →”; “Project Manager: <name>” under the project title on the hub, linking to that PM’s portfolio when the caller holds `PM_PORTFOLIO`; About in the account menu.
+
+**Notes:** the per-project note (W4C-2a) is shown as report prose. Owning PM and Super PM edit it in a popup (bold, italic, underline, strike, heading, lists, highlight, link). The server keeps sanitised HTML on `AnalyticsNote`. Last save wins. Portfolio notes (W4C-3) use the same editor, stored in `PortfolioNote`. The editor is a small in-house toolbar over a sanitised allow-list; it is not Tiptap.
+
+**Takeaways:** deterministic rule engine in `insights.ts`. No model call in 2.1. Each insight cites the figures it used.
+
+**Export-ready layout (from 4C-2a):** fixed content width, section cards that do not split, chart heights in pixels, every figure also in text, light print theme. W4C-4 renders those print routes to PDF.
+
+**Access:** `dashboardAccess` is enforced on the project hub (4C-2b). Privilege matrix owns capability. Project visibility owns which projects a Viewer may open, including `ALL_ACTIVE`. A dashboard only aggregates projects inside the caller’s data scope. `PM_PORTFOLIO` and `TOTAL_COMPANY` gate `/portfolio` (4C-3); a Viewer on `ALL_ACTIVE` needs a portfolio tick as well.
+
+*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 are as-built; Wave 4C-4 (PDF export) is the next package.*

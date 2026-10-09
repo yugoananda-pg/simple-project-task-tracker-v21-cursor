@@ -4,6 +4,9 @@ import { listIssues } from "@/src/lib/actions/issues";
 import { listMilestones } from "@/src/lib/actions/milestones";
 import { getProjectById } from "@/src/lib/actions/projects";
 import { listTasksByProject } from "@/src/lib/actions/tasks";
+import { loadProjectAnalytics } from "@/src/lib/actions/analytics";
+import { listCustomAssigneeNames } from "@/src/lib/custom-assignees";
+import { hasDashboardScope, portfolioAccessFor } from "@/src/lib/dashboard-access";
 import { getSessionUser } from "@/src/lib/rbac";
 
 type ProjectDetailPageProps = {
@@ -21,6 +24,8 @@ export default async function ProjectDetailPage({
     milestonesResult,
     sessionUser,
     holidaysResult,
+    customAssigneeNames,
+    analytics,
   ] = await Promise.all([
     getProjectById(id),
     listTasksByProject(id),
@@ -28,6 +33,8 @@ export default async function ProjectDetailPage({
     listMilestones(id),
     getSessionUser(),
     listHolidayDateKeys(),
+    listCustomAssigneeNames(),
+    loadProjectAnalytics(id),
   ]);
 
   const loadError =
@@ -41,9 +48,22 @@ export default async function ProjectDetailPage({
             ? milestonesResult.error
             : null;
 
+  const ownerId = projectResult.success ? projectResult.data.project.ownerId : null;
+  const ownerName =
+    projectResult.success && ownerId
+      ? (projectResult.data.memberUsers.find((member) => member.id === ownerId)
+          ?.name ?? null)
+      : null;
+  const ownerPortfolioHref =
+    ownerId && sessionUser && portfolioAccessFor(sessionUser).pm
+      ? `/portfolio?scope=pm&pm=${encodeURIComponent(ownerId)}`
+      : null;
+
   return (
     <ProjectDetailView
       projectId={id}
+      ownerName={ownerName}
+      ownerPortfolioHref={ownerPortfolioHref}
       initialProject={projectResult.success ? projectResult.data.project : null}
       initialTasks={tasksResult.success ? tasksResult.data : []}
       initialIssues={issuesResult.success ? issuesResult.data : []}
@@ -65,6 +85,11 @@ export default async function ProjectDetailPage({
       canReassignOwner={sessionUser?.globalRole === "super_pm"}
       memberUsers={
         projectResult.success ? projectResult.data.memberUsers : []
+      }
+      customAssigneeNames={customAssigneeNames}
+      analytics={analytics}
+      canViewProjectAnalytics={
+        sessionUser ? hasDashboardScope(sessionUser, "PROJECT") : false
       }
       loadError={loadError}
     />

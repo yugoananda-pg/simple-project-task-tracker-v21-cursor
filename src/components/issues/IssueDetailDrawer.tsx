@@ -10,6 +10,8 @@ import {
 import { X } from "lucide-react";
 
 import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
+import AssigneePicField from "@/src/components/tasks/AssigneePicField";
+import DateField from "@/src/components/ui/DateField";
 import {
   addIssueComment,
   closeIssue,
@@ -17,6 +19,11 @@ import {
   updateIssue,
 } from "@/src/lib/actions/issues";
 import { computeIssueFixFlag } from "@/src/lib/analytics/issue-schedule";
+import {
+  ISSUE_CATEGORY_LABEL,
+  ISSUE_SEVERITY_LABEL,
+  ISSUE_STATUS_LABEL,
+} from "@/src/lib/issue-labels";
 import type { ProjectMemberUser } from "@/src/lib/actions/projects";
 import {
   isFutureLocalDate,
@@ -39,6 +46,7 @@ type IssueDetailDrawerProps = {
   canManage: boolean;
   canComment: boolean;
   currentUserId: string | null;
+  customAssigneeNames: string[];
   onClose: () => void;
   onUpdated: (issue: Issue) => void;
 };
@@ -108,6 +116,7 @@ export default function IssueDetailDrawer({
   canManage,
   canComment,
   currentUserId,
+  customAssigneeNames,
   onClose,
   onUpdated,
 }: IssueDetailDrawerProps) {
@@ -253,7 +262,7 @@ export default function IssueDetailDrawer({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusFlagBadge flag={flag} />
               <span className="text-xs text-zinc-500">
-                {detail.progress}% · {detail.status.replaceAll("_", " ")}
+                {detail.progress}% · {ISSUE_STATUS_LABEL[detail.status]}
               </span>
             </div>
           </div>
@@ -328,7 +337,7 @@ export default function IssueDetailDrawer({
                 >
                   {SEVERITY_OPTIONS.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {ISSUE_SEVERITY_LABEL[option]}
                     </option>
                   ))}
                 </select>
@@ -348,7 +357,7 @@ export default function IssueDetailDrawer({
                 >
                   {CATEGORY_OPTIONS.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {ISSUE_CATEGORY_LABEL[option]}
                     </option>
                   ))}
                 </select>
@@ -358,7 +367,7 @@ export default function IssueDetailDrawer({
                 {detail.status === "closed" || detail.status === "cancelled" ? (
                   <input
                     className={fieldClassName}
-                    value={detail.status}
+                    value={ISSUE_STATUS_LABEL[detail.status]}
                     disabled
                     readOnly
                   />
@@ -376,7 +385,7 @@ export default function IssueDetailDrawer({
                   >
                     {STATUS_OPTIONS.map((option) => (
                       <option key={option} value={option}>
-                        {option}
+                        {ISSUE_STATUS_LABEL[option]}
                       </option>
                     ))}
                   </select>
@@ -406,27 +415,26 @@ export default function IssueDetailDrawer({
               </label>
             </div>
 
-            <label className="block">
-              <span className={labelClassName}>PIC</span>
-              <select
-                className={fieldClassName}
-                value={detail.picId ?? ""}
-                disabled={!canEditCore || isPending}
-                onChange={(event) =>
-                  patch({
-                    id: detail.id,
-                    picId: event.target.value || null,
-                  })
-                }
-              >
-                <option value="">Unassigned</option>
-                {memberUsers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <AssigneePicField
+              task={{
+                id: `${detail.id}-drawer`,
+                assigneeId: detail.picId,
+                assigneeName: detail.picName,
+              }}
+              members={memberUsers}
+              suggestions={customAssigneeNames}
+              disabled={!canEditCore || isPending}
+              label="PIC"
+              labelClassName={labelClassName}
+              fieldClassName={fieldClassName}
+              onCommit={(next) =>
+                patch({
+                  id: detail.id,
+                  picId: next.assigneeId,
+                  picName: next.assigneeName,
+                })
+              }
+            />
 
             <label className="block">
               <span className={labelClassName}>Related milestone</span>
@@ -462,8 +470,8 @@ export default function IssueDetailDrawer({
             ).map(([key, label, disallowFuture]) => (
               <label key={key} className="block">
                 <span className={labelClassName}>{label}</span>
-                <input
-                  type="date"
+                <DateField
+                  aria-label={label}
                   className={fieldClassName}
                   value={toDateInputValue(detail[key])}
                   max={disallowFuture ? toLocalDateString() : undefined}

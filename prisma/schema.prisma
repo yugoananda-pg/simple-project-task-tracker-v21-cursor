@@ -48,6 +48,12 @@ enum CompletedProjectAccess {
   ALL
 }
 
+/// Which Active projects a Viewer may open. Capability stays on dashboardAccess.
+enum ProjectVisibilityMode {
+  SELECTED
+  ALL_ACTIVE
+}
+
 enum PurgeTrigger {
   SUPER_PM_MANUAL
   SOFT_DELETE_RETENTION_EXPIRED
@@ -144,8 +150,10 @@ model User {
   approvalStatus         ApprovalStatus         @default(PENDING)
   approvedAt             DateTime?
   approvedBy             String?                @db.Uuid
-  dashboardAccess        DashboardScope[]       @default([PROJECT, PM_PORTFOLIO])
+  dashboardAccess        DashboardScope[]       @default([PROJECT])
   completedProjectAccess CompletedProjectAccess @default(NONE)
+  /// Viewer data scope. Ignored for every other role. SELECTED uses ProjectMember.
+  projectVisibilityMode  ProjectVisibilityMode  @default(SELECTED)
 
   /// Set when the registrant confirms their Auth email. Pending Super PM queue only includes confirmed rows.
   emailConfirmedAt DateTime?
@@ -203,8 +211,10 @@ model Project {
   members         ProjectMember[]
   tasks           Task[]
   milestones      Milestone[]
-  issues          Issue[]
-  issueActivities IssueActivity[]
+  issues             Issue[]
+  issueActivities    IssueActivity[]
+  taskProgressEvents TaskProgressEvent[]
+  analyticsNote      AnalyticsNote?
 
   @@index([ownerId])
   @@index([lifecycleStatus, deletedAt])
@@ -230,6 +240,18 @@ model ProjectMember {
   @@unique([projectId, userId])
   @@index([userId])
   @@index([projectId])
+}
+
+/// Names used as a PIC without a user account. Suggestions only — the task or issue still stores the label.
+model CustomAssignee {
+  id      String @id @default(uuid()) @db.Uuid
+  name    String
+  nameKey String @unique
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 }
 
 model Milestone {
@@ -271,6 +293,8 @@ model Task {
   actualCompletionDate DateTime?    @db.Date
   progress             Int          @default(0)
   sortOrder            Int          @default(0)
+  /** Display order within process group on the List / high-density table (independent of Kanban sortOrder). */
+  listSortOrder        Int          @default(0)
   weightOverride       Float?
 
   createdAt DateTime @default(now())
@@ -282,10 +306,12 @@ model Task {
   assignee      User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   subtasks      Subtask[]
   comments      TaskComment[]
-  relatedIssues Issue[]       @relation("IssueRelatedTask")
+  relatedIssues    Issue[]             @relation("IssueRelatedTask")
+  progressEvents   TaskProgressEvent[]
 
   @@index([projectId])
   @@index([projectId, status, sortOrder])
+  @@index([projectId, bucket, listSortOrder])
 }
 
 model Subtask {
@@ -383,6 +409,56 @@ model IssueComment {
 
   @@index([issueId])
   @@index([userId])
+}
+
+/// Append-only task progress history for the Schedule S-Curve. Rows are inserted, never updated.
+model TaskProgressEvent {
+  id         String                  @id @default(uuid()) @db.Uuid
+  projectId  String                  @db.Uuid
+  taskId     String                  @db.Uuid
+  progress   Int
+  occurredOn DateTime
+  source     TaskProgressEventSource @default(recorded)
+  createdAt  DateTime                @default(now())
+  createdBy  String                  @db.Uuid
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, occurredOn])
+  @@index([taskId, occurredOn])
+}
+
+enum TaskProgressEventSource {
+  recorded
+  backfill
+}
+
+/// One narrative note on the per-project Analytics tab. Owning PM and Super PM may edit.
+model AnalyticsNote {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @unique @db.Uuid
+  bodyHtml  String @default("")
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+/// One narrative note per portfolio scope. scopeKey is `ALL` (All projects) or `PM:<user uuid>` (By PM).
+/// Soft key by design: a note survives the removal of its PM account and is simply no longer reachable.
+model PortfolioNote {
+  id       String @id @default(uuid()) @db.Uuid
+  scopeKey String @unique
+  bodyHtml String @default("")
+
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 }
 
 /// Append-only Issue Log event. Mutation after insert is forbidden.

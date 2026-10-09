@@ -7,6 +7,8 @@ type ConfirmDialogProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   isPending?: boolean;
+  /** `danger` (default) for destructive actions; `primary` for affirmative workflow confirms. */
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -18,10 +20,16 @@ export default function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   isPending = false,
+  tone = "danger",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   if (!open) return null;
+
+  const confirmClass =
+    tone === "primary"
+      ? "rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+      : "rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400";
 
   return (
     <div
@@ -62,7 +70,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isPending}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
+            className={confirmClass}
           >
             {isPending ? "Working…" : confirmLabel}
           </button>

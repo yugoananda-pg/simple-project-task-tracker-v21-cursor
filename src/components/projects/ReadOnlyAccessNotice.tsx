@@ -1,11 +1,13 @@
 type ReadOnlyAccessNoticeProps = {
   compact?: boolean;
   className?: string;
+  includeAnalytics?: boolean;
 };
 
 export default function ReadOnlyAccessNotice({
   compact = false,
   className = "",
+  includeAnalytics = false,
 }: ReadOnlyAccessNoticeProps) {
   return (
     <div
@@ -20,9 +22,12 @@ export default function ReadOnlyAccessNotice({
         Read-only access
       </p>
       <p className={compact ? "mt-1 leading-relaxed" : "mt-1.5 leading-relaxed"}>
-        You can browse tasks, timelines, and analytics. Creating tasks and
-        editing the project are limited to the owning PM or Super PM. If a task
-        is assigned to you, you can still update that task (and comment on it).
+        {includeAnalytics
+          ? "You can browse tasks, timelines, and analytics. "
+          : "You can browse tasks and timelines. "}
+        Creating tasks and editing the project are limited to the owning PM or
+        Super PM. If a task is assigned to you, you can still update that task
+        (and comment on it).
       </p>
     </div>
   );

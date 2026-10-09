@@ -2,13 +2,16 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type FormEvent,
 } from "react";
 
 import ConfirmDialog from "@/src/components/ui/ConfirmDialog";
+import DateField from "@/src/components/ui/DateField";
 import {
   createMilestone,
   deleteMilestone,
@@ -30,7 +33,8 @@ type EditorMode =
   | { kind: "edit"; milestone: Milestone }
   | { kind: "list" };
 
-const CHIP_LIMIT = 5;
+/** Two rows of chips. Further gates stay behind View all. */
+const CHIP_MAX_ROWS = 2;
 
 function formatAu(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -66,6 +70,9 @@ export default function ProjectMilestonesPanel({
   const [error, setError] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const chipListRef = useRef<HTMLUListElement>(null);
+  const [visibleCount, setVisibleCount] = useState(initialMilestones.length);
+  const [measuredKey, setMeasuredKey] = useState("");
 
   useEffect(() => {
     setMilestones(sortByTarget(initialMilestones));
@@ -76,8 +83,70 @@ export default function ProjectMilestonesPanel({
     [milestones],
   );
   const nextPending = pending[0] ?? null;
-  const visibleChips = milestones.slice(0, CHIP_LIMIT);
-  const hiddenCount = Math.max(0, milestones.length - CHIP_LIMIT);
+  const milestoneKey = milestones.map((row) => row.id).join("|");
+  const showingAll = measuredKey !== milestoneKey;
+  const visibleChips = showingAll
+    ? milestones
+    : milestones.slice(0, visibleCount);
+  const hiddenCount = Math.max(0, milestones.length - visibleChips.length);
+
+  useLayoutEffect(() => {
+    const list = chipListRef.current;
+    if (!list || milestones.length === 0) {
+      setVisibleCount(milestones.length);
+      setMeasuredKey(milestoneKey);
+      return;
+    }
+    if (measuredKey === milestoneKey) return;
+
+    const chips = [
+      ...list.querySelectorAll<HTMLElement>("[data-milestone-chip]"),
+    ];
+    if (chips.length === 0) return;
+
+    const gap = 6;
+    const rowHeight = chips[0]!.offsetHeight;
+    const firstTop = chips[0]!.offsetTop;
+    const limitBottom =
+      firstTop + CHIP_MAX_ROWS * rowHeight + (CHIP_MAX_ROWS - 1) * gap;
+    const moreWidth = 118;
+
+    let fit = chips.length;
+    for (let index = 0; index < chips.length; index += 1) {
+      const chip = chips[index]!;
+      if (chip.offsetTop + chip.offsetHeight > limitBottom + 1) {
+        fit = index;
+        break;
+      }
+    }
+
+    if (fit < chips.length) {
+      const width = list.clientWidth;
+      while (fit > 0) {
+        const last = chips[fit - 1]!;
+        const rowEnd = last.offsetLeft + last.offsetWidth;
+        if (rowEnd + gap + moreWidth <= width + 1) break;
+        fit -= 1;
+      }
+    }
+
+    setVisibleCount(fit);
+    setMeasuredKey(milestoneKey);
+  }, [milestoneKey, measuredKey, milestones]);
+
+  useEffect(() => {
+    const list = chipListRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    let lastWidth = list.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const width = list.clientWidth;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      setMeasuredKey("");
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
 
   const summary =
     milestones.length === 0
@@ -204,11 +273,11 @@ export default function ProjectMilestonesPanel({
           </div>
 
           {milestones.length > 0 ? (
-            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+            <ul ref={chipListRef} className="mt-1.5 flex flex-wrap gap-1.5">
               {visibleChips.map((milestone) => {
                 const achieved = Boolean(milestone.actualAchieved);
                 return (
-                  <li key={milestone.id}>
+                  <li key={milestone.id} data-milestone-chip="">
                     <button
                       type="button"
                       onClick={() => openEdit(milestone)}
@@ -232,8 +301,8 @@ export default function ProjectMilestonesPanel({
                   </li>
                 );
               })}
-              {hiddenCount > 0 ? (
-                <li>
+              {hiddenCount > 0 && !showingAll ? (
+                <li data-milestone-more="">
                   <button
                     type="button"
                     onClick={() => setEditor({ kind: "list" })}
@@ -357,8 +426,7 @@ export default function ProjectMilestonesPanel({
               </label>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Target date
-                <input
-                  type="date"
+                <DateField
                   value={target}
                   onChange={(event) => setTarget(event.target.value)}
                   disabled={isPending || readOnlyDetail}
@@ -390,8 +458,7 @@ export default function ProjectMilestonesPanel({
                   <span className="font-normal text-zinc-500">
                     (blank = pending)
                   </span>
-                  <input
-                    type="date"
+                  <DateField
                     value={actualAchieved}
                     max={todayIso()}
                     onChange={(event) => setActualAchieved(event.target.value)}

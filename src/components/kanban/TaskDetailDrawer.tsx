@@ -11,6 +11,7 @@ import {
 } from "react";
 import { X } from "lucide-react";
 import ConfirmDialog from "@/src/components/ui/ConfirmDialog";
+import DateField from "@/src/components/ui/DateField";
 import AssigneePicField from "@/src/components/tasks/AssigneePicField";
 import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
 import ProgressPairBadges from "@/src/components/schedule/ProgressPairBadges";
@@ -22,6 +23,7 @@ import {
 } from "@/src/lib/actions/comments";
 import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress";
 import {
+  actualDateRangeError,
   buildProgressStatusPatch,
   isFutureLocalDate,
   toLocalDateString,
@@ -52,6 +54,9 @@ export type TaskDetailDrawerProps = {
   onDeleteTask?: (taskId: string) => void;
   isDeletePending?: boolean;
   memberUsers?: ProjectMemberUser[];
+  customAssigneeNames?: string[];
+  /** Bump after cancelling actual-finish confirm so date fields revert. */
+  dateResetToken?: number;
 };
 
 const PROCESS_GROUP_OPTIONS: ReadonlyArray<{ value: TaskBucket; label: string }> = [
@@ -208,6 +213,8 @@ function AuDateField({
   onCommit,
   disabled = false,
   disallowFuture = false,
+  validate,
+  resetToken = 0,
 }: {
   id: string;
   label: string;
@@ -215,6 +222,8 @@ function AuDateField({
   onCommit: (next: string | null) => void;
   disabled?: boolean;
   disallowFuture?: boolean;
+  validate?: (next: string | null) => string | null;
+  resetToken?: number;
 }) {
   const externalValue = toDateInputValue(value);
   const [caption, setCaption] = useState(externalValue);
@@ -222,31 +231,58 @@ function AuDateField({
   const [error, setError] = useState<string | null>(null);
   /** Extra remount token when an invalid edit must be discarded. */
   const [epoch, setEpoch] = useState(0);
+  const [seenResetToken, setSeenResetToken] = useState(resetToken);
 
   if (syncedExternal !== externalValue) {
     setSyncedExternal(externalValue);
     setCaption(externalValue);
     setError(null);
   }
+  if (seenResetToken !== resetToken) {
+    setSeenResetToken(resetToken);
+    setCaption(externalValue);
+    setError(null);
+    setEpoch((n) => n + 1);
+  }
 
   const today = toLocalDateString();
+
+  function rejection(raw: string): string | null {
+    if (raw === "") return validate?.(null) ?? null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    return (
+      validate?.(raw) ??
+      (disallowFuture && isFutureLocalDate(raw)
+        ? "Actual dates cannot be in the future."
+        : null)
+    );
+  }
+
+  function revertInvalid(message: string) {
+    setError(message);
+    setCaption(externalValue);
+    setEpoch((n) => n + 1);
+  }
 
   return (
     <div className="w-full min-w-0 max-w-full">
       <label htmlFor={id} className={labelClassName}>
         {label}
       </label>
-      <input
+      <DateField
         key={`${id}-${externalValue}-${epoch}`}
         id={id}
-        type="date"
-        lang="en-AU"
         defaultValue={externalValue}
         max={disallowFuture ? today : undefined}
         disabled={disabled}
         onBlur={(event) => {
           const raw = event.target.value;
           if (raw === "") {
+            const message = rejection("");
+            if (message) {
+              revertInvalid(message);
+              return;
+            }
             setCaption("");
             setError(null);
             if (externalValue !== "") onCommit(null);
@@ -258,10 +294,9 @@ function AuDateField({
             setEpoch((n) => n + 1);
             return;
           }
-          if (disallowFuture && isFutureLocalDate(raw)) {
-            setError("Actual dates cannot be in the future.");
-            setCaption(externalValue);
-            setEpoch((n) => n + 1);
+          const message = rejection(raw);
+          if (message) {
+            revertInvalid(message);
             return;
           }
           setError(null);
@@ -272,6 +307,7 @@ function AuDateField({
         onChange={(event) => {
           // Native date pickers emit a complete YYYY-MM-DD on change — commit
           // immediately so picks are not lost if the field never receives blur.
+          // Incomplete keyboard segments stay local (often "") and must not commit.
           const raw = event.target.value;
           if (raw === "") {
             setCaption("");
@@ -281,10 +317,9 @@ function AuDateField({
           if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
             return;
           }
-          if (disallowFuture && isFutureLocalDate(raw)) {
-            setError("Actual dates cannot be in the future.");
-            setCaption(externalValue);
-            setEpoch((n) => n + 1);
+          const message = rejection(raw);
+          if (message) {
+            revertInvalid(message);
             return;
           }
           setCaption(raw);
@@ -318,6 +353,8 @@ export default function TaskDetailDrawer({
   onDeleteTask,
   isDeletePending = false,
   memberUsers = [],
+  customAssigneeNames = [],
+  dateResetToken = 0,
 }: TaskDetailDrawerProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLElement>(null);
@@ -404,14 +441,18 @@ export default function TaskDetailDrawer({
     };
   }, [activeCommentsTaskId]);
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!isVisible) return;
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onCloseRef.current();
     }
 
     const previousOverflow = document.body.style.overflow;
@@ -423,7 +464,7 @@ export default function TaskDetailDrawer({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isVisible, onClose]);
+  }, [isVisible]);
 
   const subtasks: Subtask[] = useMemo(() => {
     const items = activeTask?.subtasks ?? [];
@@ -799,6 +840,7 @@ export default function TaskDetailDrawer({
                   key={activeTask.id}
                   task={activeTask}
                   members={memberUsers}
+                  suggestions={customAssigneeNames}
                   disabled={!canEdit}
                   labelClassName={labelClassName}
                   fieldClassName={fieldClassName}
@@ -824,6 +866,21 @@ export default function TaskDetailDrawer({
                       disallowFuture={
                         field.key === "actualStartDate" ||
                         field.key === "actualCompletionDate"
+                      }
+                      resetToken={dateResetToken}
+                      validate={
+                        field.key === "actualStartDate" ||
+                        field.key === "actualCompletionDate"
+                          ? (next) =>
+                              actualDateRangeError(
+                                field.key === "actualStartDate"
+                                  ? next
+                                  : activeTask.actualStartDate,
+                                field.key === "actualCompletionDate"
+                                  ? next
+                                  : activeTask.actualCompletionDate,
+                              )
+                          : undefined
                       }
                       onCommit={(next) =>
                         patchTask({ [field.key]: next })

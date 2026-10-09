@@ -59,6 +59,31 @@ export function toLocalDateString(date: Date = new Date()): string {
   return format(date, "yyyy-MM-dd");
 }
 
+/** Calendar years the tracker accepts for schedule dates. */
+export const PLAUSIBLE_YEAR_MIN = 2000;
+export const PLAUSIBLE_YEAR_MAX = 2100;
+
+/**
+ * True when `value` is a real calendar date (no 30 February) in an accepted
+ * year. A mistyped year such as 0227 or 1902 would otherwise stretch every
+ * chart axis, so every save path checks this first.
+ */
+export function isPlausibleLocalDate(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < PLAUSIBLE_YEAR_MIN || year > PLAUSIBLE_YEAR_MAX) return false;
+  const probe = new Date(Date.UTC(year, month - 1, day, 12));
+  return (
+    probe.getUTCFullYear() === year &&
+    probe.getUTCMonth() === month - 1 &&
+    probe.getUTCDate() === day
+  );
+}
+
 /**
  * Convert a local YYYY-MM-DD string into a Date suitable for Prisma `@db.Date`.
  * Uses UTC noon so the calendar day is stable across timezones when serialised.
@@ -98,6 +123,29 @@ export function isFutureLocalDate(value: string | null | undefined): boolean {
   const datePart = value.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
   return datePart > toLocalDateString();
+}
+
+/**
+ * Actual duration is start→finish, both in the past or today, finish not before start.
+ * Returns a user-facing message, or null when the pair is allowed.
+ */
+export function actualDateRangeError(
+  start: string | null,
+  finish: string | null,
+): string | null {
+  if (isFutureLocalDate(start)) {
+    return "Actual start date cannot be in the future.";
+  }
+  if (isFutureLocalDate(finish)) {
+    return "Actual finish date cannot be in the future.";
+  }
+  if (finish && !start) {
+    return "Enter an actual start date before the actual finish date. Duration needs both dates.";
+  }
+  if (start && finish && finish < start) {
+    return "Actual finish date cannot be earlier than the actual start date.";
+  }
+  return null;
 }
 
 /** Effective due date for overdue checks — prefer updated, else initial. */
@@ -148,9 +196,15 @@ export function buildProgressStatusPatch(
       return;
     }
 
-    // done
-    next.actualStartDate = current.actualStartDate ?? today;
-    next.actualCompletionDate = today;
+    // done — keep an explicit finish/start from the patch (e.g. user-typed actual finish)
+    next.actualStartDate =
+      patch.actualStartDate !== undefined
+        ? (patch.actualStartDate ?? current.actualStartDate ?? today)
+        : (current.actualStartDate ?? today);
+    next.actualCompletionDate =
+      patch.actualCompletionDate !== undefined
+        ? (patch.actualCompletionDate ?? today)
+        : (current.actualCompletionDate ?? today);
   };
 
   if (patch.progress !== undefined && patch.status === undefined) {

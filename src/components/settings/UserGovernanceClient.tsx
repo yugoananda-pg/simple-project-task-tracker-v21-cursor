@@ -23,6 +23,7 @@ import {
   type ManagedUserDto,
   type UserDeletionImpact,
 } from "@/src/lib/actions/users";
+import { privilegeDefaultsForRole } from "@/src/lib/dashboard-access";
 import { getRoleLabel } from "@/src/lib/role-labels";
 import type {
   ApprovalStatus,
@@ -1006,6 +1007,21 @@ export default function UserGovernanceClient({
                                 disabled={
                                   row.globalRole === "super_pm" || isPending
                                 }
+                                onChange={(event) => {
+                                  const role = event.target.value as GlobalRole;
+                                  const defaults = new Set(
+                                    privilegeDefaultsForRole(role).dashboardAccess,
+                                  );
+                                  const form = event.currentTarget.form;
+                                  for (const opt of DASHBOARD_OPTIONS) {
+                                    const box = form?.elements.namedItem(
+                                      `dash_${opt.id}`,
+                                    );
+                                    if (box instanceof HTMLInputElement) {
+                                      box.checked = defaults.has(opt.id);
+                                    }
+                                  }
+                                }}
                                 className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
                               >
                                 <option value="super_pm">Super PM</option>
@@ -1049,9 +1065,10 @@ export default function UserGovernanceClient({
                               </p>
                             ) : (
                               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                Total Company grants the enterprise-wide portfolio
-                                view across all active programmes (Wave 4C{" "}
-                                <span className="font-medium">/portfolio</span>).
+                                Per-project Analytics opens the Analytics tab.
+                                PM Portfolio and Total Company are saved for the
+                                portfolio page. Changing the role fills the
+                                default ticks. You can adjust them before saving.
                               </p>
                             )}
                             <div className="flex flex-wrap gap-3">

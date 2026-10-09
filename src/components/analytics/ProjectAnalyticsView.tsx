@@ -1,445 +1,338 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useMemo } from "react";
+import { CalendarClock, Lightbulb } from "lucide-react";
 
 import {
-  computeProjectAnalytics,
-  type OverdueTaskRow,
-} from "@/src/lib/analytics/task-metrics";
+  ChartCard,
+  Panel,
+  ProgressTrack,
+  SectionHeading,
+  TABLE_HEAD,
+  TABLE_ROW,
+} from "@/src/components/analytics/panel";
+import { PALETTE, TrendChart, type TrendSeries } from "@/src/components/analytics/charts";
+import IssueIntelligencePane from "@/src/components/analytics/IssueIntelligencePane";
+import ScheduleComposition from "@/src/components/analytics/ScheduleComposition";
+import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
+import ProjectNote from "@/src/components/analytics/ProjectNote";
+import type { IssueIntelActivity } from "@/src/lib/analytics/issue-intelligence";
+import { buildIssueIntelligence } from "@/src/lib/analytics/issue-intelligence";
+import { buildProjectInsights } from "@/src/lib/analytics/insights";
+import {
+  buildScheduleSeries,
+  milestoneVarianceDays,
+  milestoneVarianceLabel,
+  type ProgressEventPoint,
+} from "@/src/lib/analytics/schedule-series";
+import {
+  computeProjectScheduleHealth,
+  formatPercent1,
+  resolveHolidaySet,
+} from "@/src/lib/analytics/weighted-progress";
 import { formatAuDate } from "@/src/lib/gantt/date-utils";
-import type { Task } from "@/src/lib/types";
-import PicLabel from "@/src/components/tasks/PicLabel";
+import { toLocalDateString } from "@/src/lib/task-defaults";
+import type { Issue, Milestone, Task } from "@/src/lib/types";
+
+const S_CURVE_SERIES: readonly TrendSeries[] = [
+  { key: "target", name: "Target", colour: PALETTE.reference, dashed: true },
+  { key: "actual", name: "Actual", colour: PALETTE.actual, filled: true },
+];
+const BURN_DOWN_SERIES: readonly TrendSeries[] = [
+  { key: "remainingDays", name: "Remaining", colour: PALETTE.taskRemaining, filled: true },
+  { key: "idealRemainingDays", name: "Ideal", colour: PALETTE.reference, dashed: true },
+];
 
 export type ProjectAnalyticsViewProps = {
+  projectId: string;
   tasks: Task[];
-  onTaskClick?: (task: Task) => void;
-  readOnly?: boolean;
-  /** When false, Recharts is not mounted (avoids 0×0 measure in hidden tab panels). */
+  issues: Issue[];
+  milestones: Milestone[];
+  holidayDateKeys: string[];
+  events: ProgressEventPoint[];
+  activities: IssueIntelActivity[];
+  noteHtml: string;
+  noteUpdatedAt: string | null;
+  noteUpdatedByName: string | null;
+  canEditNote: boolean;
   chartsVisible?: boolean;
+  onOpenIssueLog: () => void;
+  onOpenIssue: (issueId: string) => void;
 };
-
-const CHART_TOOLTIP_STYLE = {
-  contentStyle: {
-    backgroundColor: "rgb(24 24 27)",
-    border: "1px solid rgb(63 63 70)",
-    borderRadius: "0.5rem",
-    color: "rgb(250 250 250)",
-    fontSize: "12px",
-  },
-  itemStyle: { color: "rgb(250 250 250)" },
-  labelStyle: { color: "rgb(161 161 170)" },
-};
-
-const CHART_AXIS_COLOUR = "#a1a1aa";
-const CHART_GRID_COLOUR = "rgba(113, 113, 122, 0.35)";
-
-type KpiCardProps = {
-  label: string;
-  value: string;
-  hint?: string;
-  accent?: "default" | "success" | "warning" | "danger";
-};
-
-function KpiCard({ label, value, hint, accent = "default" }: KpiCardProps) {
-  const accentClassName =
-    accent === "success"
-      ? "border-emerald-300/60 dark:border-emerald-500/40"
-      : accent === "warning"
-        ? "border-amber-300/60 dark:border-amber-500/40"
-        : accent === "danger"
-          ? "border-red-300/60 dark:border-red-500/40"
-          : "border-zinc-200 dark:border-zinc-700";
-
-  return (
-    <div
-      className={[
-        "rounded-xl border bg-white p-4 shadow-sm dark:bg-zinc-950 dark:shadow-black/20",
-        accentClassName,
-      ].join(" ")}
-    >
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
-        {value}
-      </p>
-      {hint ? (
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
-      ) : null}
-    </div>
-  );
-}
-
-function ChartFrame({ children }: { children?: ReactNode }) {
-  return (
-    <div className="h-[300px] w-full min-w-0 min-h-[300px]">{children}</div>
-  );
-}
-
-function ChartCard({
-  title,
-  description,
-  children,
-  emptyMessage,
-  isEmpty,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  emptyMessage: string;
-  isEmpty: boolean;
-}) {
-  return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-black/20">
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          {title}
-        </h3>
-        {description ? (
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      {isEmpty ? (
-        <div className="flex min-h-[14rem] items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {emptyMessage}
-          </p>
-        </div>
-      ) : (
-        children
-      )}
-    </section>
-  );
-}
-
-function OverduePanel({
-  rows,
-  onTaskClick,
-  readOnly = false,
-}: {
-  rows: OverdueTaskRow[];
-  onTaskClick?: (task: Task) => void;
-  readOnly?: boolean;
-}) {
-  return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-black/20">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Overdue tasks alert
-          </h3>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Incomplete tasks past their effective due date.
-          </p>
-        </div>
-        <span
-          className={[
-            "rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
-            rows.length > 0
-              ? "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200"
-              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
-          ].join(" ")}
-        >
-          {rows.length > 0 ? `${rows.length} overdue` : "All clear"}
-        </span>
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-emerald-300/70 bg-emerald-50 px-4 py-6 text-center dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
-            No overdue tasks — great work!
-          </p>
-          <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-200/80">
-            Every open task is on or ahead of its effective due date.
-          </p>
-        </div>
-      ) : (
-        <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-700">
-          {rows.map((row) => {
-            const content = (
-              <>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                    {row.task.title}
-                  </p>
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    <PicLabel task={row.task} className="inline-flex" /> · Due{" "}
-                    {formatAuDate(
-                      row.task.updatedDueDate ?? row.task.initialDueDate,
-                    )}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold tabular-nums text-white dark:bg-red-500">
-                  {row.daysOverdue === 1
-                    ? "1 day overdue"
-                    : `${row.daysOverdue} days overdue`}
-                </span>
-              </>
-            );
-
-            if (onTaskClick) {
-              return (
-                <li key={row.task.id}>
-                  <button
-                    type="button"
-                    onClick={() => onTaskClick(row.task)}
-                    title={
-                      readOnly
-                        ? `${row.task.title} — view task details (read-only)`
-                        : row.task.title
-                    }
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-zinc-900 dark:hover:bg-zinc-900/80 dark:focus-visible:outline-zinc-100"
-                  >
-                    {content}
-                  </button>
-                </li>
-              );
-            }
-
-            return (
-              <li
-                key={row.task.id}
-                className="flex items-center justify-between gap-3 px-4 py-3"
-              >
-                {content}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
 
 export default function ProjectAnalyticsView({
+  projectId,
   tasks,
-  onTaskClick,
-  readOnly = false,
+  issues,
+  milestones,
+  holidayDateKeys,
+  events,
+  activities,
+  noteHtml,
+  noteUpdatedAt,
+  noteUpdatedByName,
+  canEditNote,
   chartsVisible = true,
+  onOpenIssueLog,
+  onOpenIssue,
 }: ProjectAnalyticsViewProps) {
-  const analytics = useMemo(() => computeProjectAnalytics(tasks), [tasks]);
-
-  if (tasks.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
-          <p className="text-base font-medium text-zinc-900 dark:text-zinc-50">
-            No analytics available yet
-          </p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {readOnly
-              ? "This project has no task data to analyse yet."
-              : "Add tasks to this project to unlock progress dashboards and workload insights."}
-          </p>
-        </div>
-    );
-  }
-
-  const pieData = analytics.statusCounts.filter((item) => item.count > 0);
-  const hasWorkload = analytics.workloadRows.some((row) => row.total > 0);
-  const hasProcessGroups = analytics.processGroupRows.some(
-    (row) => row.total > 0,
+  const today = toLocalDateString();
+  const health = useMemo(
+    () => computeProjectScheduleHealth(tasks, holidayDateKeys, today),
+    [tasks, holidayDateKeys, today],
   );
+  const series = useMemo(
+    () =>
+      buildScheduleSeries({
+        tasks,
+        events,
+        holidayKeys: holidayDateKeys,
+        today,
+      }),
+    [tasks, events, holidayDateKeys, today],
+  );
+  const intel = useMemo(
+    () =>
+      buildIssueIntelligence({
+        issues: issues.map((issue) => ({
+          id: issue.id,
+          issueNumber: issue.issueNumber,
+          displayId: issue.displayId,
+          status: issue.status,
+          severity: issue.severity,
+          category: issue.category,
+          progress: issue.progress,
+          picName: issue.picName,
+          updatedStartDate: issue.updatedStartDate,
+          updatedDueDate: issue.updatedDueDate,
+          actualStartDate: issue.actualStartDate,
+          actualResolutionDate: issue.actualResolutionDate,
+          raisedAt: issue.raisedAt,
+          updatedAt: issue.updatedAt,
+        })),
+        activities,
+        holidayKeys: holidayDateKeys,
+        today,
+      }),
+    [issues, activities, holidayDateKeys, today],
+  );
+  const insights = useMemo(
+    () =>
+      buildProjectInsights({
+        taskCount: tasks.length,
+        projectPs: health.projectPs,
+        delta: health.delta,
+        statusFlag: health.statusFlag,
+        pActual: health.pActualProject,
+        pTarget: health.pTargetProject,
+        issues: intel,
+      }),
+    [tasks.length, health, intel],
+  );
+  const holidays = useMemo(
+    () => resolveHolidaySet(holidayDateKeys),
+    [holidayDateKeys],
+  );
+  const latest = useMemo(() => {
+    for (let index = series.points.length - 1; index >= 0; index -= 1) {
+      if (series.points[index].actual != null) return series.points[index];
+    }
+    return undefined;
+  }, [series.points]);
+  const sortedMilestones = useMemo(
+    () =>
+      [...milestones].sort((a, b) =>
+        a.updatedTarget.localeCompare(b.updatedTarget),
+      ),
+    [milestones],
+  );
+  const deltaTone =
+    health.delta >= 0
+      ? "text-emerald-600 dark:text-emerald-400"
+      : "text-rose-600 dark:text-rose-400";
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Total tasks"
-          value={String(analytics.totalTasks)}
-          hint={
-            analytics.totalTasks === 1
-              ? "1 task tracked"
-              : `${analytics.totalTasks} tasks tracked`
-          }
+    <div className="space-y-12">
+      <section aria-labelledby="schedule-intelligence-heading" className="space-y-5">
+        <SectionHeading
+          id="schedule-intelligence-heading"
+          icon={CalendarClock}
+          title="Schedule Intelligence"
+          description="Task weights only. Issue work is reported in the pane below and does not move these figures."
         />
-        <KpiCard
-          label="Completion"
-          value={`${analytics.completionPercent}%`}
-          hint={`${analytics.completedCount} of ${analytics.totalTasks} completed`}
-          accent="success"
-        />
-        <KpiCard
-          label="Overdue tasks"
-          value={String(analytics.overdueCount)}
-          hint={
-            analytics.overdueCount === 0
-              ? "Nothing overdue right now"
-              : "Requires attention"
-          }
-          accent={analytics.overdueCount > 0 ? "danger" : "default"}
-        />
-        <KpiCard
-          label="Active assignees"
-          value={String(analytics.activeAssigneeCount)}
-          hint="PICs with open assigned tasks"
-        />
-      </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <ChartCard
-          title="Status distribution"
-          description="Share of tasks by workflow status."
-          isEmpty={pieData.length === 0}
-          emptyMessage="No status data to chart yet."
-        >
-          {chartsVisible ? (
-            <ChartFrame>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="count"
-                    nameKey="label"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={58}
-                    outerRadius={92}
-                    paddingAngle={2}
-                  >
-                    {pieData.map((entry) => (
-                      <Cell key={entry.status} fill={entry.colour} stroke="none" />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value, name) => [value ?? 0, name ?? "Tasks"]}
-                    {...CHART_TOOLTIP_STYLE}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    formatter={(value) => (
-                      <span className="text-xs text-zinc-600 dark:text-zinc-300">
-                        {value}
-                      </span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </ChartFrame>
-          ) : (
-            <ChartFrame aria-hidden />
-          )}
-        </ChartCard>
-
-        <ChartCard
-          title="Workload per PIC"
-          description="Open vs completed tasks grouped by assignee."
-          isEmpty={!hasWorkload}
-          emptyMessage="No assignee workload to display yet."
-        >
-          {chartsVisible ? (
-            <ChartFrame>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <BarChart
-                  data={analytics.workloadRows}
-                  margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
-                >
-                  <CartesianGrid stroke={CHART_GRID_COLOUR} vertical={false} />
-                  <XAxis
-                    dataKey="assigneeLabel"
-                    tick={{ fill: CHART_AXIS_COLOUR, fontSize: 11 }}
-                    interval={0}
-                    angle={-20}
-                    textAnchor="end"
-                    height={56}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fill: CHART_AXIS_COLOUR, fontSize: 11 }}
-                  />
-                  <Tooltip
-                    {...CHART_TOOLTIP_STYLE}
-                    labelFormatter={(label, payload) => {
-                      const row = payload?.[0]?.payload as
-                        | { isCustomPic?: boolean }
-                        | undefined;
-                      if (row?.isCustomPic) {
-                        return `${label} (Unregistered PIC)`;
-                      }
-                      return String(label ?? "");
-                    }}
-                  />
-                  <Legend
-                    formatter={(value) => (
-                      <span className="text-xs text-zinc-600 dark:text-zinc-300">
-                        {value}
-                      </span>
-                    )}
-                  />
-                  <Bar
-                    dataKey="open"
-                    name="Open"
-                    stackId="workload"
-                    fill="#0ea5e9"
-                  />
-                  <Bar
-                    dataKey="completed"
-                    name="Completed"
-                    stackId="workload"
-                    fill="#10b981"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartFrame>
-          ) : (
-            <ChartFrame aria-hidden />
-          )}
-        </ChartCard>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <ChartCard
-          title="Process group breakdown"
-          description="Task volume and completion within each PMBOK process group."
-          isEmpty={!hasProcessGroups}
-          emptyMessage="No process group data to display yet."
-        >
-          <div className="space-y-3">
-            {analytics.processGroupRows.map((row) => (
-              <div
-                key={row.bucket}
-                className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900/70"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                    {row.label}
-                  </p>
-                  <p className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
-                    {row.completed}/{row.total} completed · {row.completionPercent}%
-                  </p>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all dark:bg-emerald-400"
-                    style={{ width: `${row.completionPercent}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="sptt-card sptt-card-lift px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Project punctuality
+            </p>
+            <p className="mt-1.5 text-3xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
+              {formatPercent1(health.projectPs)}
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              Actual progress as a share of target
+            </p>
           </div>
-        </ChartCard>
+          <div className="sptt-card sptt-card-lift px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Actual minus target
+            </p>
+            <p
+              className={`mt-1.5 text-3xl font-semibold tabular-nums tracking-tight ${deltaTone}`}
+            >
+              {formatPercent1(health.delta)}
+            </p>
+            <div className="mt-2 space-y-1">
+              <ProgressTrack
+                label="Actual"
+                value={health.pActualProject}
+                colour={PALETTE.actual}
+              />
+              <ProgressTrack
+                label="Target"
+                value={health.pTargetProject}
+                colour={PALETTE.reference}
+              />
+            </div>
+          </div>
+          <div className="sptt-card sptt-card-lift px-5 py-4 sm:col-span-2 lg:col-span-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Status flag
+            </p>
+            <div className="mt-3">
+              <StatusFlagBadge
+                flag={health.statusFlag}
+                className="px-2.5 py-1 text-xs"
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+              {tasks.length === 1 ? "1 task" : `${tasks.length} tasks`} weighted by planned working days
+            </p>
+          </div>
+        </div>
 
-        <OverduePanel
-          rows={analytics.overdueTasks}
-          onTaskClick={onTaskClick}
-          readOnly={readOnly}
-        />
-      </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <ProjectNote
+            projectId={projectId}
+            html={noteHtml}
+            updatedAt={noteUpdatedAt}
+            updatedByName={noteUpdatedByName}
+            canEdit={canEditNote}
+            className="lg:col-span-2"
+          />
+          <Panel title="Key takeaways">
+            <ul className="space-y-3 px-5 py-4">
+              {insights.map((insight) => (
+                <li
+                  key={insight.id}
+                  className="flex gap-2.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-200"
+                >
+                  <Lightbulb
+                    className="mt-0.5 size-4 shrink-0 text-amber-500"
+                    aria-hidden
+                  />
+                  <span>{insight.text}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </div>
+
+        {chartsVisible ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard
+              title="Schedule S-Curve"
+              summary={
+                (latest
+                  ? `On ${formatAuDate(latest.date)}, target is ${formatPercent1(latest.target)} and actual is ${formatPercent1(latest.actual ?? 0)}.`
+                  : "Add task dates to plot the schedule curve.") +
+                (series.usesBackfill
+                  ? " Earlier actuals include an approximation from actual dates, labelled where history was not yet recorded."
+                  : "")
+              }
+            >
+              <TrendChart data={series.points} series={S_CURVE_SERIES} percent />
+            </ChartCard>
+            <ChartCard
+              title="Task burn-down"
+              summary={
+                latest
+                  ? `Remaining effort on ${formatAuDate(latest.date)} is ${latest.remainingDays?.toFixed(1) ?? "—"} working days. The ideal line on that date is ${latest.idealRemainingDays.toFixed(1)}.`
+                  : "Add task dates to plot remaining effort."
+              }
+            >
+              <TrendChart data={series.points} series={BURN_DOWN_SERIES} />
+            </ChartCard>
+          </div>
+        ) : null}
+
+        <ScheduleComposition
+          tasks={tasks}
+          holidayDateKeys={holidayDateKeys}
+          today={today}
+          chartsVisible={chartsVisible}
+        >
+          <Panel title="Milestones" bodyClassName="overflow-x-auto">
+          {sortedMilestones.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+              No milestones on this project yet.
+            </p>
+          ) : (
+            <table className="min-w-full text-left text-sm">
+              <thead className={TABLE_HEAD}>
+                <tr>
+                  <th className="px-5 py-2 font-semibold">Name</th>
+                  <th className="px-5 py-2 font-semibold">Target</th>
+                  <th className="px-5 py-2 font-semibold">Achieved</th>
+                  <th className="px-5 py-2 font-semibold">Variance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                {sortedMilestones.map((milestone) => {
+                  const variance = milestoneVarianceDays(
+                    milestone.updatedTarget,
+                    milestone.actualAchieved,
+                    holidays,
+                  );
+                  const varianceLabel = milestoneVarianceLabel(variance);
+                  const varianceTone =
+                    variance == null || variance === 0
+                      ? "text-zinc-700 dark:text-zinc-200"
+                      : variance > 0
+                        ? "text-amber-700 dark:text-amber-300"
+                        : "text-emerald-700 dark:text-emerald-300";
+                  return (
+                    <tr key={milestone.id} className={TABLE_ROW}>
+                      <td className="px-5 py-2.5 font-medium text-zinc-900 dark:text-zinc-50">
+                        {milestone.name}
+                      </td>
+                      <td className="px-5 py-2.5 tabular-nums text-zinc-700 dark:text-zinc-200">
+                        {formatAuDate(milestone.updatedTarget)}
+                      </td>
+                      <td className="px-5 py-2.5 tabular-nums text-zinc-700 dark:text-zinc-200">
+                        {milestone.actualAchieved
+                          ? formatAuDate(milestone.actualAchieved)
+                          : "—"}
+                      </td>
+                      <td className={`px-5 py-2.5 ${varianceTone}`}>
+                        {varianceLabel}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          </Panel>
+        </ScheduleComposition>
+      </section>
+
+      <IssueIntelligencePane
+        intel={intel}
+        chartsVisible={chartsVisible}
+        onOpenIssueLog={onOpenIssueLog}
+        onOpenIssue={onOpenIssue}
+      />
     </div>
   );
 }

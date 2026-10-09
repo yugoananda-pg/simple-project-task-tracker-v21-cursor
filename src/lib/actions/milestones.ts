@@ -14,6 +14,7 @@ import { prisma } from "@/src/lib/prisma";
 import { requireAdminProject, requireReadableProject } from "@/src/lib/rbac";
 import {
   dbDateToLocalDateString,
+  isPlausibleLocalDate,
   localDateStringToDbDate,
 } from "@/src/lib/task-defaults";
 import type { Milestone } from "@/src/lib/types";
@@ -60,8 +61,11 @@ function validateName(name: string): string {
 
 function requireDate(value: string, label: string): Date {
   const trimmed = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    throw new ActionError(`Please enter a valid ${label}.`, "VALIDATION");
+  if (!isPlausibleLocalDate(trimmed)) {
+    throw new ActionError(
+      `Please enter a valid ${label} between the years 2000 and 2100.`,
+      "VALIDATION",
+    );
   }
   return localDateStringToDbDate(trimmed);
 }

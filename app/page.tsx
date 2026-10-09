@@ -5,6 +5,7 @@ import {
   listBrowsableProjectOwners,
   listProjects,
 } from "@/src/lib/actions/projects";
+import { portfolioAccessFor } from "@/src/lib/dashboard-access";
 import {
   canAccessCompletedWorkspace,
   canBrowsePeerPmPortfolios,
@@ -68,6 +69,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       browsableOwners={browsableOwners}
       browseOwnerId={effectiveBrowseOwnerId}
       currentUserId={user.id}
+      portfolioAccess={portfolioAccessFor(user)}
     />
   );
 }

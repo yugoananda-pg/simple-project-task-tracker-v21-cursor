@@ -7,10 +7,12 @@ import { useToast } from "@/src/components/providers/ToastProvider";
 import SettingsPageHeader from "@/src/components/settings/SettingsPageHeader";
 import {
   listViewerProjectGrants,
+  setViewerProjectVisibilityMode,
   syncViewerProjectGrants,
   type ViewerDirectoryRow,
   type ViewerGrantProjectRow,
 } from "@/src/lib/actions/viewer-visibility";
+import type { ProjectVisibilityMode } from "@/src/lib/types";
 
 type ViewerVisibilityClientProps = {
   initialViewers: ViewerDirectoryRow[];
@@ -128,6 +130,35 @@ export default function ViewerVisibilityClient({
     });
   }
 
+  function handleMode(mode: ProjectVisibilityMode) {
+    if (!selectedViewer || selectedViewer.projectVisibilityMode === mode) return;
+    const viewerId = selectedViewer.id;
+    startTransition(async () => {
+      const result = await setViewerProjectVisibilityMode({
+        viewerUserId: viewerId,
+        mode,
+      });
+      if (!result.success) {
+        showToast(result.error, "error");
+        return;
+      }
+      setViewers((current) =>
+        current.map((viewer) =>
+          viewer.id === viewerId
+            ? { ...viewer, projectVisibilityMode: mode }
+            : viewer,
+        ),
+      );
+      showToast(
+        mode === "ALL_ACTIVE"
+          ? "This Viewer can now open every Active project."
+          : "This Viewer is limited to the selected projects.",
+        "success",
+      );
+      router.refresh();
+    });
+  }
+
   function handleSave() {
     if (!selectedViewerId || !dirty) return;
     startTransition(async () => {
@@ -171,7 +202,7 @@ export default function ViewerVisibilityClient({
       <SettingsPageHeader
         current="Viewer visibility"
         title="Viewer project visibility"
-        description="Grant approved Viewers read-only access to Active projects without asking each owning PM to edit their roster. Membership is still stored as ProjectMember rows (relational, not an array on the user)."
+        description="Choose whether a Viewer opens a saved list of Active projects, or every Active project. Access stays read-only. Dashboard ticks are set separately under Users and privileges."
       />
 
       {viewers.length === 0 ? (
@@ -227,8 +258,11 @@ export default function ViewerVisibilityClient({
                         {viewer.email}
                       </span>
                       <span className="mt-0.5 text-[11px] text-zinc-500">
-                        {viewer.grantedActiveCount} Active project
-                        {viewer.grantedActiveCount === 1 ? "" : "s"}
+                        {viewer.projectVisibilityMode === "ALL_ACTIVE"
+                          ? "All Active projects"
+                          : `${viewer.grantedActiveCount} Active project${
+                              viewer.grantedActiveCount === 1 ? "" : "s"
+                            }`}
                       </span>
                     </button>
                   </li>
@@ -249,6 +283,50 @@ export default function ViewerVisibilityClient({
               </p>
             ) : (
               <>
+                <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Which Active projects
+                  </p>
+                  <div
+                    role="radiogroup"
+                    aria-label="Viewer project visibility mode"
+                    className="mt-2 inline-flex flex-wrap gap-0.5 rounded-xl border border-zinc-200 bg-zinc-100/80 p-1 dark:border-zinc-700 dark:bg-zinc-950/70"
+                  >
+                    {(
+                      [
+                        ["SELECTED", "Selected projects"],
+                        ["ALL_ACTIVE", "All Active projects"],
+                      ] as const
+                    ).map(([mode, label]) => {
+                      const selected =
+                        selectedViewer.projectVisibilityMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          disabled={isPending}
+                          onClick={() => handleMode(mode)}
+                          className={[
+                            "rounded-lg px-3 py-1.5 text-sm font-semibold transition-[color,background-color,box-shadow] duration-150",
+                            selected
+                              ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/5 dark:bg-zinc-800 dark:text-zinc-50 dark:ring-white/10"
+                              : "text-zinc-600 hover:bg-white/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-100",
+                          ].join(" ")}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 max-w-xl text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    {selectedViewer.projectVisibilityMode === "ALL_ACTIVE"
+                      ? "This Viewer can open every Active project. Completed and deleted projects stay off the list. The checklist below is kept and applies again on Selected projects."
+                      : "This Viewer opens only the ticked Active projects. An owning PM can still add or remove them on one project from Edit Project."}
+                  </p>
+                </div>
+
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200 p-4 dark:border-zinc-700">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -350,9 +428,9 @@ export default function ViewerVisibilityClient({
       )}
 
       <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-        Owning PMs may still add or remove Viewers from Edit Project → team
-        roster. This page is the Super PM shortcut for cross-portfolio Viewer
-        grants. Access remains read-only for Viewer accounts.
+        Dashboard access (the Analytics tab, and later the portfolio page) is
+        set under Users and privileges. This page only chooses which projects
+        a Viewer may open. Access remains read-only.
       </p>
     </section>
   );

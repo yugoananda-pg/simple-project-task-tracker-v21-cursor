@@ -8,6 +8,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/src/components/providers/ToastProvider";
 import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
 import ProgressPairBadges from "@/src/components/schedule/ProgressPairBadges";
+import TaskImportDialog from "@/src/components/tasks/TaskImportDialog";
 import ConfirmDialog from "@/src/components/ui/ConfirmDialog";
 import {
   createProject,
@@ -31,6 +32,8 @@ type HomePageClientProps = {
   browsableOwners?: BrowsableProjectOwner[];
   browseOwnerId?: string | null;
   currentUserId?: string | null;
+  /** Which portfolio views this person may open. */
+  portfolioAccess?: { pm: boolean; all: boolean };
 };
 
 export default function HomePageClient({
@@ -43,11 +46,14 @@ export default function HomePageClient({
   browsableOwners = [],
   browseOwnerId = null,
   currentUserId = null,
+  portfolioAccess = { pm: false, all: false },
 }: HomePageClientProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [projects, setProjects] = useState(initialProjects);
   const [modalOpen, setModalOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<"blank" | "excel">("blank");
+  const [excelBusy, setExcelBusy] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -89,15 +95,28 @@ export default function HomePageClient({
     });
   }
 
+  // Deep link from the scope control to the same scope on /portfolio.
+  const portfolioHref = (() => {
+    if (scopeDraft === PROJECT_LIST_SCOPE_ALL) {
+      return portfolioAccess.all ? "/portfolio?scope=all" : null;
+    }
+    const pmId = scopeDraft || currentUserId;
+    return portfolioAccess.pm && pmId
+      ? `/portfolio?scope=pm&pm=${encodeURIComponent(pmId)}`
+      : null;
+  })();
+
   function openModal() {
     setName("");
     setDescription("");
     setError(null);
+    setCreateMode("blank");
     setModalOpen(true);
   }
 
   function closeModal() {
-    if (isPending) return;
+    if (isPending || excelBusy) return;
+    setExcelBusy(false);
     setModalOpen(false);
   }
 
@@ -170,7 +189,7 @@ export default function HomePageClient({
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+    <section className="mx-auto w-full px-4 py-10 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -216,6 +235,14 @@ export default function HomePageClient({
                     </option>
                   ))}
               </select>
+              {portfolioHref ? (
+                <Link
+                  href={portfolioHref}
+                  className="mt-2 inline-flex text-xs font-semibold text-slate-700 underline-offset-2 hover:underline dark:text-slate-200"
+                >
+                  Analytics for this scope →
+                </Link>
+              ) : null}
               {isScopePending ? (
                 <p
                   className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300"
@@ -363,9 +390,11 @@ export default function HomePageClient({
               No projects yet
             </p>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {canCreateProject
-                ? "Create your first project to get started."
-                : "Projects shared with you will appear here."}
+              {canBrowsePeerPortfolios && !browseOwnerId
+                ? "Nothing you own or are assigned to is Active. Choose All projects above to browse the portfolio, or create one."
+                : canCreateProject
+                  ? "Create your first project to get started."
+                  : "Projects shared with you will appear here."}
             </p>
           </div>
         ) : (
@@ -465,7 +494,10 @@ export default function HomePageClient({
             role="dialog"
             aria-modal="true"
             aria-labelledby="new-project-title"
-            className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+            className={[
+              "max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900",
+              createMode === "excel" ? "max-w-2xl" : "max-w-md",
+            ].join(" ")}
             onClick={(event) => event.stopPropagation()}
           >
             <h2
@@ -475,9 +507,57 @@ export default function HomePageClient({
               New project
             </h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Give your project a clear name and optional description.
+              Start with an empty project, or create one from an Excel workbook.
             </p>
 
+            <div
+              role="tablist"
+              aria-label="How to create the project"
+              className="mt-4 inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-700 dark:bg-zinc-800"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={createMode === "blank"}
+                disabled={isPending || excelBusy}
+                onClick={() => setCreateMode("blank")}
+                className={[
+                  "rounded-md px-3 py-1.5 text-sm font-semibold",
+                  createMode === "blank"
+                    ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-50"
+                    : "text-zinc-600 dark:text-zinc-300",
+                ].join(" ")}
+              >
+                Blank project
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={createMode === "excel"}
+                disabled={isPending || excelBusy}
+                onClick={() => setCreateMode("excel")}
+                className={[
+                  "rounded-md px-3 py-1.5 text-sm font-semibold",
+                  createMode === "excel"
+                    ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-50"
+                    : "text-zinc-600 dark:text-zinc-300",
+                ].join(" ")}
+              >
+                From Excel
+              </button>
+            </div>
+
+            {createMode === "excel" ? (
+              <TaskImportDialog
+                onPendingChange={setExcelBusy}
+                onCancel={closeModal}
+                onCreated={(project) => {
+                  setModalOpen(false);
+                  router.push(`/projects/${project.id}`);
+                  router.refresh();
+                }}
+              />
+            ) : (
             <form className="mt-6 space-y-4" onSubmit={handleCreateProject}>
               <div>
                 <label
@@ -542,6 +622,7 @@ export default function HomePageClient({
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       ) : null}

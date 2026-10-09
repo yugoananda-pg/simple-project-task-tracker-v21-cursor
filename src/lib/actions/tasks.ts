@@ -8,8 +8,9 @@ import {
   ActionError,
   type ActionResult,
 } from "@/src/lib/actions/errors";
-import { assertActualDateNotFuture } from "@/src/lib/actions/date-validation";
 import { auditCreate, auditUpdate } from "@/src/lib/audit";
+import { rememberCustomAssignee } from "@/src/lib/custom-assignees";
+import { logTaskProgress } from "@/src/lib/actions/task-progress-log";
 import { syncProjectProgressClock } from "@/src/lib/actions/project-lifecycle";
 import { mapTask } from "@/src/lib/mappers";
 import { prisma } from "@/src/lib/prisma";
@@ -22,15 +23,18 @@ import {
   requireApprovedSessionUser,
 } from "@/src/lib/rbac";
 import {
+  actualDateRangeError,
   addDaysToLocalDateString,
   clampProgress,
+  dbDateToLocalDateString,
   defaultProgressForStatus,
+  isPlausibleLocalDate,
   localDateStringToDbDate,
   progressFromStatusChange,
   statusFromProgress,
   toLocalDateString,
 } from "@/src/lib/task-defaults";
-import type { Task, TaskStatus } from "@/src/lib/types";
+import type { Task, TaskBucket, TaskStatus } from "@/src/lib/types";
 import type { Prisma } from "@prisma/client";
 
 const TASK_INCLUDE = {
@@ -80,8 +84,11 @@ function validateTaskTitle(title: string): string {
 function parseOptionalDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const datePart = value.trim().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-    throw new ActionError("Please enter a valid date.", "VALIDATION");
+  if (!isPlausibleLocalDate(datePart)) {
+    throw new ActionError(
+      "Please enter a valid date between the years 2000 and 2100.",
+      "VALIDATION",
+    );
   }
   return localDateStringToDbDate(datePart);
 }
@@ -191,15 +198,37 @@ export async function createTask(input: {
   title: string;
   description?: string;
   status?: TaskStatus;
+  bucket?: TaskBucket;
+  /** Insert at this index within the process group (0-based). Defaults to end. */
+  listIndex?: number;
+  /** Optional planned span from the List draft row; defaults to today → +7 WD calendar days. */
+  initialStartDate?: string | null;
+  initialDueDate?: string | null;
 }): Promise<ActionResult<Task>> {
   try {
     const { user } = await requireAdminProject(input.projectId);
     const title = validateTaskTitle(input.title);
     const description = (input.description ?? "").trim();
     const status: TaskStatus = input.status ?? "todo";
+    const bucket: TaskBucket = input.bucket ?? "executing";
 
-    const initialStart = toLocalDateString();
-    const initialDue = addDaysToLocalDateString(initialStart, 7);
+    const initialStart =
+      input.initialStartDate?.trim().slice(0, 10) || toLocalDateString();
+    const initialDue =
+      input.initialDueDate?.trim().slice(0, 10) ||
+      addDaysToLocalDateString(initialStart, 7);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(initialStart)) {
+      throw new ActionError("Please enter a valid initial start date.", "VALIDATION");
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(initialDue)) {
+      throw new ActionError("Please enter a valid initial due date.", "VALIDATION");
+    }
+    if (initialDue < initialStart) {
+      throw new ActionError(
+        "Initial due date cannot be before the initial start date.",
+        "VALIDATION",
+      );
+    }
     const initialStartDate = parseLocalDateString(initialStart);
     const initialDueDate = parseLocalDateString(initialDue);
     const progress = defaultProgressForStatus(status);
@@ -214,6 +243,24 @@ export async function createTask(input: {
       const sortOrder =
         minSort._min.sortOrder == null ? 0 : minSort._min.sortOrder - 1;
 
+      const siblings = await tx.task.findMany({
+        where: { projectId: input.projectId, bucket },
+        select: { id: true, listSortOrder: true },
+        orderBy: [{ listSortOrder: "asc" }, { createdAt: "asc" }],
+      });
+      const insertAt =
+        input.listIndex == null
+          ? siblings.length
+          : Math.max(0, Math.min(input.listIndex, siblings.length));
+
+      for (let i = siblings.length - 1; i >= insertAt; i -= 1) {
+        const sibling = siblings[i]!;
+        await tx.task.update({
+          where: { id: sibling.id },
+          data: { listSortOrder: i + 1, ...touch },
+        });
+      }
+
       const created = await tx.task.create({
         data: {
           projectId: input.projectId,
@@ -221,7 +268,9 @@ export async function createTask(input: {
           description,
           status,
           progress,
+          bucket,
           sortOrder,
+          listSortOrder: insertAt,
           initialStartDate,
           initialDueDate,
           updatedStartDate: initialStartDate,
@@ -240,6 +289,15 @@ export async function createTask(input: {
         },
         include: TASK_INCLUDE,
       });
+      if (progress > 0) {
+        await logTaskProgress(tx, {
+          projectId: input.projectId,
+          taskId: created.id,
+          progress,
+          actorId: user.id,
+          previousProgress: null,
+        });
+      }
       await tx.project.update({
         where: { id: input.projectId },
         data: touch,
@@ -327,6 +385,10 @@ export async function updateTaskFields(
       data.sortOrder = patch.sortOrder;
     }
 
+    if (patch.listSortOrder !== undefined) {
+      data.listSortOrder = patch.listSortOrder;
+    }
+
     if (patch.priority !== undefined) data.priority = patch.priority;
     if (patch.bucket !== undefined) data.bucket = patch.bucket;
     if (patch.assigneeId !== undefined || patch.assigneeName !== undefined) {
@@ -362,6 +424,9 @@ export async function updateTaskFields(
           );
         }
         data.assigneeName = customName;
+        if (customName) {
+          await rememberCustomAssignee(user.id, customName);
+        }
       }
     }
     if (patch.initialStartDate !== undefined) {
@@ -376,16 +441,34 @@ export async function updateTaskFields(
     if (patch.updatedDueDate !== undefined) {
       data.updatedDueDate = parseOptionalDate(patch.updatedDueDate);
     }
-    if (patch.actualStartDate !== undefined) {
-      assertActualDateNotFuture(patch.actualStartDate, "Actual start date");
-      data.actualStartDate = parseOptionalDate(patch.actualStartDate);
-    }
-    if (patch.actualCompletionDate !== undefined) {
-      assertActualDateNotFuture(
-        patch.actualCompletionDate,
-        "Actual completion date",
-      );
-      data.actualCompletionDate = parseOptionalDate(patch.actualCompletionDate);
+    if (
+      patch.actualStartDate !== undefined ||
+      patch.actualCompletionDate !== undefined
+    ) {
+      const nextStart =
+        patch.actualStartDate !== undefined
+          ? patch.actualStartDate
+          : task.actualStartDate
+            ? dbDateToLocalDateString(task.actualStartDate)
+            : null;
+      const nextFinish =
+        patch.actualCompletionDate !== undefined
+          ? patch.actualCompletionDate
+          : task.actualCompletionDate
+            ? dbDateToLocalDateString(task.actualCompletionDate)
+            : null;
+      const rangeError = actualDateRangeError(nextStart, nextFinish);
+      if (rangeError) {
+        throw new ActionError(rangeError, "VALIDATION");
+      }
+      if (patch.actualStartDate !== undefined) {
+        data.actualStartDate = parseOptionalDate(patch.actualStartDate);
+      }
+      if (patch.actualCompletionDate !== undefined) {
+        data.actualCompletionDate = parseOptionalDate(
+          patch.actualCompletionDate,
+        );
+      }
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -394,6 +477,15 @@ export async function updateTaskFields(
         data,
         include: TASK_INCLUDE,
       });
+      if (nextTask.progress !== task.progress) {
+        await logTaskProgress(tx, {
+          projectId: task.projectId,
+          taskId,
+          progress: nextTask.progress,
+          actorId: user.id,
+          previousProgress: task.progress,
+        });
+      }
       await tx.project.update({
         where: { id: task.projectId },
         data: auditUpdate(user.id),
@@ -464,6 +556,9 @@ export async function reorderTasks(input: {
             })
           : null;
 
+        const nextProgress = statusChanged
+          ? progressFromStatusChange(input.status, current.progress)
+          : current.progress;
         await tx.task.update({
           where: { id: taskId },
           data: {
@@ -471,13 +566,73 @@ export async function reorderTasks(input: {
             sortOrder: index,
             ...touch,
             ...(effects ?? {}),
-            progress: statusChanged
-              ? progressFromStatusChange(input.status, current.progress)
-              : current.progress,
+            progress: nextProgress,
           },
         });
+        if (nextProgress !== current.progress) {
+          await logTaskProgress(tx, {
+            projectId: input.projectId,
+            taskId,
+            progress: nextProgress,
+            actorId: user.id,
+            previousProgress: current.progress,
+          });
+        }
       }
 
+      await tx.project.update({
+        where: { id: input.projectId },
+        data: touch,
+      });
+    });
+
+    revalidatePath(`/projects/${input.projectId}`);
+    return actionSuccess({ ok: true });
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+/** Persist List / high-density table order within (and across) process groups. */
+export async function reorderTasksInList(input: {
+  projectId: string;
+  /** Full ordered id lists per process group that changed. */
+  groups: Array<{ bucket: TaskBucket; orderedTaskIds: string[] }>;
+}): Promise<ActionResult<{ ok: true }>> {
+  try {
+    const { user } = await requireAdminProject(input.projectId);
+    const touch = auditUpdate(user.id);
+    const allIds = input.groups.flatMap((group) => group.orderedTaskIds);
+
+    if (allIds.length === 0) {
+      return actionSuccess({ ok: true });
+    }
+
+    const existing = await prisma.task.findMany({
+      where: { id: { in: allIds }, projectId: input.projectId },
+      select: { id: true },
+    });
+    if (existing.length !== allIds.length) {
+      throw new ActionError(
+        "One or more tasks could not be reordered on the list.",
+        "VALIDATION",
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const group of input.groups) {
+        for (let index = 0; index < group.orderedTaskIds.length; index += 1) {
+          const taskId = group.orderedTaskIds[index]!;
+          await tx.task.update({
+            where: { id: taskId },
+            data: {
+              bucket: group.bucket,
+              listSortOrder: index,
+              ...touch,
+            },
+          });
+        }
+      }
       await tx.project.update({
         where: { id: input.projectId },
         data: touch,

@@ -2,8 +2,8 @@
 
 **Document Identifier:** `doc/dev_req.md`  
 **Product Title:** Simple Project Task Tracker 2.1 (Executive Portfolio Intelligence System)  
-**Document Version:** 2.1.9  
-**Status:** Approved Technical Requirements Specification — Waves **4A** and **4B** as-built and UAT-accepted; Wave **4C** requirements remain binding but not yet implemented  
+**Document Version:** 2.1.27
+**Status:** Approved Technical Requirements Specification — Waves **4A** and **4B** as-built and UAT-accepted; Wave **4C-1** List as-built; Wave **4C-1b** Excel import as-built; Wave **4C-2a** per-project Analytics as-built 8 Oct 2026 (UAT pack not yet accepted); Wave **4C-2b** dashboard access as-built 9 Oct 2026 (UAT not yet accepted); Wave **4C-3** portfolio, macro timeline and About as-built 9 Oct 2026 (UAT not yet accepted); Wave **4C-4 onward** remain binding but not yet implemented
 **Amendment:** Universal mutation audit trail; Completed Projects workspace; soft-delete / restore / five-year completed retention; Purged Project Register; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE / delivery alignment with Cursor and as-built UAT  
 **IDE Target:** Cursor (Agent / IDE browser automation for UAT)  
 **Language Standard:** Professional Australian English (`en-AU`)  
@@ -285,11 +285,24 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * Optional Super PM email alerts fire when a registrant **confirms email** (enters the queue), with a deep link to `/settings/users` — not merely on form submit.
   * **Privilege matrix directory UX:** approved active accounts appear as a compact A–Z directory with **instant name/email search**, **role filter chips** (All / Super PM / PM / Member / Viewer), and **progressive disclosure** — expand one person at a time to edit display name, reset password, role, Completed visibility, and dashboard scopes. Avoid rendering every full privilege form at once.
 * **FR-GOV-04 [Dynamic Dashboard Scopes]:**
-  * By default, PMs and Members have access to all dashboards; Viewers have none.
-  * A Super PM can override dashboard privileges on a per-user basis across three granular scopes:
-    1. `PROJECT`: Access to the Per-Project Analytics view.
-    2. `PM_PORTFOLIO`: Access to the PM Portfolio Analytics dashboard.
-    3. `TOTAL_COMPANY`: Access to the Macro Enterprise Portfolio dashboard.
+  * Dashboard scopes are a **capability**, enforced on the hub Analytics tab. `/portfolio` uses the same check (FR-PORT-01). Enforcement of the hub tab is as-built in Wave **4C-2b**, and of `/portfolio` in Wave **4C-3** (both 9 Oct 2026).
+  * Defaults (Super PM may revoke or grant any non–Super PM scope):
+    1. **Super PM:** `PROJECT`, `PM_PORTFOLIO`, `TOTAL_COMPANY` — locked.
+    2. **PM:** all three.
+    3. **Member:** `PROJECT` only.
+    4. **Viewer:** `PROJECT` only.
+  * Scopes:
+    1. `PROJECT`: Per-project Analytics on the project hub.
+    2. `PM_PORTFOLIO`: Portfolio analytics for one PM (`/portfolio?scope=pm`).
+    3. `TOTAL_COMPANY`: All-projects analytics (`/portfolio?scope=all`).
+  * A dashboard aggregates only projects inside the caller’s data scope. For a Viewer that is the granted set, or every Active project when `projectVisibilityMode = ALL_ACTIVE` (FR-GOV-04B).
+  * Changing role in the privilege matrix fills that role’s default ticks. The Super PM may adjust them before saving. Approval and direct provisioning write the same defaults.
+* **FR-GOV-04B [Viewer project visibility mode — Wave 4C-2b]:**
+  * Stored on `User.projectVisibilityMode` as `SELECTED` | `ALL_ACTIVE`. Default `SELECTED`. The column is ignored for every role other than Viewer.
+  * **Selected:** the Viewer opens Active projects that have a `ProjectMember` row (Settings → Viewer project visibility checklist, or Edit Project roster).
+  * **All Active:** the Viewer may open every non-deleted Active project, read-only, without a tick per project. Completed, soft-deleted, and purged projects stay out of this mode. Switching to All Active does **not** delete the checklist rows, so Selected can be restored.
+  * This mode is data scope. It does not grant `PM_PORTFOLIO` or `TOTAL_COMPANY`. A Viewer still needs `PROJECT` to see the Analytics tab.
+  * Administered only by a Super PM at `/settings/viewer-visibility`. The privilege matrix does not edit this mode.
 * **FR-GOV-04A [Completed Projects Visibility — Super PM Invocation]:**
   * Super PMs shall arbitrarily decide, per account, whether that account may view projects labelled Completed.
   * Stored on `User.completedProjectAccess` as `NONE` | `ASSIGNED` | `ALL`.
@@ -306,7 +319,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * **Viewer:** Sees only Active projects where a Super PM or owning PM has granted them a `ProjectMember` row. Access is strictly read-only (no task mutations, no comments, no issues). They do **not** get the peer portfolio browser.
   * **Viewer grant UI (preferred — Super PM):** Settings → **Viewer project visibility** (`/settings/viewer-visibility`). The Super PM selects an approved Viewer and checks the Active programmes they may open. Saves sync that Viewer’s Active-project `ProjectMember` rows only (other roster members untouched; soft-deleted / Completed memberships left alone). This avoids asking every owning PM to edit each project after a new Viewer is approved.
   * **Viewer grant UI (alternate — owning PM / Super PM):** Edit Project → team roster still adds or removes a Viewer on a single project.
-  * Project membership, registered task assignees, and issue PIC fields may target **only** approved, active human accounts (not pending, rejected, deactivated, or the System actor). Edit Project roster checkboxes list directory users; **task/issue PIC pickers** list the project roster plus the owning PM and every active Super PM. Server Actions reject other targets. Visibility must remain relational (`ProjectMember`); `User.projectVisibility: String[]` is forbidden.
+  * Project membership and registered task or issue PIC accounts may target **only** approved, active human accounts (not pending, rejected, deactivated, or the System actor). Edit Project roster checkboxes list directory users; **task/issue PIC pickers** list the project roster plus the owning PM and every active Super PM, then previously used custom names. Server Actions reject other **account** targets. A custom PIC is a display name with a null user id (`assigneeId` / `picId`), remembered in `CustomAssignee` so the same name can be chosen again. Custom names are not user accounts and do not grant access. Visibility must remain relational (`ProjectMember`); `User.projectVisibility: String[]` is forbidden.
 * **FR-GOV-06 [Safe Account Deactivation, Reactivation & Purge]:**
   * Direct cascade deletion of active user accounts is strictly prohibited. Self-deactivation and modification of the System actor are forbidden.
   * **PM / Super PM deactivation:** The Super PM is warned that every owned project must be assigned to another approved, active PM or Super PM (not the target). Under Settings → Users & privileges → **Safe deletion**, Review & deactivate lists each owned project; the Super PM selects a replacement per project. Tasks and issue PIC fields on those projects that were assigned to the target move to the new owner. Tasks and PIC on non-owned projects move to each project's owning PM. Memberships are removed. Receiving PMs are emailed (aggregated by recipient) with project names and transferred task titles. Another Super PM may be deactivated only if at least one active, approved Super PM remains.
@@ -361,7 +374,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
 * **FR-MLS-04 [Project hub milestone UX]:**
   * On the project hub, milestones shall appear as a **compact stage-gate strip** (count, next-target summary, chips) so they do not dominate the task/issue workspace.
   * Add and Edit shall open a **focused modal** (progressive disclosure). The create form must not remain always visible on the hub.
-  * Chips show the next milestones by `updatedTarget` (cap with **View all** when the list is long). Clicking a chip opens detail; owning PM / Super PM may edit name, description, updated target, achieved date, or delete; other roles may view read-only.
+  * Chips show milestones by `updatedTarget` and use the width of the strip, up to two rows. **View all** appears only when further chips would not fit. Clicking a chip opens detail; owning PM / Super PM may edit name, description, updated target, achieved date, or delete; other roles may view read-only.
   * Ordering on the strip and in lists is by `updatedTarget` ascending (next gate first).
 
 ---
@@ -390,21 +403,48 @@ UI percentages in this pane are reported to one decimal place, consistent with p
     5. Count of active tasks and overdue tasks.
     6. **Open-issue count** (issues in `open`, `in_progress`, or `blocked`). If any of those has `severity = critical`, the count uses the rose token.
 * **FR-UI-03 [High-Density Tabular Task View]:**
-  * Within the project workspace, the List View shall be upgraded to a High-Density Data Table.
-  * Columns: Reorder Handle, Task Title, Process Group (Initiating → Closing), Priority, Weight ($W_i$), Multi-Dates (Initial, Updated, Actual), PIC/Assignee badge, Status, and Progress Slider/Input.
-  * Inline cell editing shall be supported for Status, Priority, Progress, and PIC.
+  * Within the project workspace, the List View shall present a high-density schedule table grouped by process group (Initiating → Closing).
+  * **No.** shall use process-group indexing: Initiating `1.x`, Planning `2.x`, Executing `3.x`, Monitoring `4.x`, Closing `5.x` (sequential within each group).
+  * Columns (Australian English): No., Task, Status (To Do / Doing / Done), Actual %, Target %, Initial start, Initial due, Initial WD, Updated start, Updated due, Updated WD, Actual start, Actual finish, Actual WD, PS, Status flag.
+  * **WD** columns shall show inclusive working days between the pair of dates (weekends and registered holidays excluded), using $D_{\text{planned}}=\max(1,\ldots)$ so the same start and end date shows **1** (never zero). Examples: 12→16 Oct 2026 (Mon–Fri) = 5 WD; 12→12 Oct 2026 = 1 WD. Actual WD uses Actual start → Actual finish; show an em dash only when either date is missing.
+  * The List table scrollport shall freeze the column header row (vertical scroll) and the Task name column together with No./drag (horizontal scroll). Sticky panes use opaque fills so scrolling cells do not show through; a right freeze edge on the Task column appears while scrolled horizontally (not on process-group or Add-row rows). Process-group header rows stick under the column header (vertical) and keep their label in the freeze rail while scrolling horizontally. The group header is a label only. Each group has one **Add row** at the bottom. Hovering the **existing bottom grid line** of a row thickens that same border and shows a **+** (no extra spacer row). Clicking opens an instant local draft at that index (not persisted until complete). Drafts require title + initial start + initial due; leaving an incomplete touched draft offers Continue editing / Discard. Empty projects still show all five process groups with emphasised **Add row**. Inline delete (hover trash + confirm) removes a task via `deleteTask` with the same permission rules as the drawer. List date cells are uncontrolled while typing so day/month/year keyboard entry is not clobbered. Actual date rules: no future dates; actual finish requires actual start; finish ≥ start. Violations revert the field and show a dismissible toast/banner (~7s). Entering a valid **actual finish** while Status is not Done or Actual % is not 100% shall prompt to mark the task Done at 100%; Confirm applies the finish date with those side effects; Cancel restores the previous field value. Project and task punctuality scores recalculate from the updated task set on every successful mutation.
+  * Above the List table, show the live **Project punctuality score** (aggregate Project PS). Initial WD, Updated WD, and Actual WD columns are centre-aligned.
+  * Transient List / task mutation errors (for example future Actual dates) shall be dismissible and auto-clear within a few seconds.
+  * Updated start/due are the schedule baseline for Punctuality Score; on create they default to the initial dates.
+  * Inline editing shall be supported for Task title, Status, Actual %, and all six date fields. Target %, WD, PS, and Status flag are computed and not editable. A task flagged **Due to Commence** leaves the PS cell blank. The engine still scores that task at $100\%$; only the cell is hidden.
+  * Users may add a task at the end of any process group or insert a row; drag-and-drop shall reorder within or across process groups (`listSortOrder`, independent of Kanban `sortOrder`).
+  * Fields not on the grid (PIC, priority, description, checklist, comments) remain available via an optional Details control that opens the existing task drawer — the drawer is not required for schedule-column edits.
 * **FR-UI-04 [Five-View Project Workspace]:**
-  * The project hub shall expose five peer views with no layout shift: **List**, **Kanban**, **Gantt**, **Analytics**, **Issue Log**.
+  * The project hub shall expose five peer views with no layout shift: **List**, **Kanban**, **Gantt**, **Issue Log**, **Analytics**.
   * Issue Log is the system of record for unplanned impediments (Module J). Issues shall not appear as Gantt task bars in Release 2.1.
   * The Analytics view shall host **Schedule Intelligence** and **Issue Intelligence** as two stacked panes (FR-ANL-04). Every Issue Log mutation shall be visible on Issue Intelligence without a page reload beyond `revalidatePath`.
-  * Project-level Status Flag and Actual / Target progress appear under the project description once. Individual views shall not repeat that project summary strip.
+  * Project-level Status Flag and Actual / Target progress appear under the project description once. The List View may additionally show the live **Project punctuality score** above the table (FR-UI-03); other views shall not repeat the header summary strip.
+  * Home, project hub, completed projects, and the app header use the full viewport width with a small side gutter (`px-4` / `sm:px-6` / `lg:px-8`). Settings forms stay on a narrower reading width. Project description prose may stay capped so lines remain readable.
 * **FR-UI-05 [Per-Project Gantt task rail]:**
-  * The sticky left rail shall contain two freeze-pane columns: **Task** then **Progress**, followed by the timeline.
+  * Only the **Task** column is frozen while the chart scrolls sideways. **Progress** sits beside it and scrolls away with the timeline, so a long project keeps more of the date scale on screen.
   * **Task column:** task title (wrapping / multi-line so wording is readable), the task’s 11-state Status Flag pill, Kanban status, and PIC name. The **Custom** badge for unregistered PICs shall be hidden on this surface.
   * **Progress column:** stacked Actual and Target progress badges for that task ($P_{\text{actual}}$, $P_{\text{target}}$), using the same capped target engine as elsewhere.
   * Row heights for Task, Progress, and timeline bars shall stay aligned.
   * The Gantt scrollport shall use a moderately tall viewport (`max-height ≈ 100vh − 200px`) so more rows are visible without monopolising the screen.
   * The solid **Today** line and dashed milestone lines shall span the task/group body height only (bottom aligned to the last table row), remaining sticky under the date header while scrolling.
+
+---
+
+### Module I: Excel task import (FR-IMP) — Wave 4C-1b
+
+* **FR-IMP-01 [Workbook contract]:**
+  * A PM or Super PM who can create projects opens **+ New Project** and chooses **From Excel**. The workbook creates a new Active project; it does not add tasks to a project that already exists. The project name is cell B1. Description starts empty. The signed-in user owns the project.
+  * Accepted file: `.xlsx`, sheet named `Tasks` when present, otherwise the first sheet. At most 500 task rows and 2 MB.
+  * **Structure is checked before any task row is read.** Cell A1 is `Project Name:` and B1 is the name. Row 2 is exactly: Process Group, Task, Progress, Initial Start Date, Initial End Date, Updated Start Date, Updated Finish Date, Actual Start Date, Actual End Date. Task values start at row 3. A wrong label blocks the import. The file served by **Download template** is `templates/task-import-template.xlsx`.
+  * A blank task name is skipped. A blank or unrecognised process group is stored as Executing and called out in the preview. `Initiation` is accepted as Initiating. Blank progress is 0%. Progress above 100% is stored as 100% and noted. Blank updated dates copy the initial dates. Status is derived from progress (0% To Do, 1–99% Doing, 100% Done). There is no PIC or Status column; every imported task is unassigned, including on update.
+  * Dates accept Excel date cells, formula results, `YYYY-MM-DD`, and Australian `D/M/YYYY`.
+* **FR-IMP-02 [Preview then commit]:**
+  * Choosing a file runs validation and writes nothing. The preview names the project from B1 and lists each task, plus errors and row warnings. **Create project** stays disabled while any row has an error.
+  * Duplicate titles inside one process group error.
+  * Within each process group, file order becomes `listSortOrder`.
+* **FR-IMP-03 [Integrity]:**
+  * Block the file when the template labels are wrong, or when any task row has: a missing initial span; an inverted span; a future actual date; actual end before actual start; progress of 0% with an actual start or actual end; progress from 1% to 99% with no actual start; an actual end while progress is under 100%; progress of 100% with no actual start or no actual end.
+  * Commit is one transaction with audit stamps and the same progress-clock update as other task writes.
 
 ---
 
@@ -426,7 +466,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * Those three figures remain task-derived. Issue counts shall **not** appear in this header (they belong in FR-ANL-05).
 * **FR-ANL-04 [Two-pane Analytics layout]:**
   * `ProjectAnalyticsView.tsx` shall render two labelled panes on the **same** Analytics hub tab, stacked vertically with no layout shift when either pane is empty:
-    1. **Schedule Intelligence** — FR-ANL-01, FR-ANL-02, FR-ANL-03.
+    1. **Schedule Intelligence** — FR-ANL-01, FR-ANL-02, FR-ANL-03, FR-ANL-11.
     2. **Issue Intelligence** — FR-ANL-05 through FR-ANL-09, implemented by `src/components/analytics/IssueIntelligencePane.tsx`.
   * Issue Intelligence is not a sixth hub tab. Viewers who can open Analytics can read it.
 * **FR-ANL-05 [Issue Intelligence header KPIs]:**
@@ -439,43 +479,75 @@ UI percentages in this pane are reported to one decimal place, consistent with p
     * Mean **Issue PS** over the active set (em dash when the set is empty).
     * Closure rate (one decimal place).
     * Last activity timestamp, actor display name, and `ISS-nnn`.
+  * Hovering a figure (or focusing it) shows an explanation immediately: what the figure is, what the number counts, and how to read it. There is no delay. The explanation uses near-black text on a white card.
 * **FR-ANL-06 [Issue Fix Realisation and Issue burn-down]:**
   * **Issue Fix Realisation** chart: $P_{\text{issue target}}(t)$ (dashed) versus $P_{\text{issue actual}}(t)$ (solid), using $W_j^{\text{issue}}$ from Section 3.7. Chart title shall be **Issue Fix Realisation**, never an unqualified “S-Curve”.
   * **Issue burn-down** chart: remaining active issues versus calendar, with the ideal linear close-out when dates exist.
   * Both charts live only in the Issue Intelligence pane.
 * **FR-ANL-07 [Issue breakdown charts]:**
-  * Status stack, severity stack, and category stack (counts).
-  * Fix schedule flag histogram (11 states, issue-level, non-cancelled).
+  * The seven issue charts sit in three rows: (1) Issue Fix Realisation and Issue burn-down; (2) Status, Severity, and PIC load; (3) Category and Fix schedule flag.
+  * Status, severity, and category are counts. Status, severity, category, fix-schedule flag, and PIC load are horizontal bars so the labels stay readable in a shared row.
+  * Fix schedule flag histogram (states that occur, issue-level, non-cancelled).
   * PIC load: active-issue count per PIC, with *Unassigned* as its own bar.
 * **FR-ANL-08 [Issue activity stream]:**
   * The twenty most recent `IssueActivity` rows for the project, newest first.
-  * Each row: `createdAt` (`DD/MM/YYYY HH:mm` in `en-AU`), actor name, `ISS-nnn`, `eventType`, one-line `summary`.
+  * Each row: `createdAt` (`DD/MM/YYYY HH:mm` in `en-AU`), a colour-coded `eventType` badge, `ISS-nnn`, one-line `summary`, actor name. The list scrolls inside its card.
   * Selecting a row opens `IssueDetailDrawer` for that issue.
 * **FR-ANL-09 [Live coupling, empty state, completed projects]:**
   * Pure functions live in `src/lib/analytics/issue-intelligence.ts`. The Server Action `getProjectIssueAnalytics(projectId)` returns the Issue Intelligence DTO from live Prisma rows — no warehouse. Both ship in **Wave 4C**; Wave 4B only guarantees `IssueActivity` persistence.
   * Every Issue Log Server Action shall write `IssueActivity` in the same transaction as the mutation (except delete, which cascades the issue’s activity away) and shall `revalidatePath` the project workspace.
   * Empty state when the project has no issues: copy *No issues have been logged for this project*, with a control that switches the hub to Issue Log. KPIs are zero; charts show the empty illustration, not an error.
   * Completed projects retain a historical Issue Intelligence pane. Soft-deleted projects are not analysed until restored.
+* **FR-ANL-10 [Progress history, note, takeaways — Wave 4C-2a]:**
+  * `TaskProgressEvent` is append-only (`progress`, `occurredOn`, `source` `recorded` | `backfill`, `createdBy`). Task progress changes write a row in the same transaction. Existing tasks are backfilled from actual finish, else actual start, else `createdAt`, with `source = backfill`. The Schedule S-Curve actual series uses that history and stops at today. The chart states when a backfill approximation is included.
+  * The Schedule pane includes the milestone table (name, updated target, achieved date, working-day variance).
+  * The per-project note reads as report prose on the Analytics page. It is not an inline editor. Owning PM and Super PM use **Edit**, which opens a popup with bold, italic, underline, strike, heading, lists, highlight, and link. The server stores only sanitised HTML on `AnalyticsNote` (one row per project). Last save wins and the page shows who updated it. Font size stays with the page so the report has one reading size.
+  * `src/lib/analytics/insights.ts` produces at most five rule-based takeaways. Each line cites the figure it used. No language-model call.
+  * Charts are 280px tall inside section cards, and every chart has the same figure in a sentence beside it.
+  * Hovering a chart shows a white card. Series colour is only the swatch. The words are near-black (`#18181b` / `#3f3f46`) so a pale series stays readable.
+  * `dashboardAccess` includes `PROJECT` before the Analytics tab or `loadProjectAnalytics` returns figures (FR-GOV-04, as-built 4C-2b). PDF export remains Wave 4C-4. The pure helpers that build the series (`buildScheduleSeries`, `buildScheduleComposition`, `buildIssueIntelligence`) are shared with `/portfolio` (FR-PORT-04).
+* **FR-ANL-11 [Schedule composition]:**
+  * **Task status** doughnut: count of To Do, Doing, and Done, with the task total in the hole. Issues are excluded.
+  * **Effort by process group** bar: planned working days ($D_i$) for Initiating through Closing. Dates are the updated pair when set, otherwise the initial pair. Undated tasks add 0. The length is the same one used to weight the Schedule S-Curve.
+  * **Overdue tasks** list: tasks that are not Done and whose effective due date is before today. Columns are task name, PIC, and calendar days late, most late first. Empty copy: *No tasks are past their due date.*
+* **FR-ANL-12 [Analytics visual design and cost — 2.1.25]:**
+  * Layout, top to bottom, on Schedule Intelligence: three header tiles (punctuality; actual minus target with an Actual bar and a Target bar; status flag); the **Project note** beside **Key takeaways**; Schedule S-Curve and Task burn-down; Task status and Effort by process group; **Overdue tasks** beside **Milestones**. Issue Intelligence follows: twelve KPIs (six health figures, then six status counts and last activity), then the chart rows and the activity stream.
+  * One palette. Reference lines (target, ideal) are neutral dashed slate. Progress is emerald. Remaining task work is sky and remaining issue work is amber. Issue status and severity bars use fixed per-value colours that match the KPI dots. Cards, borders, and hover shadows come from one set of CSS variables, so light and dark mode stay in step.
+  * Hover and focus: cards ease border and shadow; KPI tiles also lift by 1px; tables highlight the row; one teal focus ring is used app-wide. Motion honours `prefers-reduced-motion`.
+  * Responsive: tiles and charts reflow from one column to six without horizontal page scroll; wide tables scroll inside their card.
+  * Cost: the Analytics pane is code-split and mounted only while the tab is visible, so Recharts and the series maths cost nothing on List, Kanban, Gantt, or Issue Log. The chunk is fetched when the tab is hovered or focused. Trend charts draw without animation and chart components are memoised.
 
 ---
 
 ### Module F: Multi-Project Executive Portfolio Dashboards (FR-PORT)
 
-* **FR-PORT-01 [Dedicated Portfolio Route]:**
-  * Executive portfolio analytics shall be housed under a dedicated top-level route: `/portfolio`.
-  * Accessible exclusively to users holding `PM_PORTFOLIO` or `TOTAL_COMPANY` dashboard privileges.
-* **FR-PORT-02 [Three Distinct Viewing Scopes]:**
-  1. **Analytics by Project:** Deep comparison across selected individual projects.
-  2. **Analytics by PM:** Aggregates all capital projects managed by a selected Project Manager, showcasing portfolio-level health, aggregate punctuality, and resource allocation.
-  3. **Total Company Projects:** A macro portfolio overview of every *active* capital programme across the entire enterprise. Completed programmes are excluded unless the viewer is authorised under FR-GOV-04A and explicitly includes the Completed cohort.
+* **FR-PORT-01 [Dedicated Portfolio Route and access]:**
+  * Executive portfolio analytics are housed under the top-level route `/portfolio` (as-built Wave 4C-3, 9 Oct 2026).
+  * The page opens only for a user holding `PM_PORTFOLIO` or `TOTAL_COMPANY`. Anyone else is redirected to `/`, and the header shows no Portfolio link. By PM needs `PM_PORTFOLIO`; All projects needs `TOTAL_COMPANY`. A request for a view the caller does not hold falls back to the one they do hold. Super PM holds both (locked). A Viewer on `ALL_ACTIVE` does not gain a portfolio tick from that mode.
+  * **Data scope (server side):** every query uses `portfolioProjectsFilter` (`rbac.ts`). PM and Super PM: every Active project. Member: memberships. Viewer: memberships, or every Active project on `ALL_ACTIVE`. The browser never receives rows outside that set, and the PM picker lists only PMs who own at least one visible project (plus the caller when a PM).
+* **FR-PORT-02 [Two portfolio scopes]:**
+  1. **By PM** (`/portfolio?scope=pm&pm=<id>`): Active projects owned by a selected PM. The default is the caller when they own a visible project, otherwise the first PM with projects. An unknown or unauthorised id falls back to that default.
+  2. **All projects** (`/portfolio?scope=all`): the same readout across every Active project the caller may see, a filter to compare fewer projects, and a **Comparison by PM** table (projects, tasks, punctuality, actual and target, overdue tasks, critical issues, Status Flag; lowest punctuality first). Completed programmes stay out unless the caller has `completedProjectAccess = ALL` and switches **Include Completed projects** on (`&completed=1`).
+  * Per-project analytics stay on the project hub (FR-ANL). Comparison of individual projects is a filter on All projects, not a third route.
 * **FR-PORT-03 [Executive Multi-Project Macro Gantt]:**
-  * Positioned prominently at the top of the PM Portfolio and Total Company views.
-  * **Three-Tier Project Bars:** Renders three clean, uncluttered horizontal timeline bars per project:
-    1. *Initial Planned Span* (Zinc): Earliest `initialStartDate` to latest `initialDueDate`.
-    2. *Updated Planned Span* (Sky Blue): Earliest `updatedStartDate` to latest `updatedDueDate`.
-    3. *Actual Realisation Span* (Emerald / Amber): Earliest `actualStartDate` to latest `actualCompletionDate`. If the project remains active, the Actual bar terminates at the vertical "Today" line.
-  * **Milestone Diamond Overlays:** Project milestones are pinned directly onto the macro bars as diamond markers.
-  * **Instant Hover Tooltips (0ms):** Hovering over a milestone diamond reveals an instant popover displaying Milestone Name, Description, Target Date, Achieved Date, and Variance.
+  * Positioned at the top of both views, under six KPI cards (projects, portfolio punctuality, actual minus target, Status Flag, overdue tasks, active issues).
+  * **Three-Tier Project Bars:** three horizontal bars per project:
+    1. *Initial Planned Span* (grey): earliest `initialStartDate` to latest `initialDueDate`.
+    2. *Updated Planned Span* (blue): earliest `updatedStartDate` to latest `updatedDueDate`.
+    3. *Actual Realisation Span* (green at project punctuality 95% or better, amber below): earliest `actualStartDate` (else earliest actual finish) to latest `actualCompletionDate`. While work has started and not finished, the bar runs to the vertical **Today** line and the running part is hatched.
+  * Beside each row: Target, Actual and Status Flag for that project. The project name links to the hub and wraps to two lines.
+  * **Milestone Diamond Overlays:** project milestones sit on the bars as diamonds: achieved (green), achieved late (amber), past target (red), upcoming (outlined).
+  * **Instant Tooltips (0 ms):** hover or keyboard focus on a bar or diamond opens a card with no delay. A milestone card shows name, description, project, target, achieved date and variance in working days. The card follows its target when the page scrolls.
+  * A date outside the years 2000 to 2100 is ignored when drawing the axis (FR-DAT-01).
+* **FR-PORT-04 [Rolled-up analytics]:** below the timeline each view shows the same blocks as the project hub, computed over the pooled tasks: key takeaways (rule-based, `insights.ts` and `portfolio.ts`), Schedule S-Curve, task burn-down, task status doughnut, effort by process group, overdue tasks (with a Project column), milestones, and Issue Intelligence (KPIs, fix realisation, burn-down, status, severity, PIC load, category, fix schedule flag, recent activity with the project named). Each task is weighted by its planned working days, so the portfolio score is the project score applied to the pooled set. Issues stay out of the schedule figures.
+  * The figures are computed in the browser from the viewer’s local today (the view loads client-side only), which avoids a server and browser disagreement near midnight.
+  * Payload control: progress history keeps the last event per task per day; issue history rows carry no summary; the stream takes the latest 200 rows.
+* **FR-PORT-05 [Portfolio notes]:** one note per scope, stored as sanitised HTML in `PortfolioNote` (`scopeKey` `ALL` or `PM:<lowercase uuid>`), shown as report prose with an **Edit** popup (same editor as FR-ANL-10). Maximum 20,000 characters (server check and database CHECK). Last save wins; the card shows who saved and when.
+  * **All projects** note: any PM and any Super PM who holds `TOTAL_COMPANY` (decision D3).
+  * **By PM** note: that PM when they hold `PM_PORTFOLIO`, and any Super PM.
+  * Everyone else sees the note read-only.
+* **FR-PORT-06 [Entry points]:** header **Portfolio** link (FR-PORT-01 gate); the home page scope control shows **Analytics for this scope →** (My projects and a PM go to By PM, All projects goes to All projects) when the matching tick is held; the project hub shows “Project Manager: <name>” under the title, linking to that PM’s portfolio when the caller holds `PM_PORTFOLIO`.
+* **FR-PORT-07 [Presentation]:** dark and light themes, charts at fixed pixel heights, every figure also stated in words, and a header that fits a 390 px phone width without horizontal scrolling. Colour is never the only carrier of meaning (Status Flag and milestone state also carry text).
 
 ---
 
@@ -490,8 +562,19 @@ UI percentages in this pane are reported to one decimal place, consistent with p
     5. **Deleted Projects** (FR-LFC-07, FR-LFC-08, FR-LFC-09): list of soft-deleted projects; **Restore** and **Permanently delete**.
     6. **Purged Project Register** (FR-LFC-11): read-only historical record of physically removed projects, including Super PM-initiated purges and automated retention purges.
 * **FR-ADM-02 [System About & Architectural Credits Modal]:**
-  * Accessible from the user profile dropdown.
-  * Displays application release metadata (`v2.1.4-executive-intel`), runtime stack versions, database connectivity status, and formal architectural credits denoting **Yugo Ananda** as the Grand Designer and Chief Solution Architect.
+  * Accessible from the user profile dropdown (**About**) for any approved user (as-built Wave 4C-3, 9 Oct 2026).
+  * Displays application release metadata (`v2.1.4-executive-intel`), runtime stack versions (Node.js, Next.js, React, Prisma, Supabase JS, Recharts, Tailwind CSS, PostgreSQL), database connectivity status with latency and checked time, and formal architectural credits denoting **Yugo Ananda** as the Grand Designer and Chief Solution Architect.
+  * `getAboutInfo` carries no project data. When the database probe fails (4 second limit) it reports only “not connected”; error text, hosts and credentials are never returned.
+  * The dialog traps focus, closes on Escape or the Close button, and returns focus to the account button.
+
+---
+
+### Module K: Data integrity of schedule dates (FR-DAT) — Wave 4C-3
+
+* **FR-DAT-01 [Plausible schedule dates]:**
+  * Every date a person can save on a task, issue or milestone, and every date read from an Excel import, must be a real calendar date in the years **2000 to 2100**. `isPlausibleLocalDate` (`task-defaults.ts`) is the single check. A mistyped year such as `0227` or `1902` is refused with *Please enter a valid date between the years 2000 and 2100.*
+  * Date fields default `min` to `2000-01-01` and `max` to `2100-12-31`.
+  * Charts and the macro axis also skip an out-of-range date already stored, so one bad row cannot stretch a time axis. Such a row still needs correcting by a person.
 
 ---
 
@@ -579,7 +662,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
 > **Architectural Guardrail (Issues are not Tasks):**  
 > An Issue records an unplanned impediment that has already occurred. A Task records planned scope. Issues **shall not** contribute to $D_{\text{planned}}$, $W_i$, $P_{\text{actual}_{\text{project}}}$, $P_{\text{target}_{\text{project}}}$, Project PS, the **Schedule** S-Curve, or the **task** effort burn-down. Issue-level PS and the 11-state Status Flag may be *displayed* on the Issue Log and aggregated **only** inside the Issue Intelligence pane (Section 3.7, FR-ANL-04–09). They are never rolled into project schedule health. Exclusion from the task-weighted schedule does **not** mean Issue Log work is invisible on Analytics.
 
-* **FR-ISS-01 [Workspace placement]:** Every project the caller may read shall expose an **Issue Log** as the fifth hub view (List, Kanban, Gantt, Analytics, Issue Log) in `ProjectDetailView`, implemented by `src/components/issues/ProjectIssueLogView.tsx` and `IssueDetailDrawer.tsx`.
+* **FR-ISS-01 [Workspace placement]:** Every project the caller may read shall expose an **Issue Log** as the fourth hub view (List, Kanban, Gantt, Issue Log, Analytics) in `ProjectDetailView`, implemented by `src/components/issues/ProjectIssueLogView.tsx` and `IssueDetailDrawer.tsx`. Analytics follows Issue Log.
 * **FR-ISS-02 [Entity — identity]:** Each issue shall persist:
   * `id` (UUID), `projectId`, `issueNumber` (integer, unique per project, displayed `ISS-{n padded to 3}`), `title` (required, ≤ 200 characters), `description`, `sortOrder`.
 * **FR-ISS-03 [Entity — classification]:**
@@ -590,7 +673,8 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * `resolutionSummary` (mandatory before `closed`; mandatory reason before `cancelled`).
 * **FR-ISS-04 [Entity — people]:**
   * `raisedBy` / `raisedAt` — set once at insert to the session user / `now()`.
-  * `picId` / `picName` — Person in Charge of the fix. PIC must be a `ProjectMember` of the same project, the owning PM, or a Super PM. Clearing PIC is allowed; `picName` then stores `""`.
+  * `picId` / `picName` — Person in Charge of the fix. A registered PIC must be a `ProjectMember` of the same project, the owning PM, or a Super PM. A custom PIC stores `picId = null` and a `picName` of at most 120 characters (same rule as a task custom assignee). Saving a custom name upserts `CustomAssignee` (`name` + unique `nameKey`) so later task and issue pickers can suggest it. Clearing PIC is allowed; `picName` then stores `""`.
+  * Issue Log and the issue drawer show severity, status, and category as words (`In progress`, `Critical`, `Technical`). Stored values stay the codes above. Long titles wrap in the log; they are not cropped to a single line.
 * **FR-ISS-05 [Entity — dates]:** Calendar `@db.Date` fields, Australian `DD/MM/YYYY` in the UI:
   * `initialStartDate`, `initialDueDate` — first committed fix window; immutable after insert except Super PM.
   * `updatedStartDate`, `updatedDueDate` — current plan; on create copied from initial (same rule as tasks and milestones).
@@ -606,7 +690,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * Any progress or status mutation shall be visible on Issue Intelligence immediately (FR-ISS-15, FR-ANL-09).
 * **FR-ISS-07 [Optional traceability]:** `relatedTaskId` and `relatedMilestoneId` are nullable FKs to rows of the **same** project. Deleting the related task/milestone sets the FK to null (`ON DELETE SET NULL`).
 * **FR-ISS-08 [Activity thread]:** `IssueComment` (`id`, `issueId`, `userId`, `content`, four-stamp audit). Append-oriented. Visible in the issue drawer. Each comment insert shall also write `IssueActivity` with `eventType = COMMENTED`.
-* **FR-ISS-09 [Register UI]:** High-density table columns: Issue ID, Title, Category, Severity, Status, PIC, Progress, Initial dates, Updated dates, Actual dates, Status Flag, Related task. Inline edit for Status, Severity, Progress, PIC. Filters: status, severity, PIC, overdue (`updatedDueDate < today` and status not in `resolved`/`closed`/`cancelled`). **Log issue** primary action.
+* **FR-ISS-09 [Register UI]:** High-density table columns: Issue ID, Title, Category, Severity, Status, PIC, Progress, Initial dates, Updated dates, Actual dates, Status Flag, Related task. Inline edit for Title, Severity, Status, PIC, Progress, and updated start / updated due. **Every row is one line:** controls share one height and sit on the vertical centre, the title truncates with its full text on hover, updated start and due sit side by side, and Delete is an icon button. Wide registers scroll inside the card. Title and PIC follow FR-ISS-11 (owning PM / Super PM). A member who is the PIC may edit status, progress, and updated dates. Filters: status, severity, PIC, overdue (`updatedDueDate < today` and status not in `resolved`/`closed`/`cancelled`). **Log issue** primary action.
 * **FR-ISS-10 [Issue-level Status Flag]:** Reuse Section 3.6 formulae with issue dates and `progress`. Labelled “Fix schedule flag” in the UI so it is not confused with the project Status Flag. Not rolled into Project PS. The distribution of these flags **shall** appear on Issue Intelligence (FR-ANL-07).
 * **FR-ISS-11 [Authorisation]:**
   | Action | Super PM | Owning PM | Member (`canEdit` or PIC) | Member (read) | Viewer |
@@ -663,7 +747,7 @@ graph LR
     TOTAL_COMPANY
   }
   ```
-  The `User` model will define `dashboardAccess DashboardScope[] @default([PROJECT, PM_PORTFOLIO])`, guaranteeing compile-time and database-level type safety.
+  The `User` model defines `dashboardAccess DashboardScope[] @default([PROJECT])`, guaranteeing compile-time and database-level type safety. Role defaults in application code add the wider scopes for Super PM and PM (FR-GOV-04).
 
 ---
 
@@ -866,8 +950,9 @@ model User {
   approvalStatus  ApprovalStatus   @default(PENDING)
   approvedAt      DateTime?
   approvedBy      String?          @db.Uuid
-  dashboardAccess          DashboardScope[]         @default([PROJECT, PM_PORTFOLIO])
+  dashboardAccess          DashboardScope[]         @default([PROJECT])
   completedProjectAccess   CompletedProjectAccess   @default(NONE)
+  projectVisibilityMode    ProjectVisibilityMode    @default(SELECTED)
   /// Set after Auth email confirmation; Super PM pending queue requires this.
   emailConfirmedAt DateTime?
   deactivatedAt   DateTime?
@@ -949,6 +1034,16 @@ model ProjectMember {
   @@unique([projectId, userId])
   @@index([userId])
   @@index([projectId])
+}
+
+model CustomAssignee {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  nameKey   String   @unique
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
 }
 
 model Milestone {
@@ -1132,6 +1227,51 @@ model IssueActivity {
   @@index([issueId, createdAt])
 }
 
+/// Append-only task progress history for the Schedule S-Curve (Wave 4C-2a).
+/// `source = backfill` marks a one-off approximation from actual dates.
+enum TaskProgressEventSource { recorded backfill }
+
+model TaskProgressEvent {
+  id         String                  @id @default(uuid()) @db.Uuid
+  projectId  String                  @db.Uuid
+  taskId     String                  @db.Uuid
+  progress   Int
+  occurredOn DateTime
+  source     TaskProgressEventSource @default(recorded)
+  createdAt  DateTime                @default(now())
+  createdBy  String                  @db.Uuid
+  project    Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task       Task                    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, occurredOn])
+  @@index([taskId, occurredOn])
+}
+
+/// One project note per project. Stored as sanitised HTML and shown as report prose.
+model AnalyticsNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @unique @db.Uuid
+  bodyHtml  String   @default("")
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+/// One note per portfolio scope (Wave 4C-3). `scopeKey` is `ALL` or `PM:<lowercase user uuid>`.
+/// A soft key on purpose: a PM note must survive a handover and needs no foreign key.
+/// The database also checks the key shape and `char_length(bodyHtml) <= 20000`.
+model PortfolioNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  scopeKey  String   @unique
+  bodyHtml  String   @default("")
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String   @db.Uuid
+}
+
 /// Immutable tombstone written BEFORE the operational Project row is physically deleted.
 /// Super PM hard-deletes, 30-day soft-delete expiry, and five-year completed expiry all insert here.
 model PurgedProject {
@@ -1190,10 +1330,10 @@ model PurgedProject {
 
 ### 7.1 Performance & Computational Latency
 * **Engine Execution Speed:** S-Curve data points and task weight aggregations for projects containing up to 500 tasks shall execute in $< 50\text{ ms}$ on the server. Issue Intelligence aggregates for up to 500 issues on the same project shall execute in $< 50\text{ ms}$ and shall not block Schedule pane rendering.
-* **Zero Layout Shift:** Tab switching between List, Kanban, Gantt, Analytics, and Issue Log must occur smoothly without layout jitter or cascading React re-renders.
+* **Zero Layout Shift:** Tab switching between List, Kanban, Gantt, Issue Log, and Analytics must occur smoothly without layout jitter or cascading React re-renders.
 
 ### 7.2 Security & Data Governance
-* **Row-Level Security (RLS):** All newly created tables (`Holiday`, `Milestone`, `Issue`, `IssueComment`, `IssueActivity`, `PurgedProject`) shall have PostgreSQL RLS enabled. Server Actions connecting via Prisma shall maintain fail-closed authorisation checks. `PurgedProject` is readable and insertable only by Super PM sessions and by the System retention job; it is never updated or deleted by application code. `IssueActivity` is insertable by authorised Issue Log actors and readable by anyone who may read the parent project; it is never updated or deleted except by cascade.
+* **Row-Level Security (RLS):** All newly created tables (`Holiday`, `Milestone`, `Issue`, `IssueComment`, `IssueActivity`, `PurgedProject`, and from Wave 4C `TaskProgressEvent`, `AnalyticsNote`, `CustomAssignee`, `PortfolioNote`) shall have PostgreSQL RLS enabled. Every new table in a migration enables RLS in that same migration (the Wave 4C-3 migration closed a gap on the three Wave 4C tables created earlier). Server Actions connecting via Prisma shall maintain fail-closed authorisation checks. `PurgedProject` is readable and insertable only by Super PM sessions and by the System retention job; it is never updated or deleted by application code. `IssueActivity` is insertable by authorised Issue Log actors and readable by anyone who may read the parent project; it is never updated or deleted except by cascade.
 * **Authentication Boundary:** Unapproved users cannot hold a workspace session (middleware force sign-out) and cannot execute Server Actions. Any attempt to invoke actions from an unapproved session throws an immediate `ActionError("Account pending approval", "FORBIDDEN")`.
 * **Destructive confirmation:** Soft-delete and permanent purge require an explicit ConfirmDialog. Permanent purge requires a typed confirmation of the project name.
 * **Retention jobs:** `runProjectRetentionJob` shall be idempotent, transactional per project, and shall never skip writing `PurgedProject` before a physical `DELETE`.
@@ -1201,6 +1341,7 @@ model PurgedProject {
 ### 7.3 Localisation & Ergonomics
 * **Locale:** Australian English (`en-AU`).
 * **Date Representation:** Form displays and tooltips must render calendar dates in `DD/MM/YYYY` format using `date-fns/format`.
+* **Date fields:** Every editable calendar field (List, task drawer, Issue Log create form and register, issue drawer, milestone dialog, holiday form) uses a native date input with a calendar button fixed at the right end. Clicking the field or that button opens an in-page month grid. Previous and next month only change the month on display; the date is written when a day is chosen. Typing a date in the field still works. The browser’s own picker glyph is hidden so it does not cover the button.
 * **Spelling:** All user-facing interface text, error messages, and documentation must adhere strictly to Australian spelling (e.g. *programme*, *prioritise*, *visualisation*, *colour*).
 
 ### 7.4 Accessibility (WCAG 2.1 AA Compliance)
@@ -1244,8 +1385,9 @@ flowchart TD
         C1["W4C-1 High-density grid"]
         C2["W4C-2 Per-project Analytics"]
         C3["W4C-3 Portfolio, macro Gantt, About"]
+        C4["W4C-4 PDF export"]
         CU["W4C-U UAT plus regression"]
-        C1 --> C2 --> C3 --> CU
+        C1 --> C2 --> C3 --> C4 --> CU
     end
     CU --> Done([Release 2.1 accepted 12 Oct 2026])
 ```
@@ -1268,13 +1410,15 @@ Stakeholder-usable increment: Super PMs approve users, delegate privileges, hand
 5. Execute the Wave 4B UAT pack (UAT-405, UAT-405A–D, UAT-406–407, UAT-412–422). Issue Intelligence charts remain Wave 4C.
 6. **As-built:** Wave 4B UAT pack accepted (including job-assisted UAT-413 / 418) — see `doc/dev_uat.md`.
 
-### Wave 4C: Executive visualisation (planned 01–12 Oct 2026; **not started**)
+### Wave 4C: Executive visualisation (planned 01–12 Oct 2026; **4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 as-built**)
 Stakeholder-usable increment: high-density task grid, full Analytics (Schedule and Issue Intelligence), `/portfolio` with macro Gantt, About modal.
-1. High-density inline-edit task grid.
-2. `ProjectAnalyticsView.tsx` Schedule Intelligence and Issue Intelligence (`issue-intelligence.ts`, `getProjectIssueAnalytics`).
-3. `/portfolio`, three scopes, macro Gantt, About modal `v2.1.4-executive-intel`.
-4. Execute the Wave 4C UAT pack (UAT-408–410, UAT-423–425) and **UAT-R** (re-run 4A and 4B packs).
-5. **As-built:** Deferred — do not commence Wave 4C UAT until development of this wave is complete.
+1. High-density inline-edit task grid. **As-built.**
+2. Excel create-project import. **As-built.**
+3. `ProjectAnalyticsView.tsx` Schedule Intelligence and Issue Intelligence (`issue-intelligence.ts`, `schedule-series.ts`, `schedule-composition.ts`, `insights.ts`, `TaskProgressEvent`, `AnalyticsNote`), including the task-status pie, effort bars, and overdue list (FR-ANL-11). **As-built 8 Oct 2026.** UAT-423–425 not yet accepted.
+4. Dashboard access on the Analytics tab and Viewer All Active (FR-GOV-04, FR-GOV-04B). **As-built 9 Oct 2026.** UAT not yet accepted.
+5. `/portfolio` (By PM, All projects), macro timeline, rolled-up analytics, portfolio notes, entry points, and the About modal (FR-PORT-01 to FR-PORT-07, FR-ADM-02) with `PortfolioNote`, row-level security on the three tables that lacked it, and the date guard (FR-DAT-01). **As-built 9 Oct 2026.** UAT-409 and UAT-410 not yet accepted.
+6. PDF export (**W4C-4**) is the next package.
+7. Execute the Wave 4C UAT pack (UAT-408–410, UAT-423–427) and **UAT-R** when PDF export ships.
 
 ---
 
@@ -1311,8 +1455,8 @@ Each scenario is executed in the wave that first makes it exercisable in the run
 | **UAT-421** | 4B | Issue close rights | Member who is not PIC attempts to close the issue; owning PM then closes it with a resolution summary. | Member is `FORBIDDEN`; PM succeeds with `status = closed`. |
 | **UAT-422** | 4B | Issue not in weights | Project has one 10-day task; an issue with an 8-day fix window is added. | Task weight remains $100\%$; issue does not appear on Gantt task rows. |
 | **UAT-408** | 4C | S-Curve Realisation | View project analytics after marking 3 tasks complete ahead of time. | Actual green line trends above the dashed target curve. |
-| **UAT-409** | 4C | Executive Gantt | Open `/portfolio` as Super PM under *Total Company*. | Macro Gantt renders 3 clean bars per project with milestone diamond nodes and instant tooltips. |
-| **UAT-410** | 4C | Credits Modal | Open About modal from user dropdown. | Version displays `v2.1.4-executive-intel`; Yugo Ananda credited as Grand Designer. |
+| **UAT-409** | 4C | Executive Gantt | Open `/portfolio` as a PM holding both portfolio ticks: By PM, then All projects. Hover a milestone diamond. Sign in as a Member without a portfolio tick and open `/portfolio`. | Both views load; the macro timeline shows three bars per project, milestone diamonds, and instant tooltips; All projects lists the By PM comparison; a PM can save the All projects note and the stamp names them. The Member is sent to `/` and sees no Portfolio link. |
+| **UAT-410** | 4C | Credits Modal | Open **About** from the user dropdown as any approved user. Press Escape. | Version displays `v2.1.4-executive-intel`; runtime stack and database status show; Yugo Ananda credited as Grand Designer and Chief Solution Architect; Escape closes the dialog. |
 | **UAT-423** | 4C | Issue Intelligence live progress | PIC sets ISS-001 progress to $40\%$, then opens the Analytics tab. | Issue Intelligence $\bar{P}_{\text{issue}}$ and Issue Fix Realisation actual update to $40\%$; status stack shows `in_progress`; **Schedule** S-Curve, Project PS, and task burn-down are unchanged. |
 | **UAT-424** | 4C | Issue Intelligence activity stream | PIC posts a comment on ISS-001, then returns to Analytics. | Activity stream lists a `COMMENTED` event with actor, `ISS-001`, and timestamp; Last activity KPI matches that event. |
 | **UAT-425** | 4C | Issue Intelligence empty state | Open Analytics on a project with tasks but no issues. | Issue Intelligence shows *No issues have been logged for this project* and a control to open Issue Log; Schedule pane still plots the task S-Curve. |
@@ -1330,5 +1474,22 @@ Each scenario is executed in the wave that first makes it exercisable in the run
 | 2.1.7 | 6 Oct 2026 | FR-UI-01 Portfolio scope pending feedback (inline list overlay + combobox cue); pre–Wave 4C UX polish documented holistically |
 | 2.1.8 | 6 Oct 2026 | FR-PRJ-01 optional Custom Project ID (`customProjectId`); ER / Prisma Project entity updated; hub header display when non-blank |
 | 2.1.9 | 6 Oct 2026 | FR-UI-01 / FR-GOV-05 Portfolio scope: **Back to projects** restores filter; brand / Projects / typed `/` reset to My projects; product title 2.1 |
-
-*End of System Requirements Specification (`doc/dev_req.md`). Waves 4A and 4B are as-built and UAT-accepted; Wave 4C requirements remain binding pending development.*
+| 2.1.10 | 6 Oct 2026 | FR-UI-03 high-density List table (process-group No., WD columns, inline edit, DnD, `listSortOrder`) |
+| 2.1.11 | 6 Oct 2026 | FR-UI-03 sticky header/Task column, wrapping titles, WD display uses $D_{\text{planned}}=\max(1,\ldots)$ |
+| 2.1.12 | 6 Oct 2026 | FR-UI-03 freeze bleed/Status; process-group + Insert freeze-rail; dismissible errors |
+| 2.1.13 | 6 Oct 2026 | FR-UI-03 one Add row per process group; hover + inserts between tasks |
+| 2.1.14 | 6 Oct 2026 | FR-UI-03 gap-hover +, draft rows, inline delete, empty-table, date typing |
+| 2.1.15 | 6 Oct 2026 | FR-UI-03 gap hover JS state; date keyboard entry uncontrolled while focused |
+| 2.1.16 | 6 Oct 2026 | FR-UI-03 actual-finish→Done confirm; Project PS above List; centre WD; grid-line + |
+| 2.1.17 | 8 Oct 2026 | FR-IMP-01–03 Excel task import; FR-GOV-04 defaults and enforcement; FR-PORT-02 reduced to By PM and All projects. Decisions D1–D6 in `dev_plan.md` §8.3 may move after the operational trial. |
+| 2.1.18 | 8 Oct 2026 | Issue titles wrap; severity/status/category show words; custom issue PIC; `CustomAssignee` name directory; fluid home and project width. |
+| 2.1.19 | 8 Oct 2026 | Milestone chips use the strip width (View all only past two rows). FR-ANL-10: TaskProgressEvent, Schedule and Issue Intelligence, plain project note, rule-based takeaways. |
+| 2.1.20 | 8 Oct 2026 | Every date field has a calendar button at the right end. The button opens the native calendar. |
+| 2.1.21 | 8 Oct 2026 | Project note is report prose. Edit opens a rich-text popup. Stored HTML is sanitised. |
+| 2.1.22 | 8 Oct 2026 | FR-ANL-11: task status pie, effort by process group, overdue task list on Schedule Intelligence. |
+| 2.1.23 | 8 Oct 2026 | Task status is a doughnut. Chart hover text is near-black on white. Issue KPI hover explains each figure immediately. Issue charts use three rows. |
+| 2.1.24 | 8 Oct 2026 | In-page date calendar: month arrows do not write the date. Issue Log inline title, PIC, and updated dates. Hub order is List, Kanban, Gantt, Issue Log, Analytics. |
+| 2.1.25 | 8 Oct 2026 | Issue Log rows are one line. Analytics visual refresh (FR-ANL-12): one palette, note and takeaways up front, shared card and hover styling, lazy-loaded and visible-only Analytics pane. |
+| 2.1.26 | 9 Oct 2026 | FR-GOV-04 enforced on the Analytics tab. FR-GOV-04B Viewer `projectVisibilityMode` (`SELECTED` or `ALL_ACTIVE`). Role defaults: Super PM and PM all three scopes; Member and Viewer `PROJECT` only. |
+| 2.1.27 | 9 Oct 2026 | W4C-3 as-built. FR-PORT-01 to FR-PORT-07 rewritten to the build (access, data scope, rolled-up analytics, portfolio notes, entry points); FR-ADM-02 About modal; new FR-DAT-01 plausible dates (2000–2100); `PortfolioNote` model; UAT-409 and UAT-410 made executable. |
+*End of System Requirements Specification (`doc/dev_req.md`). Waves 4A and 4B are as-built and UAT-accepted; Wave 4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 are as-built; Wave 4C-4 (PDF) and close-out remain binding pending development.*
