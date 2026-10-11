@@ -16,6 +16,7 @@ import {
   type StatusFlagId,
 } from "@/src/lib/analytics/weighted-progress";
 import { notifyPmOfProjectAssignments } from "@/src/lib/mail/notify";
+import { taskAssignedToUserWhere } from "@/src/lib/task-assignees";
 import { mapProject } from "@/src/lib/mappers";
 import { prisma } from "@/src/lib/prisma";
 import {
@@ -568,19 +569,48 @@ export async function reassignProjectOwner(input: {
         const tasks = await tx.task.findMany({
           where: {
             projectId: input.projectId,
-            assigneeId: previousOwnerId,
+            ...taskAssignedToUserWhere(previousOwnerId),
           },
-          select: { id: true, title: true },
+          select: {
+            id: true,
+            title: true,
+            assigneeId: true,
+            assigneeName: true,
+            assignees: { orderBy: { sortOrder: "asc" } },
+          },
         });
-        if (tasks.length > 0) {
-          await tx.task.updateMany({
-            where: {
-              projectId: input.projectId,
-              assigneeId: previousOwnerId,
-            },
+        for (const task of tasks) {
+          const nextPics = (
+            task.assignees.length > 0
+              ? task.assignees.map((row) => ({
+                  userId: row.userId,
+                  name: row.assigneeName,
+                }))
+              : [{ userId: task.assigneeId, name: task.assigneeName }]
+          ).map((pic) =>
+            pic.userId === previousOwnerId
+              ? { userId: newOwner.id, name: newOwner.name }
+              : pic,
+          );
+          const first = nextPics[0];
+          await tx.taskAssignee.deleteMany({ where: { taskId: task.id } });
+          if (nextPics.length > 0) {
+            await tx.taskAssignee.createMany({
+              data: nextPics.map((pic, index) => ({
+                taskId: task.id,
+                userId: pic.userId,
+                assigneeName: pic.name,
+                sortOrder: index,
+                createdBy: actorId,
+                updatedBy: actorId,
+              })),
+            });
+          }
+          await tx.task.update({
+            where: { id: task.id },
             data: {
-              assigneeId: newOwner.id,
-              assigneeName: newOwner.name,
+              assigneeId: first?.userId ?? null,
+              assigneeName: first?.name ?? "",
               ...auditUpdate(actorId),
             },
           });

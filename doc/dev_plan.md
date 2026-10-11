@@ -2,8 +2,8 @@
 
 **Document Identifier:** `doc/dev_plan.md`  
 **Product Title:** Simple Project Task Tracker 2.1 (Executive Portfolio Intelligence System)  
-**Version:** 2.1.27  
-**Status:** Canonical Master Plan (North Star) — Waves **4A** and **4B** UAT-accepted; **Wave 4C-1** (high-density List) as-built; **Wave 4C-1b** (Excel task import) as-built; **Wave 4C-2a** (per-project Analytics) as-built 8 Oct 2026, UAT not yet accepted; **Wave 4C-2b** (dashboard access) as-built 9 Oct 2026, UAT not yet accepted; **Wave 4C-3** (portfolio, macro timeline, About) as-built 9 Oct 2026, UAT not yet accepted; Wave **4C-4 onward** not yet developed  
+**Version:** 2.1.46  
+**Status:** Canonical Master Plan (North Star) — Waves **4A** and **4B** UAT-accepted; **Wave 4C-1** through **4C-4** as-built (4C-2a to 4C-4 UAT not yet accepted); Wave **4C-U** close-out not yet run  
 **Amendment:** Universal mutation audit trail; Completed Projects (not Archive); soft-delete / restore / purge; five-year completed retention; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE target Cursor; delivery status aligned to as-built UAT (`doc/dev_uat.md`)  
 **Target Platform:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Supabase PostgreSQL, Prisma ORM 7  
 **IDE Target:** Cursor (Agent / IDE browser automation for UAT)  
@@ -100,7 +100,7 @@ graph TD
 * **Scope:** Schedule variance and early warning classification engine.
 * **Capability:** 
   * Target progress capped at $100\%$ ($P_{\text{target}} = \min(100\%,\ E_{\text{elapsed}} / D_{\text{planned}} \times 100\%)$), including when tasks breach their due dates.
-  * Piecewise evaluation of Punctuality Score across Not Started, In Progress, and Completed tasks, plus project-level aggregate punctuality.
+  * Piecewise evaluation of Punctuality Score across Not Started, In Progress, and Completed tasks, plus project-level aggregate punctuality. A finished task or a fully finished project is scored against the planned due date (release 2.1.33): on or before that date is never Late, and an early start does not reduce the score. Unfinished work keeps actual versus capped target.
   * Deterministic mapping to exactly one of **11 Australian English PM Status Flags** (Due to Commence, Delayed Commencement, Critically Overdue Start, On Track, Slipping, Critically Delayed, Ahead of Schedule, Completed Ahead of Schedule, Completed On Time, Completed Late, Completed Severely Late).
 * **Wave 4A increment:** The Status Flag pill shall render on the task row, Kanban card, Gantt Task column, drawer, and landing card in the running application. The Gantt Progress column shows stacked Actual / Target per task.
 
@@ -168,7 +168,7 @@ graph TD
 
 ### F-2110: High-Density Tabular Workspace — **Wave 4C-1 (as-built 6 Oct 2026)**
 * **Scope:** Workspace data presentation layer (`TaskListView.tsx`).
-* **Capability:** Process-group schedule table with Australian English column headers: **No.** (1.x–5.x by process group), **Task**, **Status**, **Actual %**, **Target %**, **Initial start / due / WD**, **Updated start / due / WD** (schedule baseline for PS), **Actual start / finish / WD**, **PS**, **Status flag**. Working-day durations exclude weekends and registered holidays and use $D_{\text{planned}}=\max(1,\ldots)$ (same-day = 1 WD). Tasks group under Initiating → Closing; list order uses `listSortOrder` (independent of Kanban `sortOrder`). Inline edit for title, status, actual %, and dates; PS / Status flag / Target % / WD columns are computed read-only. Drag-and-drop reorders within or across process groups. The process-group header is a label only. Each group has one **Add row** at the bottom (freeze rail). Hovering a horizontal grid line shows a single **+** that opens an instant local draft (title + initial dates required before persist). Empty projects keep the five-group table. Inline delete with confirm uses `deleteTask`. List dates use uncontrolled inputs for keyboard entry. A quiet **Details** control opens the existing drawer for PIC, priority, checklist, and comments (fields not on the grid). The table scrollport freezes the column header, process-group headers, and the Task (plus No./drag) columns with opaque panes and a scroll-aware freeze edge; long titles wrap. Transient mutation errors (including future actual dates) auto-dismiss (~7s) and are manually closable via toast/banner.
+* **Capability:** Process-group schedule table with Australian English column headers: **No.** (1.x–5.x by process group), **Task**, **Status**, **Actual %**, **Target %**, **Initial start / due / WD**, **Updated start / due / WD** (schedule baseline for PS), **Actual start / finish / WD**, **PS**, **Status flag**. Working-day durations exclude weekends and registered holidays and use $D_{\text{planned}}=\max(1,\ldots)$ (same-day = 1 WD). Tasks group under Initiating → Closing; list order uses `listSortOrder` (independent of Kanban `sortOrder`). Inline edit for title, status, actual %, and dates; PS / Status flag / Target % / WD columns are computed read-only. Drag-and-drop reorders within or across process groups. The process-group header is a label only. Each group has one **Add row** at the bottom (freeze rail). Hovering a horizontal grid line shows a single **+** that opens an instant local draft (title + initial dates required before persist). Empty projects keep the five-group table. Inline delete with confirm uses `deleteTask`. List dates use uncontrolled inputs for keyboard entry. A **Details** button beside the task name opens the same drawer as a Kanban card, for PIC, priority, description, checklist, and comments (fields not on the grid). The table scrollport freezes the column header, process-group headers, and the Task (plus No./drag) columns with opaque panes and a scroll-aware freeze edge; long titles wrap. Transient mutation errors (including future actual dates) auto-dismiss (~7s) and are manually closable via toast/banner.
 * **As-built note:** Wave 4A already surfaces $W_i$, progress, and Status Flags on the prior card list. Wave 4C-1 replaces that list with the high-density table above (sticky / freeze polish 6 Oct 2026).
 
 ### F-2120: Excel task import — **Wave 4C-1b**
@@ -187,7 +187,9 @@ graph TD
     2. **Issue Intelligence (Issue Log).**
   * **Schedule S-Curve:** Renders cumulative planned baseline ($P_{\text{target}}(t)$) versus cumulative actual achievement ($P_{\text{actual}}(t)$) over the project calendar duration using **task** weights $W_i$ only.
   * **Task burn-down:** Visualises remaining working-day *task* effort over time against an ideal linear burn-down trajectory.
-  * **Schedule header:** Aggregate Punctuality Score ($\text{Project PS}$), Target vs. Actual progress divergence ($\Delta P$), overall project Status Flag. Issue counts do not appear here.
+  * **Schedule header:** Aggregate Punctuality Score ($\text{Project PS}$), Target vs. Actual progress divergence ($\Delta P$), overall project Status Flag. Issue counts do not appear here. As built in 2.1.31 these are three headline cards: **Actual minus target** (half width, with large Actual and Target bars so progress is never mistaken for the score), **Project punctuality** (shown as a two-decimal score such as `0.89`, with a hover and focus explainer that stays inside the window) and **Status flag** (large badge and a full-sentence meaning).
+  * **Schedule by process group (2.1.28, milestone lines 2.1.36):** directly under the headline cards, a simplified Gantt of the five process groups, each with three bars (Initial, Updated, Actual) from the earliest start to the latest end of that group's tasks, using the same geometry as the portfolio macro timeline. Dashed milestone lines cross every row (amber pending, emerald achieved). The S-curve and the burn-down do not draw them. **Key takeaways** then sits beside the project note at the same width (2.1.40; the 2.1.28 build used twice the width).
+  * **Executive report (2.1.37, notes 2.1.40):** **Export report** on this tab and on `/portfolio` downloads a 16:9 PDF or PowerPoint of the figures already on the screen. Same slides in both files. No second calculation. An empty note is left out. A short note sits under the takeaways on the first slide. A long note is the next slide. On a printed timeline the milestone date sits with the title.
   * **Issue Intelligence header:** Non-cancelled total; cancelled count; status counts; critical-and-active; overdue; $\bar{P}_{\text{issue}}$ over the active set; mean **Issue PS** (em dash when none active); closure rate; last activity (actor, `ISS-nnn`, time). Hovering a figure explains it immediately.
   * **Issue Fix Realisation:** Duration-weighted among non-cancelled issues using $W_j^{\text{issue}}$ (equal weight fallback). Target from issue working-day elapsed/planned dates; actual as a step function of `progress` from `IssueActivity`. Chart title **Issue Fix Realisation** — never an unqualified “S-Curve”.
   * **Issue burn-down:** Remaining active issues versus calendar, against an ideal linear close-out when dates exist.
@@ -1014,15 +1016,19 @@ $$P_{\text{target}_i} = \min\left(100\%,\ \frac{E_{\text{elapsed}_i}}{D_{\text{p
    100.0\% & \text{if } T_{\text{now}} \ge T_{\text{start}_i} \text{ and } P_{\text{target}_i} = 0 \\
    \frac{P_{\text{actual}_i}}{P_{\text{target}_i}} \times 100\% & \text{if } T_{\text{now}} \ge T_{\text{start}_i} \text{ and } P_{\text{target}_i} > 0
    \end{cases}$$
-3. **Completed ($P_{\text{actual}} = 100\%$):**
-   $$\text{PS}_i = \frac{D_{\text{planned}_i}}{\max\left(1, D_{\text{actual}_i}\right)} \times 100\%$$
-   where $D_{\text{actual}_i}$ is working days from effective planned start $T_{\text{start}_i}$ through $T_{\text{actualCompletion}_i}$ (schedule span). Late finishes therefore yield low PS even when active work was a single day.
+3. **Completed ($P_{\text{actual}} = 100\%$, or status Done) — release 2.1.33:**
+   Judge the actual finish against the planned due date (updated due, otherwise initial). $D_{\text{ahead}}$ is the working days strictly after the finish through the due date. $D_{\text{overdue}}$ is the working days strictly after the due date through the finish.
+   * Before the due date: $\text{PS}_i = \max\left(105,\ 105 + D_{\text{ahead}} / D_{\text{planned}_i} \times 100\right)$. Flag: Completed Ahead of Schedule.
+   * On the due date: $\text{PS}_i = 100$. Flag: Completed On Time.
+   * After the due date: $\text{PS}_i = D_{\text{planned}_i} / (D_{\text{planned}_i} + D_{\text{overdue}}) \times 100$. Completed Late when the score is at least 85; Completed Severely Late when it is below 85.
 4. **Project-Level Aggregate PS:**
+   While any task is unfinished:
    $$\text{Project PS} = \begin{cases}
    100.0\% & \text{if } P_{\text{target}_{\text{project}}} = 0 \text{ and } P_{\text{actual}_{\text{project}}} = 0 \\
    100.0\% + P_{\text{actual}_{\text{project}}} & \text{if } P_{\text{target}_{\text{project}}} = 0 \text{ and } P_{\text{actual}_{\text{project}}} > 0 \\
    \frac{P_{\text{actual}_{\text{project}}}}{P_{\text{target}_{\text{project}}}} \times 100\% & \text{if } P_{\text{target}_{\text{project}}} > 0
    \end{cases}$$
+   When every task is complete, the project uses rule 3 on its window: earliest planned start, latest planned due, latest actual finish.
 
 ### 6.6 The 11-State Status Flag Matrix
 
@@ -1035,10 +1041,10 @@ $$P_{\text{target}_i} = \min\left(100\%,\ \frac{E_{\text{elapsed}_i}}{D_{\text{p
 | **SF-05** | **Slipping** | $85\% \le \text{PS} < 95\%$ | $0\% < P_{\text{actual}} < 100\%$ | Amber badge (`bg-amber-500/10 text-amber-400 border-amber-500/30`) |
 | **SF-06** | **Critically Delayed** | $\text{PS} < 85\%$ | $0\% < P_{\text{actual}} < 100\%$ | Rose badge (`bg-rose-500/10 text-rose-400 border-rose-500/30`) |
 | **SF-07** | **Ahead of Schedule** | $\text{PS} \ge 105\%$ | $0\% < P_{\text{actual}} < 100\%$ | Teal badge (`bg-teal-500/10 text-teal-400 border-teal-500/30`) |
-| **SF-08** | **Completed Ahead of Schedule** | $\text{PS} \ge 105\%$ | $P_{\text{actual}} = 100\%$ | Indigo badge (`bg-indigo-100 text-indigo-950`) |
-| **SF-09** | **Completed On Time** | $95\% \le \text{PS} < 105\%$ | $P_{\text{actual}} = 100\%$ | Zinc badge (`bg-zinc-200 text-zinc-900`) |
-| **SF-10** | **Completed Late** | $85\% \le \text{PS} < 95\%$ | $P_{\text{actual}} = 100\%$ | Amber badge (`bg-amber-200 text-amber-950`) |
-| **SF-11** | **Completed Severely Late** | $\text{PS} < 85\%$ | $P_{\text{actual}} = 100\%$ | Rose badge (`bg-rose-200 text-rose-950`) |
+| **SF-08** | **Completed Ahead of Schedule** | $\text{PS} \ge 105$ | Finished strictly before the planned due date | Indigo badge (`bg-indigo-100 text-indigo-950`) |
+| **SF-09** | **Completed On Time** | $\text{PS} = 100$ | Finished on the planned due date | Zinc badge (`bg-zinc-200 text-zinc-900`) |
+| **SF-10** | **Completed Late** | $\text{PS} \ge 85$ | Finished after the planned due date | Amber badge (`bg-amber-200 text-amber-950`) |
+| **SF-11** | **Completed Severely Late** | $\text{PS} < 85$ | Finished after the planned due date | Rose badge (`bg-rose-200 text-rose-950`) |
 
 ---
 
@@ -1123,9 +1129,10 @@ flowchart TD
         C2a["W4C-2a Per-project Analytics core"]
         C2b["W4C-2b Dashboard access realignment"]
         C3["W4C-3 Portfolio, macro timeline, About"]
-        C4["W4C-4 PDF export"]
+        C3a["W4C-3a Feedback: views, score format"]
+        C4["W4C-4 PDF and PowerPoint export"]
         CU["W4C-U Wave 4C UAT plus regression"]
-        C1 --> C1b --> C2a --> C2b --> C3 --> C4 --> CU
+        C1 --> C1b --> C2a --> C2b --> C3 --> C3a --> C4 --> CU
     end
     CU --> Done([Release 2.1 accepted 12 Oct 2026])
 ```
@@ -1148,8 +1155,9 @@ flowchart TD
 | **W4C-2a** | 4C | Per-project Analytics core | 08 Oct 2026 | 08 Oct 2026 | 4d | W4C-1b | `TaskProgressEvent`; Schedule + Issue Intelligence; report-style project note with popup editor; rule-based takeaways; export-ready layout — **as-built; UAT not yet accepted** |
 | **W4C-2b** | 4C | Dashboard access realignment | 09 Oct 2026 | 09 Oct 2026 | 1.5d | W4C-2a | `PROJECT` gates the Analytics tab; Viewer `projectVisibilityMode`; privilege defaults D2 — **as-built; UAT not yet accepted** |
 | **W4C-3** | 4C | Portfolio, macro timeline, About | 09 Oct 2026 | 09 Oct 2026 | 4d | W4C-2b | `/portfolio` By PM and All projects; three-bar timeline with milestone diamonds; rolled-up Schedule and Issue Intelligence; portfolio notes; PM comparison; About modal; `PortfolioNote` with row-level security — **as-built; UAT not yet accepted** |
-| **W4C-4** | 4C | Executive PDF export | — | — | 2d | W4C-3 | Print routes + server PDF for all three dashboards; inside Release 2.1 — **next package; not started** |
-| **W4C-U** | 4C | **Wave 4C UAT + regression** | — | — | 3d | W4C-4 | UAT-408–410, 423–425, 426–428, UAT-IMP, pack **UAT-R** — **deferred until 4C-4 ships** |
+| **W4C-3a** | 4C | Feedback package (release 2.1.28) | 09 Oct 2026 | 09 Oct 2026 | 1d | W4C-3 | Punctuality Score shown as `0.000`; headline cards (Actual and Target bars, score explainer, large Status flag); **Schedule by process group** timeline first on Analytics; takeaways beside the note (equal width from 2.1.40); Gantt Comfortable/Compact rows, fit-to-width, group collapse; Kanban Compact/Comfortable cards; Expanded view; stored preferences — **as-built; UAT-428–431 not yet accepted** |
+| **W4C-4** | 4C | Executive PDF and PowerPoint | 10 Oct 2026 | 10 Oct 2026 | 1d | W4C-3a | Client-side 16:9 PDF and PPTX of the Analytics tab and `/portfolio`; same slide list; numbered milestone key — **as-built; UAT-432 not yet accepted** |
+| **W4C-U** | 4C | **Wave 4C UAT + regression** | — | — | 3d | W4C-4 | UAT-408–410, 423–432, UAT-IMP, pack **UAT-R** — **deferred until close-out** |
 
 **Wave roll-up**
 
@@ -1157,7 +1165,7 @@ flowchart TD
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | **4A — Live schedule health** | 12–18 Sep 2026 | 7 | Holidays and schedule health in the running app | Wave 4A UAT pack accepted | **Shipped + UAT accepted** |
 | **4B — Governed programme office** | 19–30 Sep 2026 | 12 | Approvals, Issue Log, Completed/Deleted/Purged operable | Wave 4B UAT pack accepted | **Shipped + UAT accepted** |
-| **4C — Executive visualisation** | 01 Oct 2026 onward | — | List, Excel import, Analytics, portfolio, PDF, About | Wave 4C UAT pack + UAT-R accepted | **4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 as-built; 4C-4 onward not started** |
+| **4C — Executive visualisation** | 01 Oct 2026 onward | — | List, Excel import, Analytics, portfolio, PDF and PowerPoint, About | Wave 4C UAT pack + UAT-R accepted | **4C-1 through 4C-4 as-built; 4C-U not started** |
 | **Programme** | 12 Sep–12 Oct 2026 | **31** | Release 2.1 accepted | All three wave packs green | **Blocked on Wave 4C** |
 
 No parallel tracks are authorised on the critical path above. A later wave must not start while its predecessor’s UAT pack still has open priority-1 defects.
@@ -1211,8 +1219,8 @@ W4A-1|--|
   1. High-density inline-edit task grid.
   2. Per-project Analytics: Schedule Intelligence and Issue Intelligence (`IssueIntelligencePane.tsx`, `issue-intelligence.ts`, `getProjectIssueAnalytics`).
   3. `/portfolio` with two views (By PM and All projects), the macro timeline, rolled-up analytics and notes, and the System About modal.
-* **UAT pack:** UAT-408, UAT-409, UAT-410, UAT-423 to UAT-427, plus **UAT-R** (full re-run of Wave 4A and Wave 4B packs on the integrated build). UAT-408 and UAT-423–427 are executable and not yet accepted. UAT-409 and UAT-410 are executable on the 4C-3 build and not yet accepted. UAT-R waits for 4C-4 and close-out.
-* **Exit criteria:** Wave 4C UAT pack and UAT-R accepted. Release 2.1 is accepted only when all three wave packs are green. **Not met** — 4C-1 through 4C-3 are as-built; 4C-4 (PDF) and the 4C UAT pack are still open.
+* **UAT pack:** UAT-408, UAT-409, UAT-410, UAT-423 to UAT-431, plus **UAT-R** (full re-run of Wave 4A and Wave 4B packs on the integrated build). UAT-408 and UAT-423–427 are executable and not yet accepted. UAT-409 and UAT-410 are executable on the 4C-3 build and not yet accepted. UAT-428 to UAT-431 (feedback package 4C-3a) are executable and not yet accepted. UAT-R waits for 4C-4 and close-out.
+* **Exit criteria:** Wave 4C UAT pack and UAT-R accepted. Release 2.1 is accepted only when all three wave packs are green. **Not met** — 4C-1 through 4C-3a are as-built; 4C-4 (PDF) and the 4C UAT pack are still open.
 
 ---
 
@@ -1245,7 +1253,7 @@ Scenarios are accepted **in the wave that first makes them exercisable**. They a
 #### Wave 4A pack (`W4A-U` — planned 18 September 2026; **accepted 5 October 2026**)
 1. **UAT-401 (Holiday Engine):** Super PM creates a national holiday on Tuesday in `/settings/holidays`; a Mon–Wed task duration equals 2 working days **on the task row**.
 2. **UAT-402 (Weighted Progress):** Task A (10 days) and Task B (2 days) display weights of $83.3\%$ and $16.7\%$ on the live List view.
-3. **UAT-403 (Punctuality Score):** As of 20/09/2026, a task with Updated Start `07/09/2026`, Updated Due `18/09/2026` (10 WD), and $50\%$ progress reports $P_{\text{target}} = 100\%$ (capped), $\text{PS} = 50.0\%$, and **Critically Delayed** on the task and landing card.
+3. **UAT-403 (Punctuality Score):** As of 20/09/2026, a task with Updated Start `07/09/2026`, Updated Due `18/09/2026` (10 WD), and $50\%$ progress reports $P_{\text{target}} = 100\%$ (capped), $\text{PS} = 50.0$ (shown as `0.500`), and **Critically Delayed** on the task and landing card.
 4. **UAT-404 (Status Flag SF-01):** An unstarted task due next week displays **Due to Commence** with a sky blue badge in the running app.
 5. **UAT-411 (Audit stamps):** Create a task as User A, then edit it as User B — **List** shows **Created by** = User A’s login name and **Updated by** = User B’s login name (UUIDs are not shown; the drawer does not display audit stamps).
 
@@ -1276,7 +1284,8 @@ Scenarios are accepted **in the wave that first makes them exercisable**. They a
 23. **UAT-423 (Issue Intelligence live progress):** After PIC sets ISS-001 to $40\%$, Analytics Issue Intelligence shows $40\%$ mean progress and Fix Realisation actual; Schedule S-Curve is unchanged.
 24. **UAT-424 (Issue Intelligence activity stream):** A comment on ISS-001 appears as `COMMENTED` in the Analytics activity stream with actor and timestamp; Last activity KPI matches.
 25. **UAT-425 (Issue Intelligence empty state):** A project with tasks but no issues shows *No issues have been logged for this project* on Analytics; Schedule pane still plots.
-26. **UAT-R (Regression):** Re-execute the entire Wave 4A pack and Wave 4B pack on the integrated 4C build. Any failure is a priority-1 regression and blocks release acceptance.
+26. **UAT-428 to UAT-431 (Feedback package 2.1.28):** the Analytics headline shows large Actual and Target bars and a score such as `0.315` with a hover explainer; the **Schedule by process group** timeline sits above every chart, with takeaways the same width as the note; the Gantt offers Comfortable and Compact rows, fit-to-width and group collapse; the Kanban offers Compact and Comfortable cards and both views offer Expanded view, with drag and drop unchanged.
+27. **UAT-R (Regression):** Re-execute the entire Wave 4A pack and Wave 4B pack on the integrated 4C build. Any failure is a priority-1 regression and blocks release acceptance.
 
 ---
 
@@ -1307,6 +1316,25 @@ Scenarios are accepted **in the wave that first makes them exercisable**. They a
 | 2.1.25 | 8 Oct 2026 | One-line Issue Log rows. Analytics visual refresh (palette, cards, hover, responsive layout) and a cheaper Analytics pane (code-split, mounted only while visible, memoised charts). |
 | 2.1.26 | 9 Oct 2026 | W4C-2b as-built: Analytics tab requires `PROJECT`; Viewer Selected or All Active; role defaults D2. Portfolio page remains W4C-3. |
 | 2.1.27 | 9 Oct 2026 | W4C-3 as-built: `/portfolio` (By PM, All projects), macro timeline, rolled-up Schedule and Issue Intelligence, PM comparison, project filter, optional Completed cohort, portfolio notes (D3), About modal, entry points. `PortfolioNote` added; row-level security enabled on the three tables that lacked it. Task, issue, milestone and import dates are limited to 2000–2100. Next package is W4C-4 (PDF). |
+| 2.1.28 | 9 Oct 2026 | W4C-3a feedback package, delivered before W4C-4 so the PDF reuses the final layout. Punctuality Score is displayed as `0.000` (stored scale unchanged). Analytics: headline cards with large Actual and Target bars, score hover explainer, larger Status flag; **Schedule by process group** timeline placed first; takeaways twice the note width. Gantt: Comfortable (60 px) and Compact (44 px) rows against 96 px before, viewport-fitted height, fit-to-width, group collapse. Kanban: Compact (default) and Comfortable cards, viewport-fitted columns. Expanded view for Kanban and Gantt; density preferences stored per browser. UAT-428 to UAT-431 added. Next package is W4C-4 (PDF). |
+| 2.1.29 | 9 Oct 2026 | Date fields. Clicking the day, month or year selects that part. The first keystroke replaces it, and a year is checked only after four digits, so a bad stored year such as 1902 can be retyped. An unfinished year restores the previous date and shows no error. The calendar is a fixed height, so its arrows do not move between months. Month and year in the header are buttons (years 2000–2100). A stored year outside that range opens the year list. Next package remains W4C-4 (PDF). |
+| 2.1.30 | 9 Oct 2026 | A stored actual-date pair no longer raises an error just by opening the project. Excel import and task save reject an end earlier than its start, a future actual date, and a date outside 2000–2100. Next package remains W4C-4 (PDF). |
+| 2.1.31 | 10 Oct 2026 | Two-decimal Punctuality Score, a window-aware punctuality explainer, milestone lines on the per-project schedule charts, and date-rule messages only after the edit of one date is finished. Next package remains W4C-4 (PDF). |
+| 2.1.32 | 10 Oct 2026 | Project page shows a spinner pill (“Updating the task…” / “Creating task…”) while a date check or task save is drawn. The Next.js Dev Tools “Rendering…” badge is not the cue. Next package remains W4C-4 (PDF). |
+| 2.1.33 | 10 Oct 2026 | Finished tasks and fully finished projects are scored against the planned due date. An early start no longer marks an early handover as late. Next package remains W4C-4 (PDF). |
+| 2.1.34 | 10 Oct 2026 | The Project Punctuality hover explains progress, planned length, and the calendar in plain words, with no formula. Next package remains W4C-4 (PDF). |
+| 2.1.35 | 10 Oct 2026 | The Punctuality Score hover is one instant dark card, shared by Analytics, the List heading, and the portfolio comparison. Next package remains W4C-4 (PDF). |
+| 2.1.36 | 10 Oct 2026 | Milestone lines move from the per-project S-curve and burn-down onto the process-group timeline. Next package remains W4C-4 (PDF). |
+| 2.1.37 | 10 Oct 2026 | W4C-4 ships as a client-side 16:9 PDF and PowerPoint of the Analytics tab and `/portfolio`. Same slides, light print theme, numbered milestone key. UAT-R remains the close-out gate. |
+| 2.1.38 | 10 Oct 2026 | The executive report carries the written note (project, PM portfolio, or All projects) on the slide after the summary when that note has text. |
+| 2.1.39 | 10 Oct 2026 | Portfolio scope, filters and Export report share one bar. Dropdown arrows match the Export report inset. |
+| 2.1.40 | 11 Oct 2026 | A short report note sits under the takeaways on the first slide; a long note has its own slide; an empty note is omitted. Milestone dates sit with the title. Key takeaways and the note are the same width on Analytics and Portfolio. |
+| 2.1.41 | 11 Oct 2026 | Hovering a task name in List or Gantt shows the full title at once. |
+| 2.1.42 | 11 Oct 2026 | List rows open the Kanban task drawer from a Details button beside the task name. |
+| 2.1.43 | 11 Oct 2026 | Hovering a Gantt timeline bar shows the task name, then that bar’s start and end dates. |
+| 2.1.44 | 11 Oct 2026 | A task may have several PICs. Cards stay compact with stacked initials and +N. |
+| 2.1.45 | 11 Oct 2026 | Task drawer edits save once when the panel closes, so a half-finished date pair is not checked mid-edit. |
+| 2.1.46 | 11 Oct 2026 | A drawer close restores only the values that break a rule. The other edits in that close are saved. |
 
 ### 8.3 Wave 4C restatement (binding from 8 Oct 2026)
 
@@ -1318,7 +1346,7 @@ Stakeholder decisions recorded 8 Oct 2026. They may be adjusted after a few week
 | **D2** | Default dashboard scopes: Super PM all three (locked); PM all three; Member `PROJECT` only; Viewer `PROJECT` only. Super PM may revoke or grant per user. |
 | **D3** | The All-projects note may be edited by any PM and any Super PM. Last save wins; stamps show who. Per-project note: owning PM and Super PM. Per-PM note: that PM and Super PM. |
 | **D4** | Viewer data scope and dashboard capability stay separate. New `projectVisibilityMode`: `SELECTED` (checklist) or `ALL_ACTIVE`. |
-| **D5** | PDF export ships inside Release 2.1 as **W4C-4**. |
+| **D5** | PDF and PowerPoint export ships inside Release 2.1 as **W4C-4**. Both files are the same 16:9 slides, built in the browser from the figures already on the screen. |
 | **D6** | `/portfolio` has two scopes only: **By PM** and **All projects**. Per-project analytics stay on the project hub. A filter on All projects covers comparison. |
 
 **Dashboards**
@@ -1333,8 +1361,8 @@ Stakeholder decisions recorded 8 Oct 2026. They may be adjusted after a few week
 
 **Takeaways:** deterministic rule engine in `insights.ts`. No model call in 2.1. Each insight cites the figures it used.
 
-**Export-ready layout (from 4C-2a):** fixed content width, section cards that do not split, chart heights in pixels, every figure also in text, light print theme. W4C-4 renders those print routes to PDF.
+**Export (from 4C-4):** one **Export report** button on the project Analytics tab and on `/portfolio`. The user chooses PDF or PowerPoint. Both files are the same 16:9 slides, drawn from one slide list in the browser (`executive-deck-generator.ts`, `jspdf`, `pptxgenjs`). Light off-white print theme. Every page names the report, the scope, who exported it, and the Australian date and time. Milestone lines carry a number and a key. From 2.1.38, a written note with text is the slide after the summary. No print routes and no server PDF.
 
 **Access:** `dashboardAccess` is enforced on the project hub (4C-2b). Privilege matrix owns capability. Project visibility owns which projects a Viewer may open, including `ALL_ACTIVE`. A dashboard only aggregates projects inside the caller’s data scope. `PM_PORTFOLIO` and `TOTAL_COMPANY` gate `/portfolio` (4C-3); a Viewer on `ALL_ACTIVE` needs a portfolio tick as well.
 
-*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 are as-built; Wave 4C-4 (PDF export) is the next package.*
+*End of Development Plan (`doc/dev_plan.md`). Approved as the North Star Master Blueprint for Release 2.1 development. Waves 4A and 4B are as-built and UAT-accepted; Wave 4C-1 through 4C-4 are as-built; Wave 4C-U close-out remains.*

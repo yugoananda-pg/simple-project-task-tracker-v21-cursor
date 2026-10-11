@@ -278,15 +278,24 @@ export default function ProjectIssueLogView({
               id: "new-issue",
               assigneeId: pic.assigneeId,
               assigneeName: pic.assigneeName,
+              assignees: pic.assigneeId || pic.assigneeName
+                ? [{ userId: pic.assigneeId, name: pic.assigneeName }]
+                : [],
             }}
             members={memberUsers}
             suggestions={customAssigneeNames}
             disabled={isPending}
             label="PIC"
             hideHint
+            single
             labelClassName="sr-only"
             fieldClassName={FORM_FIELD}
-            onCommit={setPic}
+            onCommit={(next) =>
+              setPic({
+                assigneeId: next.assigneeId ?? null,
+                assigneeName: next.assigneeName ?? "",
+              })
+            }
           />
           <div className="flex flex-wrap items-end gap-2 lg:col-span-2">
             <label className="min-w-0 flex-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
@@ -473,18 +482,23 @@ export default function ProjectIssueLogView({
                               id: issue.id,
                               assigneeId: issue.picId,
                               assigneeName: issue.picName,
+                              assignees:
+                                issue.picId || issue.picName
+                                  ? [{ userId: issue.picId, name: issue.picName }]
+                                  : [],
                             }}
                             members={memberUsers}
                             suggestions={customAssigneeNames}
                             disabled={isPending}
                             label={`PIC for ${issue.displayId}`}
                             hideHint
+                            single
                             labelClassName="sr-only"
                             fieldClassName={`${INLINE_INPUT} truncate`}
                             onCommit={(next) =>
                               handleInline(issue, {
-                                picId: next.assigneeId,
-                                picName: next.assigneeName,
+                                picId: next.assigneeId ?? null,
+                                picName: next.assigneeName ?? "",
                               })
                             }
                           />

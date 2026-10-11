@@ -34,9 +34,11 @@ Scenarios that are **not yet shippable** in the current build are labelled **DEF
 | Wave 4C-2a | UAT-408, UAT-423–425 | Implemented 8 Oct 2026 | Ready for operator check; not yet accepted |
 | Wave 4C-2b | UAT-426–427 | Implemented 9 Oct 2026 | Ready for operator check; not yet accepted |
 | Wave 4C-3 | UAT-409–410 | Implemented 9 Oct 2026 | Ready for operator check; not yet accepted |
-| Wave 4C remainder | UAT-R, PDF export | **Not in current build** | Do not execute yet |
+| Wave 4C-3a feedback (2.1.28) | UAT-428–431 | Implemented 9 Oct 2026 | Ready for operator check; not yet accepted |
+| Wave 4C-4 export (2.1.37, note placement 2.1.40) | UAT-432 | Implemented 11 Oct 2026 | Ready for operator check; not yet accepted |
+| Wave 4C remainder | UAT-R | **Not in current build** | Do not execute yet |
 
-**Browser agent default run order for this session:** Wave 4A + Wave 4B UAT are accepted. Wave 4C-2a is in the build and ready for UAT-408 and UAT-423–425. Wave 4C-2b is in the build and ready for UAT-426–427. Wave 4C-3 is in the build and ready for UAT-409 and UAT-410. PDF export and UAT-R are still out of scope.
+**Browser agent default run order for this session:** Wave 4A + Wave 4B UAT are accepted. Wave 4C-2a is in the build and ready for UAT-408 and UAT-423–425. Wave 4C-2b is in the build and ready for UAT-426–427. Wave 4C-3 is in the build and ready for UAT-409 and UAT-410. The 4C-3a feedback package is in the build and ready for UAT-428 to UAT-431. Wave 4C-4 is in the build and ready for UAT-432. UAT-R is still out of scope.
 
 ---
 
@@ -49,7 +51,7 @@ Scenarios that are **not yet shippable** in the current build are labelled **DEF
 | App | Next.js App Router + Supabase Auth + Prisma / PostgreSQL |
 | Dev server | `npm run dev` → `http://localhost:3000` |
 | Auth | Email + password; approved accounts only |
-| Dates in UI | Prefer `dd/mm/yyyy` display; date inputs store `yyyy-mm-dd`. Every date field has a calendar button at the right end. The button opens an in-page month grid; previous and next month do not change the stored date until a day is chosen. |
+| Dates in UI | Prefer `dd/mm/yyyy` display; date inputs store `yyyy-mm-dd`. Click the day, the month or the year to edit that part. A year is stored only after four digits; leaving an unfinished year restores the previous date and shows no error. The calendar button opens a fixed-height picker. Its month and year are buttons (years 2000–2100). Previous and next do not change the stored date, and the arrows stay put. A stored year outside 2000–2100 opens the year list. |
 
 ### 3.2 Role accounts (typical local tenant)
 
@@ -114,6 +116,11 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 | UAT-408, 423–425 | 4C-2a | Per-project Analytics | Project hub Analytics tab |
 | UAT-426–427 | 4C-2b | Dashboard access and Viewer All Active | Privilege matrix, `/settings/viewer-visibility`, project hub |
 | UAT-409–410 | 4C-3 | Portfolio, macro timeline, About | `/portfolio`, account menu → About |
+| UAT-428 | 4C-3a | Schedule headline cards and score format | Analytics tab, List, Portfolio |
+| UAT-429 | 4C-3a | Process-group timeline, takeaways and note layout | Analytics tab |
+| UAT-430 | 4C-3a | Gantt density, group collapse, fit-to-width | Gantt tab |
+| UAT-431 | 4C-3a | Kanban density and Expanded view | Kanban tab, Gantt tab |
+| UAT-432 | 4C-4 | Executive PDF and PowerPoint | Analytics tab, `/portfolio` |
 | UAT-R | 4C | Full regression | **DEFERRED** |
 
 ---
@@ -185,7 +192,7 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 **Pass**
 
 - $P_{\text{target}} = 100\%$ (capped)
-- $\text{PS} = 50.0\%$ (or displayed equivalent)
+- $\text{PS} = 50.0\%$ internally, **shown as `0.50`** (a score, not a percentage; 1.00 means on schedule — release 2.1.31). Accepted runs before 2.1.28 saw `50.0%`; release 2.1.28 showed `0.500`. That is the same value.
 - Status Flag **Critically Delayed** on task surfaces and landing card.
 
 **Note for agents:** If today’s date is far from Sep 2026, construct any fully-elapsed window with progress 50% and assert capped target + Critically Delayed.
@@ -460,7 +467,7 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 
 **Residual note:** A Next.js hydration warning overlay appeared once on the project hub during the Super PM session; it did not block create/edit/Gantt assertions.
 
-**Gantt UX polish (5 Oct 2026, pre–Wave 4C):** Chart scrollport uses `max-h-[calc(100vh-200px)]`. Today/milestone lines end on the last task/group row. When a milestone falls on Today, the milestone is offset 4px and tips/legend disclose both markers.
+**Gantt UX polish (5 Oct 2026, pre–Wave 4C; scrollport height superseded in 2.1.28 by `100dvh − 14.5rem`, see UAT-430):** Chart scrollport used `max-h-[calc(100vh-200px)]`. Today/milestone lines end on the last task/group row. When a milestone falls on Today, the milestone is offset 4px and tips/legend disclose both markers.
 
 ---
 
@@ -727,7 +734,7 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 **Steps**
 
 1. Open the project hub. Confirm the tab order is List, Kanban, Gantt, Issue Log, Analytics.
-2. Open **Analytics**. Confirm the project note and key takeaways sit above the charts. Confirm Schedule Intelligence shows the S-curve, task status doughnut, effort by process group, overdue list, and milestone table (UAT-408).
+2. Open **Analytics**. Confirm the headline cards, the process-group timeline, key takeaways and the project note sit above the charts (order as in §6E). Confirm Schedule Intelligence shows the S-curve, task status doughnut, effort by process group, overdue list, and milestone table (UAT-408).
 3. Confirm Issue Intelligence shows KPI figures, three chart rows, and an activity stream of recent issue changes (UAT-423, UAT-424).
 4. Open a project with no issues. Confirm the copy *No issues have been logged for this project* and **Open Issue Log** (UAT-425).
 
@@ -767,12 +774,12 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 ### UAT-409 — Executive macro timeline and `/portfolio`
 
 1. Sign in as the PM. The header shows **Projects, Portfolio, Completed** (Completed only with Completed visibility). Open **Portfolio**.
-2. **By PM** is selected. A **Project Manager** picker lists only PMs who own a visible Active project. Choose another PM. The six KPI cards, the macro timeline and every block below change to that PM.
+2. **By PM** is selected. A **Project Manager** picker lists only PMs who own a visible Active project. Choose another PM. The three headline cards, the three KPI cards, the macro timeline and every block below change to that PM.
 3. In the macro timeline each project shows three bars (initial plan grey, updated plan blue, actual green or amber, hatched while still running to the red **Today** line), plus Target, Actual and Status Flag. Names wrap to two lines.
 4. Hover a milestone diamond, then Tab to another one. A card opens at once (no delay) with name, project, target, achieved date and variance. Scroll the page while it is open; the card stays with its diamond.
 5. Switch to **All projects**. A **Comparison by PM** table appears. Use the project filter to tick fewer projects; the KPIs, timeline and charts follow. The key takeaways cite the figures used.
 6. Scroll: S-curve, burn-down, task status, effort by process group, overdue tasks (with a **Project** column), milestones, and Issue Intelligence (recent activity names the project). Compare one project’s score with its hub Analytics tab; a portfolio of one project gives the same percentage.
-7. **Notes.** On All projects, choose **Edit** on the note, enter a sentence, **Save**. The note shows “Updated by <you> · date time”. Reload; it persists. As a PM on another PM’s By PM view, there is no **Edit**. As Super PM, **Edit** is present on every PM’s note and on All projects.
+7. **Notes.** On All projects, choose **Edit** on the note, enter a sentence, **Save**. The note shows “Updated by <you> · date time”. Reload; it persists. At 1440 px, Key takeaways and the note are the same width and the same height. At 390 px they stack, takeaways first. As a PM on another PM’s By PM view, there is no **Edit**. As Super PM, **Edit** is present on every PM’s note and on All projects.
 8. **Completed cohort.** As Super PM, switch **Include Completed projects** on. Completed projects join with a Completed badge. As a PM without Completed visibility `ALL`, the switch is absent.
 9. **Entry points.** On `/`, the scope control shows **Analytics for this scope →** and it opens the matching view. On a project hub, “Project Manager: <name>” links to that PM’s portfolio for someone holding PM Portfolio.
 10. **Gate.** Sign in as the Member (no portfolio tick): no **Portfolio** link, and typing `/portfolio` returns to `/`. Repeat for the Viewer. Then, as Super PM, tick **PM Portfolio** and **Total Company** for the Viewer and sign in again: the Viewer’s portfolio contains only the projects they could already open (the checklist, or every Active project on **All Active**) and the note shows no **Edit**. Restore the Viewer’s ticks.
@@ -791,14 +798,78 @@ Use the live directory under **Settings → Users & privileges**. Typical seed /
 
 ---
 
+## 6E. Feedback package — UAT-428 to UAT-431 (Wave 4C-3a, release 2.1.28)
+
+**Preconditions:** A PM (or Super PM) holding **Per-project Analytics**, and an Active project with at least five tasks spread across several process groups, some late and some on time. Use a 1440 × 900 window unless a step says otherwise. Preferences are stored in the browser: clear `sptt.gantt.density` and `sptt.kanban.density` before UAT-430 and UAT-431 to see the first-visit defaults.
+
+### UAT-428 — Schedule headline cards and score format
+
+1. Open **Analytics**. The first thing under the heading is three cards.
+2. **Actual minus target** (left, half width) shows a large signed number in points (for example `−68.5`), the words *points, behind target*, and two labelled bars: **Actual** and **Target**, each with its percentage in large type. Both bars are visible without hovering.
+3. **Project punctuality** (middle) shows the score as a number with two decimals (for example `0.32`), never a percentage, with the line *Score. 1.00 is on schedule.* and a small gauge. Hover the card, or Tab onto it: a dark card opens at once, with no delay and no formula. It is titled Punctuality Score (PS). It says 1.00 is right on schedule, above 1.00 is ahead, and below 1.00 is slipping. In progress compares actual progress with elapsed working days. Completed compares planned duration with the actual finish. The bands read PS ≥ 1.05 Ahead / Completed early (indigo), 0.95 ≤ PS < 1.05 On track / Completed on time (emerald), 0.85 ≤ PS < 0.95 Slipping / Completed late (amber), and PS < 0.85 Critically delayed / Completed severely late (rose). The note says planned working days only, weekends and public holidays are excluded, an early handover is never penalised, and issue work is left out. The List PS heading and the portfolio Punctuality heading open the same card at once. Scroll so the card sits at the bottom of the window: the note opens above the card and stays fully on screen. At 390 px width it stays inside the window.
+4. **Status flag** (right) shows a large badge and the full-sentence meaning of that flag, plus the task count.
+5. Open **List**. The banner above the table and the **PS** column show the same style (`0.26`, `0.88`). Hover the project score or the **PS** heading: the same card opens at once.
+6. Open **/portfolio**. The headline cards use the same layout (title *Portfolio punctuality*), and **Comparison by PM** shows scores as `0.xx`. Hover the **Punctuality** heading: the same card opens at once.
+7. Key takeaway sentences quote the score as `0.xx` and quote Actual and Target as percentages.
+8. On a project that has milestones, **Schedule by process group** draws a dashed vertical line on the milestone day across the five rows. Pending is amber, achieved is emerald, and the legend names the kinds that appear. The **Schedule S-Curve** and **Task burn-down** do not draw those lines. A project with no milestones shows neither lines nor that legend.
+
+**Pass:** No surface shows PS as a percentage, and every score has two decimals. Actual and Target are visible at a glance on the Analytics tab. The hover or focus explainer works with the mouse and the keyboard, and it stays fully on screen when the card is near the bottom. Pending and achieved milestone lines are on the process-group timeline and match the Gantt colours. The S-curve and the burn-down have none. Light and dark themes both read clearly.
+
+### UAT-429 — Process-group timeline, takeaways and note layout
+
+1. On **Analytics**, directly below the three cards, find **Schedule by process group**.
+2. Five rows appear: Initiating, Planning, Executing, Monitoring, Closing. Each name cell shows the task count, the group score (`0.xxx`) and the overdue count. A group with no tasks reads *No tasks*.
+3. Each row has three bars: Initial plan (grey), Updated plan (blue) and Actual (green when the group score is 0.95 or more, amber below it, hatched while the work is still running to Today). Hover or focus a bar for its start and end dates. The red **Today** line crosses every row.
+4. For one group, compare the bar ends with the earliest start and latest end among that group’s tasks on List. They match.
+5. Scroll once. **Key takeaways** and **Project note** sit side by side at 1440 px, the same width and the same height. At 390 px they stack, Key takeaways first.
+6. The S-curve, burn-down and the cards below follow, in the same order as before.
+
+**Pass:** The timeline sits above every chart and note, uses the earliest and latest dates of each group, and matches the List data. Takeaways and the note are the same width and the same height on desktop.
+
+### UAT-430 — Gantt density, group collapse and fit-to-width
+
+1. Open **Gantt**. On first visit the rows are **Comfortable** (60 px, with the full task label). Choose **Compact**: rows drop to 44 px and more tasks fit without scrolling. Reload the page; **Compact** is still selected.
+2. Open the project on a wide screen with a short project (a few weeks of tasks). The timeline stretches to the full width of the card; there is no wide empty area to the right of the last column. Switch **Week** and **Month**; both fit.
+3. Choose **Collapse all groups**. Only the five group header rows remain. Choose **Expand all groups**. Click one group header: that group alone collapses and its chevron changes direction. The Today line and milestone lines stop at the last visible row.
+4. The three bars (Initial, Updated, Actual) stay aligned with their task row in both densities. Hover a bar: the card stays with the bar and names the task, then that bar’s start and end. It does not repeat the project title.
+5. Open a task: the drawer still opens from the row.
+6. Hover a long task name in the **Task** column. The complete name appears at once, with no wait, and the words are not cut off. Repeat on **List**.
+
+**Pass:** The chart shows noticeably more rows and more of the timeline at once. Preference survives a reload. The task-name tip is immediate on List and Gantt. Nothing else in the Gantt changes behaviour.
+
+### UAT-431 — Kanban density and Expanded view
+
+1. Open **Kanban Board**. On first visit cards are **Compact**: title clamped to two lines, status flag and the Actual and Target badges on one wrapping row, then PIC and due date, with no divider line. At 1440 × 900 a column shows noticeably more cards before it scrolls (about five with short titles, against about three before). Choose **Comfortable**: the badges move to their own row, the divider returns and cards grow back. Reload; the choice remains.
+2. Each column scrolls on its own. Its header stays in view. The column height follows the window height.
+3. Choose **Expand view**. The project header, milestones strip and the read-only notice (when shown) disappear and the board fills the screen. The button now reads **Exit expanded view**; choose it to return. Open **Gantt** while expanded: it is still expanded and the same button is there. Switching to List, Issue Log or Analytics shows the normal page.
+4. Drag a card to another column and drop it. Drag a card up or down within a column. The change saves and the card shows its new status. A Viewer or read-only user cannot drag.
+5. Click a card (without dragging): the task drawer opens.
+
+**Pass:** More cards are visible per column in both normal and expanded view. Drag and drop and the drawer behave as before.
+
+### UAT-432 — Executive PDF and PowerPoint
+
+**Preconditions:** A PM (or Super PM) who can open Analytics and `/portfolio`, and a project with tasks, milestones and at least one issue.
+
+1. Open a project **Analytics** tab. Find **Export report** next to Schedule Intelligence.
+2. Open the menu. Escape closes it. Choose **PDF**. A spinner reads *Preparing PDF…*. A file downloads. Open it.
+3. Confirm 16:9 pages (not A4). The first page names the project, the Custom ID when set, the Project Manager, and the report date. Status, punctuality score, actual progress, task count and active issues match the screen. Takeaways match the screen. The footer names the report, the project, who exported it, and the Australian date and time, plus the page number.
+4. Later slides cover schedule, the process-group timeline with numbered milestone markers and a key, milestones, overdue or at-risk tasks with PIC workload, and issues when any exist. In the key, the date sits with the milestone name. A long name wraps, and the date stays with that name. No chart is a screenshot of the page. No text is cropped. `>=` may stand in for `≥`.
+5. Repeat with **PowerPoint**. The same slides open, and the shapes are editable.
+6. Open `/portfolio` (By PM, then All projects). The scope toggle, the Project Manager or project list, Include Completed projects, and **Export report** sit on one bar under the title. Export is at the right, not beside the timeline heading. Dropdown arrows sit clear of the button edge. Export both formats. The file uses the ticked projects on All projects. The timeline key names the project on each numbered milestone. The ranking slide is By PM on All projects, and the project list on By PM.
+7. A written note follows three rules, the same for a project note, a PM portfolio note, and the All projects note. An empty note does not appear. A short note sits on the first page, under Key takeaways (under What stands out on a portfolio). A long note is the next page, and if it still overflows the last line says the rest is on the screen. The words match the screen, including headings and lists, and the card says who updated it. Ticking fewer projects on All projects still prints the All projects note.
+
+**Pass:** Both formats download from Analytics and from both portfolio views. Figures match the screen. Nothing is cropped. UAT-R is not part of this scenario.
+
+---
+
 ## 7. Wave 4C remainder — **DEFERRED** (do not execute on current build)
 
 | ID | Title | Why deferred |
 |----|-------|--------------|
-| PDF export | Executive PDF of the three dashboards | Wave 4C-4 |
 | UAT-R | Full 4A+4B regression on 4C build | Requires the 4C close-out gate |
 
-Agents must report these as **Deferred — Wave 4C**, not Fail. UAT-408, UAT-409, UAT-410 and UAT-423–427 are in the build; run §6B, §6C and §6D. They are not yet accepted.
+Agents must report these as **Deferred — Wave 4C**, not Fail. UAT-408, UAT-409, UAT-410, UAT-423–427, UAT-428–431 and UAT-432 are in the build; run §6B, §6C, §6D, §6E and UAT-432. They are not yet accepted.
 
 ---
 
@@ -848,7 +919,9 @@ Execute in order; skip accepted/deferred as marked.
 | — | UAT-413, 418 | **Done — PASS** (5 Oct 2026, job-assisted) |
 | — | UAT-408, 423–427 | **Ready** — not yet accepted (§6B, §6C) |
 | — | UAT-409, 410 | **Ready** — not yet accepted (§6D) |
-| — | UAT-R | **Deferred** — requires PDF export and close-out |
+| — | UAT-428–431 | **Ready** — not yet accepted (§6E) |
+| — | UAT-432 | **Ready** — not yet accepted |
+| — | UAT-R | **Deferred** — requires close-out |
 
 ### Result log (this session)
 
@@ -910,6 +983,25 @@ UAT-418  | Pass | Job-assisted: UAT-418 Five-Year Purge → Purged Register COMP
 | 1.23 | 8 Oct 2026 | Issue Log rows are one line and vertically centred. Analytics visual refresh checked in light and dark and at 640 px wide. UAT-423–425 still not accepted. |
 | 1.24 | 9 Oct 2026 | UAT-408 and UAT-423–425 are executable (Analytics is in the build). UAT-426–427 cover the Analytics-tab gate and Viewer All Active. None of these are accepted. UAT-409, UAT-410, and UAT-R stay deferred. |
 | 1.25 | 9 Oct 2026 | UAT-409 and UAT-410 are executable (§6D, Wave 4C-3 is in the build) and not yet accepted. Developer browser check of By PM, All projects, tooltips, notes, About, entry points and the Member gate on 9 Oct 2026 is recorded in `dev_proc.md` §12.13 and is not a UAT result. UAT-R stays deferred until PDF export ships. |
+| 1.26 | 9 Oct 2026 | Feedback package 2.1.28 (§6E): UAT-428 headline cards and the 0.000 score format, UAT-429 process-group timeline and takeaways/note layout, UAT-430 Gantt density, collapse and fit-to-width, UAT-431 Kanban density and Expanded view. UAT-403 now expects `0.500`. Developer browser check is recorded in `dev_proc.md` §12.14 and is not a UAT result. None accepted. |
+| 1.27 | 9 Oct 2026 | Date fields (2.1.29). Click day, month or year; a single year digit does not save and does not show a range error; four digits save the date. The calendar keeps one height across short and long months, and its month and year are buttons. Developer browser check is in `dev_proc.md` §12.15 and is not a UAT result. |
+| 1.28 | 9 Oct 2026 | Opening a project does not show “Actual finish date cannot be earlier than the actual start date” for a date already stored. Excel import rejects a future actual date, an end earlier than its start, and a date outside 2000–2100 (FR-IMP-03). Developer check is in `dev_proc.md` §12.16 and is not a UAT result. |
+| 1.29 | 10 Oct 2026 | Release 2.1.31. PS is two decimals. UAT-428 expects the floating punctuality note, the four mathematical bands, and milestone lines on the S-curve and burn-down. A date-rule message appears only after that date edit finishes, and the field then shows the previous acceptable value. Developer check is in `dev_proc.md` §12.17 and is not a UAT result. |
+| 1.30 | 10 Oct 2026 | Release 2.1.32. While a finished date is checked or a task change is saved, the project page shows a spinner pill (“Updating the task…”). Creating a task shows “Creating task…”. The Next.js Dev Tools “Rendering…” badge is not the cue. Developer check is in `dev_proc.md` §12.18 and is not a UAT result. |
+| 1.31 | 10 Oct 2026 | Release 2.1.33. A finished task or fully finished project is scored against the planned due date. Finishing on or before that date is Completed Ahead or Completed On Time, including when work started early. Finishing after that date is Completed Late or Completed Severely Late. Unfinished tasks keep the previous score. Developer check is in `dev_proc.md` §12.19 and is not a UAT result. |
+| 1.32 | 10 Oct 2026 | Release 2.1.34. The Project Punctuality hover names progress, planned working days, and the calendar, and it does not show a formula. UAT-428 step 3 matches that wording. Developer check is in `dev_proc.md` §12.20 and is not a UAT result. |
+| 1.33 | 10 Oct 2026 | Release 2.1.35. The Punctuality Score hover is one instant dark card on Analytics, the List heading, and the portfolio comparison. UAT-428 step 3 matches that card. Developer check is in `dev_proc.md` §12.20 and is not a UAT result. |
+| 1.34 | 10 Oct 2026 | Release 2.1.36. Milestone lines move from the S-curve and burn-down onto Schedule by process group. UAT-428 step 8 matches that. Developer check is in `dev_proc.md` §12.22 and is not a UAT result. |
+| 1.35 | 10 Oct 2026 | Release 2.1.37. UAT-432 covers Export report on Analytics and `/portfolio` (PDF and PowerPoint). Developer check is in `dev_proc.md` §12.23 and is not a UAT result. UAT-R stays deferred until close-out. |
+| 1.36 | 10 Oct 2026 | Release 2.1.38. UAT-432 step 7: a written note is the slide after the summary. An empty note adds no slide. Developer check is in `dev_proc.md` §12.24 and is not a UAT result. |
+| 1.37 | 10 Oct 2026 | Release 2.1.39. UAT-432 step 6: portfolio controls share one bar, and dropdown arrows match Export report. Developer check is in `dev_proc.md` §12.25 and is not a UAT result. |
+| 1.38 | 11 Oct 2026 | Release 2.1.40. UAT-429 step 5 and UAT-409 step 7: takeaways and the note are the same width. UAT-432 steps 4 and 7: milestone dates sit with the title, and a note is under the takeaways when short or on the next page when long. Developer check is in `dev_proc.md` §12.26 and is not a UAT result. |
+| 1.39 | 11 Oct 2026 | Release 2.1.41. UAT-430 step 6: the full task name appears at once on List and Gantt. Developer check is in `dev_proc.md` §12.27 and is not a UAT result. |
+| 1.40 | 11 Oct 2026 | Release 2.1.42. On List, a Details button beside the task name opens the same task drawer as a Kanban card. Developer check is in `dev_proc.md` §12.28 and is not a UAT result. |
+| 1.41 | 11 Oct 2026 | Release 2.1.43. UAT-430 step 4: a Gantt bar hover names the task, then that bar’s start and end. Developer check is in `dev_proc.md` §12.29 and is not a UAT result. |
+| 1.42 | 11 Oct 2026 | Release 2.1.44. A task may have several PICs. Developer check is in `dev_proc.md` §12.30 and is not a UAT result. |
+| 1.43 | 11 Oct 2026 | Release 2.1.45. Task drawer field edits save when the panel closes. Developer check is in `dev_proc.md` §12.31 and is not a UAT result. |
+| 1.44 | 11 Oct 2026 | Release 2.1.46. A drawer close restores only the values that break a rule and saves the rest. Developer check is in `dev_proc.md` §12.32 and is not a UAT result. |
 
 ---
 

@@ -9,7 +9,6 @@ import {
   type ActionResult,
 } from "@/src/lib/actions/errors";
 import { auditCreate, auditUpdate } from "@/src/lib/audit";
-import { rememberCustomAssignee } from "@/src/lib/custom-assignees";
 import { logTaskProgress } from "@/src/lib/actions/task-progress-log";
 import { syncProjectProgressClock } from "@/src/lib/actions/project-lifecycle";
 import { mapTask } from "@/src/lib/mappers";
@@ -17,11 +16,14 @@ import { prisma } from "@/src/lib/prisma";
 import {
   canDeleteTask,
   canMutateTask,
-  requireActiveApprovedAssignee,
   requireAdminProject,
   requireReadableProject,
   requireApprovedSessionUser,
 } from "@/src/lib/rbac";
+import {
+  resolveTaskPics,
+  taskAssigneeNestedWrite,
+} from "@/src/lib/task-assignees";
 import {
   actualDateRangeError,
   addDaysToLocalDateString,
@@ -40,6 +42,7 @@ import type { Prisma } from "@prisma/client";
 const TASK_INCLUDE = {
   subtasks: { orderBy: { sortOrder: "asc" as const } },
   comments: { orderBy: { createdAt: "asc" as const } },
+  assignees: { orderBy: { sortOrder: "asc" as const } },
 } satisfies Prisma.TaskInclude;
 
 async function loadActorNamesById(
@@ -91,6 +94,18 @@ function parseOptionalDate(value: string | null | undefined): Date | null {
     );
   }
   return localDateStringToDbDate(datePart);
+}
+
+function assertSpanOrder(
+  start: string | null,
+  end: string | null,
+  message: string,
+): void {
+  const startPart = start?.trim().slice(0, 10) || null;
+  const endPart = end?.trim().slice(0, 10) || null;
+  if (startPart && endPart && endPart < startPart) {
+    throw new ActionError(message, "VALIDATION");
+  }
 }
 
 function parseLocalDateString(value: string): Date {
@@ -391,43 +406,26 @@ export async function updateTaskFields(
 
     if (patch.priority !== undefined) data.priority = patch.priority;
     if (patch.bucket !== undefined) data.bucket = patch.bucket;
-    if (patch.assigneeId !== undefined || patch.assigneeName !== undefined) {
-      if (patch.assigneeId) {
-        const assigneeUser = await requireActiveApprovedAssignee(
-          patch.assigneeId,
-        );
-        const isProjectMember = await prisma.projectMember.findFirst({
-          where: {
-            projectId: task.projectId,
-            userId: patch.assigneeId,
-          },
-          select: { id: true },
-        });
-        const isOwner = task.project.ownerId === patch.assigneeId;
-        const isSuperPm = assigneeUser.globalRole === "super_pm";
-        if (!isProjectMember && !isOwner && !isSuperPm) {
-          throw new ActionError(
-            "Assignee must be on the project roster, the owning PM, or a Super PM.",
-            "VALIDATION",
-          );
-        }
-        data.assignee = { connect: { id: patch.assigneeId } };
-        data.assigneeName =
-          patch.assigneeName?.trim() || assigneeUser.name;
-      } else {
-        data.assignee = { disconnect: true };
-        const customName = patch.assigneeName?.trim() ?? "";
-        if (customName.length > 120) {
-          throw new ActionError(
-            "PIC name must be 120 characters or fewer.",
-            "VALIDATION",
-          );
-        }
-        data.assigneeName = customName;
-        if (customName) {
-          await rememberCustomAssignee(user.id, customName);
-        }
-      }
+    const nextPics =
+      patch.assignees !== undefined
+        ? await resolveTaskPics(task.project, user.id, patch.assignees, prisma)
+        : patch.assigneeId !== undefined || patch.assigneeName !== undefined
+          ? await resolveTaskPics(
+              task.project,
+              user.id,
+              patch.assigneeId || patch.assigneeName?.trim()
+                ? [
+                    {
+                      userId: patch.assigneeId ?? null,
+                      name: patch.assigneeName ?? "",
+                    },
+                  ]
+                : [],
+              prisma,
+            )
+          : null;
+    if (nextPics) {
+      Object.assign(data, taskAssigneeNestedWrite(nextPics, user.id));
     }
     if (patch.initialStartDate !== undefined) {
       data.initialStartDate = parseOptionalDate(patch.initialStartDate);
@@ -440,6 +438,42 @@ export async function updateTaskFields(
     }
     if (patch.updatedDueDate !== undefined) {
       data.updatedDueDate = parseOptionalDate(patch.updatedDueDate);
+    }
+    if (
+      patch.initialStartDate !== undefined ||
+      patch.initialDueDate !== undefined
+    ) {
+      assertSpanOrder(
+        patch.initialStartDate !== undefined
+          ? patch.initialStartDate
+          : task.initialStartDate
+            ? dbDateToLocalDateString(task.initialStartDate)
+            : null,
+        patch.initialDueDate !== undefined
+          ? patch.initialDueDate
+          : task.initialDueDate
+            ? dbDateToLocalDateString(task.initialDueDate)
+            : null,
+        "Initial due date cannot be before the initial start date.",
+      );
+    }
+    if (
+      patch.updatedStartDate !== undefined ||
+      patch.updatedDueDate !== undefined
+    ) {
+      assertSpanOrder(
+        patch.updatedStartDate !== undefined
+          ? patch.updatedStartDate
+          : task.updatedStartDate
+            ? dbDateToLocalDateString(task.updatedStartDate)
+            : null,
+        patch.updatedDueDate !== undefined
+          ? patch.updatedDueDate
+          : task.updatedDueDate
+            ? dbDateToLocalDateString(task.updatedDueDate)
+            : null,
+        "Updated due date cannot be before the updated start date.",
+      );
     }
     if (
       patch.actualStartDate !== undefined ||
@@ -471,27 +505,30 @@ export async function updateTaskFields(
       }
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const nextTask = await tx.task.update({
-        where: { id: taskId },
-        data,
-        include: TASK_INCLUDE,
-      });
-      if (nextTask.progress !== task.progress) {
-        await logTaskProgress(tx, {
-          projectId: task.projectId,
-          taskId,
-          progress: nextTask.progress,
-          actorId: user.id,
-          previousProgress: task.progress,
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        const nextTask = await tx.task.update({
+          where: { id: taskId },
+          data,
+          include: TASK_INCLUDE,
         });
-      }
-      await tx.project.update({
-        where: { id: task.projectId },
-        data: auditUpdate(user.id),
-      });
-      return nextTask;
-    });
+        if (nextTask.progress !== task.progress) {
+          await logTaskProgress(tx, {
+            projectId: task.projectId,
+            taskId,
+            progress: nextTask.progress,
+            actorId: user.id,
+            previousProgress: task.progress,
+          });
+        }
+        await tx.project.update({
+          where: { id: task.projectId },
+          data: auditUpdate(user.id),
+        });
+        return nextTask;
+      },
+      { timeout: 20_000, maxWait: 10_000 },
+    );
 
     revalidatePath(`/projects/${task.projectId}`);
     revalidatePath("/");

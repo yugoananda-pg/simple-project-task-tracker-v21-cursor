@@ -11,9 +11,10 @@ import {
   TABLE_HEAD,
   TABLE_ROW,
 } from "@/src/components/analytics/panel";
+import PunctualityScoreTip from "@/src/components/schedule/PunctualityScoreTip";
 import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
 import type { PmComparisonRow } from "@/src/lib/analytics/portfolio";
-import { formatPercent1 } from "@/src/lib/analytics/weighted-progress";
+import { formatScore2 } from "@/src/lib/analytics/weighted-progress";
 
 export default function PmComparison({
   rows,
@@ -35,7 +36,11 @@ export default function PmComparison({
             <th className="px-5 py-2 font-semibold">PM</th>
             <th className="px-3 py-2 text-right font-semibold">Projects</th>
             <th className="px-3 py-2 text-right font-semibold">Tasks</th>
-            <th className="px-3 py-2 text-right font-semibold">Punctuality</th>
+            <th className="px-3 py-2 text-right font-semibold">
+              <PunctualityScoreTip className="ml-auto inline-flex cursor-help rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                Punctuality
+              </PunctualityScoreTip>
+            </th>
             <th className="min-w-[14rem] px-3 py-2 font-semibold">
               Actual and target
             </th>
@@ -68,7 +73,7 @@ export default function PmComparison({
                 {row.taskCount}
               </td>
               <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-                {formatPercent1(row.ps)}
+                {formatScore2(row.ps)}
               </td>
               <td className="px-3 py-2.5">
                 <div className="space-y-1">

@@ -686,6 +686,10 @@ export async function resetAndSeedDatabase(
         seedTask.assignee,
         users,
       );
+      const assignees =
+        assigneeId || assigneeName
+          ? [{ userId: assigneeId, assigneeName, sortOrder: 0 }]
+          : [];
       const sortOrder = sortCounters[seedTask.status] ?? 0;
       sortCounters[seedTask.status] = sortOrder + 1;
 
@@ -699,6 +703,15 @@ export async function resetAndSeedDatabase(
           bucket: seedTask.bucket,
           assigneeId,
           assigneeName,
+          assignees: {
+            create: assignees.map((pic) => ({
+              userId: pic.userId,
+              assigneeName: pic.assigneeName,
+              sortOrder: pic.sortOrder,
+              createdBy: owner.id,
+              updatedBy: owner.id,
+            })),
+          },
           progress:
             seedTask.status === "done"
               ? 100

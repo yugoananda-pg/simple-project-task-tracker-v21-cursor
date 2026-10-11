@@ -33,6 +33,7 @@ import {
 } from "@/src/lib/mail/notify";
 import { generateTemporaryPassword } from "@/src/lib/password";
 import { prisma } from "@/src/lib/prisma";
+import { taskAssignedToUserWhere } from "@/src/lib/task-assignees";
 import { isPrismaUniqueViolation } from "@/src/lib/prisma-errors";
 import {
   activeApprovedUserWhere,
@@ -779,12 +780,12 @@ export async function getUserDeletionImpact(
             id: true,
             name: true,
             _count: {
-              select: { tasks: { where: { assigneeId: userId } } },
+              select: { tasks: { where: taskAssignedToUserWhere(userId) } },
             },
           },
           orderBy: { name: "asc" },
         }),
-        prisma.task.count({ where: { assigneeId: userId } }),
+        prisma.task.count({ where: taskAssignedToUserWhere(userId) }),
         prisma.issue.count({ where: { picId: userId } }),
         prisma.projectMember.count({ where: { userId } }),
       ]);
@@ -944,6 +945,7 @@ export async function reactivateUser(
       const updated = await prisma.$transaction(async (tx) => {
         await tx.projectMember.deleteMany({ where: { userId } });
 
+        await tx.taskAssignee.deleteMany({ where: { userId } });
         await tx.task.updateMany({
           where: { assigneeId: userId },
           data: {
@@ -1475,19 +1477,51 @@ async function reassignTasksAndPicsOnProject(input: {
   reason: string;
 }): Promise<string[]> {
   const tasks = await input.tx.task.findMany({
-    where: { projectId: input.projectId, assigneeId: input.fromUserId },
-    select: { id: true, title: true },
+    where: {
+      projectId: input.projectId,
+      ...taskAssignedToUserWhere(input.fromUserId),
+    },
+    select: {
+      id: true,
+      title: true,
+      assigneeId: true,
+      assigneeName: true,
+      assignees: { orderBy: { sortOrder: "asc" } },
+    },
   });
 
-  if (tasks.length > 0) {
-    await input.tx.task.updateMany({
-      where: {
-        projectId: input.projectId,
-        assigneeId: input.fromUserId,
-      },
+  for (const task of tasks) {
+    const nextPics = (
+      task.assignees.length > 0
+        ? task.assignees.map((row) => ({
+            userId: row.userId,
+            name: row.assigneeName,
+          }))
+        : [{ userId: task.assigneeId, name: task.assigneeName }]
+    ).map((pic) =>
+      pic.userId === input.fromUserId
+        ? { userId: input.toUserId, name: input.toUserName }
+        : pic,
+    );
+    const first = nextPics[0];
+    await input.tx.taskAssignee.deleteMany({ where: { taskId: task.id } });
+    if (nextPics.length > 0) {
+      await input.tx.taskAssignee.createMany({
+        data: nextPics.map((pic, index) => ({
+          taskId: task.id,
+          userId: pic.userId,
+          assigneeName: pic.name,
+          sortOrder: index,
+          createdBy: input.actorId,
+          updatedBy: input.actorId,
+        })),
+      });
+    }
+    await input.tx.task.update({
+      where: { id: task.id },
       data: {
-        assigneeId: input.toUserId,
-        assigneeName: input.toUserName,
+        assigneeId: first?.userId ?? null,
+        assigneeName: first?.name ?? "",
         ...auditUpdate(input.actorId),
       },
     });
@@ -1639,6 +1673,7 @@ async function physicallyDeleteUser(input: {
   await prisma.$transaction(async (tx) => {
     await tx.projectMember.deleteMany({ where: { userId: input.userId } });
 
+    await tx.taskAssignee.deleteMany({ where: { userId: input.userId } });
     await tx.task.updateMany({
       where: { assigneeId: input.userId },
       data: {

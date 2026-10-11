@@ -8,7 +8,11 @@ import {
 import type { Task, TaskStatus } from "@/src/lib/types";
 import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress";
 import { defaultProgressForStatus } from "@/src/lib/task-defaults";
+import ExpandViewButton from "@/src/components/ui/ExpandViewButton";
+import SegmentedControl from "@/src/components/ui/SegmentedControl";
+import { useStoredChoice } from "@/src/lib/ui/use-stored-choice";
 import KanbanColumn from "./KanbanColumn";
+import type { KanbanDensity } from "./TaskCard";
 
 export type KanbanBoardProps = {
   tasks: Task[];
@@ -27,7 +31,20 @@ export type KanbanBoardProps = {
   onTaskClick?: (task: Task) => void;
   onAddTask?: (status: TaskStatus) => void;
   readOnly?: boolean;
+  /** Expanded view: the page hides the project header so the columns can be taller. */
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
 };
+
+const DENSITY_OPTIONS: ReadonlyArray<{
+  id: KanbanDensity;
+  label: string;
+  title: string;
+}> = [
+  { id: "compact", label: "Compact", title: "Smaller cards so more fit in each column" },
+  { id: "comfortable", label: "Comfortable", title: "Larger cards with more spacing" },
+];
+const DENSITY_IDS: ReadonlyArray<KanbanDensity> = ["compact", "comfortable"];
 
 const COLUMNS: ReadonlyArray<{ id: TaskStatus; title: string }> = [
   { id: "todo", title: "To Do" },
@@ -64,7 +81,14 @@ export default function KanbanBoard({
   onTaskClick,
   onAddTask,
   readOnly = false,
+  expanded = false,
+  onToggleExpanded,
 }: KanbanBoardProps) {
+  const [density, setDensity] = useStoredChoice<KanbanDensity>(
+    "sptt.kanban.density",
+    DENSITY_IDS,
+    "compact",
+  );
   const isReady = useSyncExternalStore(
     subscribeNever,
     () => true,
@@ -142,6 +166,17 @@ export default function KanbanBoard({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <SegmentedControl
+          label="Card size"
+          options={DENSITY_OPTIONS}
+          value={density}
+          onChange={setDensity}
+        />
+        {onToggleExpanded ? (
+          <ExpandViewButton expanded={expanded} onToggle={onToggleExpanded} />
+        ) : null}
+      </div>
       <div
         className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:overflow-visible md:pb-0"
         role="region"
@@ -162,6 +197,8 @@ export default function KanbanBoard({
             }
             addTaskHint={`Create in ${column.title} (${defaultProgressForStatus(column.id)}%)`}
             readOnly={readOnly}
+            density={density}
+            expanded={expanded}
           />
         ))}
       </div>

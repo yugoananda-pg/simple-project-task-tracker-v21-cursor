@@ -99,6 +99,7 @@ function createSeedStore(): AppStore {
       bucket: "initiating",
       assigneeId: ownerId,
       assigneeName: "Demo Owner",
+      assignees: [{ userId: ownerId, name: "Demo Owner" }],
       initialStartDate: lastWeek.slice(0, 10),
       initialDueDate: yesterdayDate,
       updatedStartDate: null,
@@ -150,6 +151,7 @@ function createSeedStore(): AppStore {
       bucket: "planning",
       assigneeId: ownerId,
       assigneeName: "Demo Owner",
+      assignees: [{ userId: ownerId, name: "Demo Owner" }],
       initialStartDate: yesterdayDate,
       initialDueDate: inThreeDays,
       updatedStartDate: null,
@@ -200,6 +202,7 @@ function createSeedStore(): AppStore {
       bucket: "executing",
       assigneeId: null,
       assigneeName: "",
+      assignees: [],
       initialStartDate: null,
       initialDueDate: overdueDate,
       updatedStartDate: null,
@@ -228,6 +231,7 @@ function createSeedStore(): AppStore {
       bucket: "initiating",
       assigneeId: ownerId,
       assigneeName: "Demo Owner",
+      assignees: [{ userId: ownerId, name: "Demo Owner" }],
       initialStartDate: null,
       initialDueDate: inThreeDays,
       updatedStartDate: null,
@@ -338,6 +342,15 @@ function isValidTask(value: unknown): value is Task {
     isTaskBucket(task.bucket) &&
     isNullableString(task.assigneeId) &&
     typeof task.assigneeName === "string" &&
+    (task.assignees === undefined ||
+      (Array.isArray(task.assignees) &&
+        task.assignees.every(
+          (pic) =>
+            pic &&
+            typeof pic === "object" &&
+            isNullableString((pic as { userId?: unknown }).userId) &&
+            typeof (pic as { name?: unknown }).name === "string",
+        ))) &&
     isNullableString(task.initialStartDate) &&
     isNullableString(task.initialDueDate) &&
     isNullableString(task.updatedStartDate) &&
@@ -654,6 +667,7 @@ export function createTask(input: {
     bucket: "executing",
     assigneeId: null,
     assigneeName: "",
+    assignees: [],
     initialStartDate: null,
     initialDueDate: null,
     updatedStartDate: null,

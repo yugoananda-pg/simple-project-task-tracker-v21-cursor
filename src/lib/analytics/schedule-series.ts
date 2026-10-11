@@ -76,6 +76,24 @@ export function sampleDates(
   return dates;
 }
 
+/** Put milestone days on the series so a weekly sample still has a point to mark. */
+export function includeMarkerDates(
+  dates: readonly LocalDateString[],
+  markers: readonly LocalDateString[],
+  start: LocalDateString,
+  end: LocalDateString,
+): LocalDateString[] {
+  const extra = markers.filter(
+    (date) =>
+      isPlausibleLocalDate(date) &&
+      compareLocalDates(date, start) >= 0 &&
+      compareLocalDates(date, end) <= 0 &&
+      !dates.includes(date),
+  );
+  if (extra.length === 0) return [...dates];
+  return [...dates, ...extra].sort(compareLocalDates);
+}
+
 /** Keep today on the series so a fortnightly sample still reports the current day. */
 export function includeToday(
   dates: readonly LocalDateString[],
@@ -116,6 +134,8 @@ export function buildScheduleSeries(input: {
   events: ReadonlyArray<ProgressEventPoint>;
   holidayKeys?: Iterable<string>;
   today: LocalDateString;
+  /** Days that must appear on the axis, such as milestone dates. */
+  markerDates?: readonly LocalDateString[];
 }): ScheduleSeries {
   const holidays = resolveHolidaySet(input.holidayKeys ?? []);
   const health = computeProjectScheduleHealth(
@@ -145,6 +165,11 @@ export function buildScheduleSeries(input: {
       if (!latest || compareLocalDates(value, latest) > 0) latest = value;
     }
   }
+  for (const value of input.markerDates ?? []) {
+    if (!isPlausibleLocalDate(value)) continue;
+    if (!earliest || compareLocalDates(value, earliest) < 0) earliest = value;
+    if (!latest || compareLocalDates(value, latest) > 0) latest = value;
+  }
   if (earliest && (!latest || compareLocalDates(input.today, latest) > 0)) {
     latest = input.today;
   }
@@ -161,9 +186,14 @@ export function buildScheduleSeries(input: {
 
   const taskById = new Map(input.tasks.map((task) => [task.id, task]));
   const totalDays = health.tasks.reduce((sum, row) => sum + row.dPlanned, 0);
-  const dates = includeToday(
-    sampleDates(earliest, latest),
-    input.today,
+  const dates = includeMarkerDates(
+    includeToday(
+      sampleDates(earliest, latest),
+      input.today,
+      earliest,
+      latest,
+    ),
+    input.markerDates ?? [],
     earliest,
     latest,
   );

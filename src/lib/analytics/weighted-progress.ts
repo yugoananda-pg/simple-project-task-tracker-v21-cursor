@@ -8,6 +8,7 @@ import {
   elapsedWorkingDays,
   plannedWorkingDuration,
   toHolidaySet,
+  workingDaysAfter,
   type HolidaySet,
   type LocalDateString,
 } from "@/src/lib/analytics/working-days";
@@ -34,6 +35,8 @@ export type StatusFlagId =
 export type StatusFlagDefinition = {
   id: StatusFlagId;
   label: string;
+  /** One sentence for readers: what the flag says about the schedule. */
+  meaning: string;
   badgeClassName: string;
 };
 
@@ -41,66 +44,88 @@ export const STATUS_FLAGS: Record<StatusFlagId, StatusFlagDefinition> = {
   "SF-01": {
     id: "SF-01",
     label: "Due to Commence",
+    meaning:
+      "Work has not started and the planned start date is still ahead.",
     badgeClassName:
       "border border-sky-600/35 bg-sky-100 text-sky-950 dark:border-sky-400/40 dark:bg-sky-950/60 dark:text-sky-100",
   },
   "SF-02": {
     id: "SF-02",
     label: "Delayed Commencement",
+    meaning:
+      "The planned start has passed with no progress yet, but the schedule is still recoverable (PS ≥ 0.85).",
     badgeClassName:
       "border border-amber-600/40 bg-amber-100 text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/55 dark:text-amber-100",
   },
   "SF-03": {
     id: "SF-03",
     label: "Critically Overdue Start",
+    meaning:
+      "The planned start has passed with no progress and the score has fallen below 0.850.",
     badgeClassName:
       "border border-rose-600/40 bg-rose-100 text-rose-950 dark:border-rose-400/45 dark:bg-rose-950/55 dark:text-rose-100",
   },
   "SF-04": {
     id: "SF-04",
     label: "On Track",
+    meaning:
+      "Actual progress is within 5% of target (0.95 ≤ PS < 1.05).",
     badgeClassName:
       "border border-emerald-600/40 bg-emerald-100 text-emerald-950 dark:border-emerald-400/40 dark:bg-emerald-950/55 dark:text-emerald-100",
   },
   "SF-05": {
     id: "SF-05",
     label: "Slipping",
+    meaning:
+      "Actual progress is slightly behind target (0.85 ≤ PS < 0.95).",
     badgeClassName:
       "border border-amber-600/40 bg-amber-100 text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/55 dark:text-amber-100",
   },
   "SF-06": {
     id: "SF-06",
     label: "Critically Delayed",
+    meaning:
+      "Actual progress is well behind target (PS < 0.85).",
     badgeClassName:
       "border border-rose-600/40 bg-rose-100 text-rose-950 dark:border-rose-400/45 dark:bg-rose-950/55 dark:text-rose-100",
   },
   "SF-07": {
     id: "SF-07",
     label: "Ahead of Schedule",
+    meaning:
+      "Actual progress is ahead of target (PS ≥ 1.05).",
     badgeClassName:
       "border border-teal-600/40 bg-teal-100 text-teal-950 dark:border-teal-400/40 dark:bg-teal-950/55 dark:text-teal-100",
   },
   "SF-08": {
     id: "SF-08",
     label: "Completed Ahead of Schedule",
+    meaning:
+      "Finished sooner than planned (PS ≥ 1.05).",
     badgeClassName:
       "border border-indigo-600/40 bg-indigo-100 text-indigo-950 dark:border-indigo-400/40 dark:bg-indigo-950/55 dark:text-indigo-100",
   },
   "SF-09": {
     id: "SF-09",
     label: "Completed On Time",
+    meaning:
+      "Finished on the planned schedule (0.95 ≤ PS < 1.05).",
     badgeClassName:
       "border border-zinc-500/45 bg-zinc-200 text-zinc-900 dark:border-zinc-400/40 dark:bg-zinc-800 dark:text-zinc-100",
   },
   "SF-10": {
     id: "SF-10",
     label: "Completed Late",
+    meaning:
+      "Finished a little late (0.85 ≤ PS < 0.95).",
     badgeClassName:
       "border border-amber-700/50 bg-amber-200 text-amber-950 dark:border-amber-300/50 dark:bg-amber-950/70 dark:text-amber-50",
   },
   "SF-11": {
     id: "SF-11",
     label: "Completed Severely Late",
+    meaning:
+      "Finished well after the plan (PS < 0.85).",
     badgeClassName:
       "border border-rose-700/55 bg-rose-200 text-rose-950 dark:border-rose-300/55 dark:bg-rose-950/70 dark:text-rose-50",
   },
@@ -147,6 +172,16 @@ export function round1(value: number): number {
 
 export function formatPercent1(value: number): string {
   return `${round1(value).toFixed(1)}%`;
+}
+
+/**
+ * Punctuality Score (PS) as a plain score with two decimals, for example
+ * 0.89. PS is stored on a 0 to 100 scale (89.3), where 1.00 means actual
+ * progress equals target. It is a score, not a percentage of anything.
+ */
+export function formatScore2(ps: number): string {
+  if (!Number.isFinite(ps)) return "0.00";
+  return (ps / 100).toFixed(2);
 }
 
 export function resolveHolidaySet(
@@ -217,6 +252,52 @@ export function computeTargetProgressPercent(
   };
 }
 
+function dateKey(value: string | null | undefined): LocalDateString | null {
+  if (!value) return null;
+  const key = value.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
+}
+
+function taskIsComplete(task: {
+  progress: number;
+  status?: string;
+}): boolean {
+  return clampActual(task.progress) >= 100 || task.status === "done";
+}
+
+/**
+ * Completed work is judged against the planned due date.
+ * An early start must not turn an on-time or early handover into a late score.
+ * Stored scale: 100 means 1.00. Returns null when there is no due date to judge.
+ */
+export function scoreCompletedAgainstDue(input: {
+  dueDate: LocalDateString | null;
+  actualCompletionDate: LocalDateString | null;
+  asOf: LocalDateString;
+  dPlanned: number;
+  holidays: HolidaySet;
+}): { ps: number; statusFlag: StatusFlagId } | null {
+  const due = dateKey(input.dueDate);
+  if (!due) return null;
+  const actualEnd = dateKey(input.actualCompletionDate) ?? dateKey(input.asOf);
+  if (!actualEnd) return null;
+  const planned = Math.max(1, input.dPlanned);
+
+  if (compareLocalDates(actualEnd, due) < 0) {
+    const daysAhead = workingDaysAfter(actualEnd, due, input.holidays);
+    const ps = Math.max(105, 105 + (daysAhead / planned) * 100);
+    return { ps, statusFlag: "SF-08" };
+  }
+
+  if (actualEnd === due) {
+    return { ps: 100, statusFlag: "SF-09" };
+  }
+
+  const overdueDays = workingDaysAfter(due, actualEnd, input.holidays);
+  const ps = (planned / (planned + overdueDays)) * 100;
+  return { ps, statusFlag: ps >= 85 ? "SF-10" : "SF-11" };
+}
+
 export function computeTaskPunctualityScore(input: {
   pActual: number;
   pTarget: number;
@@ -227,18 +308,26 @@ export function computeTaskPunctualityScore(input: {
   asOf: LocalDateString;
   holidays: HolidaySet;
   dPlanned: number;
+  completed?: boolean;
 }): number {
   const pActual = clampActual(input.pActual);
   const beforeStart =
     input.startDate != null &&
     compareLocalDates(input.asOf, input.startDate) < 0;
 
-  if (pActual >= 100) {
-    // Schedule-anchored span: planned start → actual completion.
-    // Using only actualStart→actualCompletion mislabels late one-day finishes as "Ahead".
-    const actualEnd = input.actualCompletionDate ?? input.asOf;
+  if (input.completed || pActual >= 100) {
+    const judged = scoreCompletedAgainstDue({
+      dueDate: input.dueDate,
+      actualCompletionDate: input.actualCompletionDate,
+      asOf: input.asOf,
+      dPlanned: input.dPlanned,
+      holidays: input.holidays,
+    });
+    if (judged) return judged.ps;
+    // No due date: keep the schedule-span ratio so a finish can still be scored.
+    const actualEnd = dateKey(input.actualCompletionDate) ?? input.asOf;
     const scheduleStart =
-      input.startDate ?? input.actualStartDate ?? actualEnd;
+      input.startDate ?? dateKey(input.actualStartDate) ?? actualEnd;
     const dActual =
       scheduleStart && actualEnd
         ? plannedWorkingDuration(scheduleStart, actualEnd, input.holidays)
@@ -260,6 +349,54 @@ export function computeTaskPunctualityScore(input: {
     return (pActual / input.pTarget) * 100;
   }
   return 100;
+}
+
+/**
+ * A finished project is the same comparison as a finished task, on the
+ * project window: earliest planned start, latest planned due, latest handover.
+ */
+function scoreCompletedProject(
+  rows: ReadonlyArray<{
+    start: LocalDateString | null;
+    due: LocalDateString | null;
+    dPlanned: number;
+    task: { actualCompletionDate: string | null };
+  }>,
+  asOf: LocalDateString,
+  holidays: HolidaySet,
+): { ps: number; statusFlag: StatusFlagId } | null {
+  let plannedStart: LocalDateString | null = null;
+  let plannedDue: LocalDateString | null = null;
+  let handover: LocalDateString | null = null;
+  let plannedDays = 0;
+
+  for (const row of rows) {
+    plannedDays += row.dPlanned;
+    if (row.start && (!plannedStart || compareLocalDates(row.start, plannedStart) < 0)) {
+      plannedStart = row.start;
+    }
+    if (row.due && (!plannedDue || compareLocalDates(row.due, plannedDue) > 0)) {
+      plannedDue = row.due;
+    }
+    const end = dateKey(row.task.actualCompletionDate) ?? dateKey(asOf);
+    if (end && (!handover || compareLocalDates(end, handover) > 0)) {
+      handover = end;
+    }
+  }
+
+  if (!plannedDue || !handover) return null;
+  const windowDays =
+    plannedStart != null
+      ? plannedWorkingDuration(plannedStart, plannedDue, holidays)
+      : plannedDays;
+
+  return scoreCompletedAgainstDue({
+    dueDate: plannedDue,
+    actualCompletionDate: handover,
+    asOf,
+    dPlanned: windowDays,
+    holidays,
+  });
 }
 
 function projectLevelPs(pActual: number, pTarget: number): number {
@@ -305,23 +442,38 @@ export function computeProjectScheduleHealth(
       : sumD > 0
         ? row.dPlanned / sumD
         : 0;
-    const ps = computeTaskPunctualityScore({
-      pActual: row.pActual,
-      pTarget: row.pTarget,
-      startDate: row.start,
-      dueDate: row.due,
-      actualStartDate: row.task.actualStartDate,
-      actualCompletionDate: row.task.actualCompletionDate,
-      asOf,
-      holidays,
-      dPlanned: row.dPlanned,
-    });
-    const statusFlag = resolveStatusFlag({
-      pActual: row.pActual,
-      ps,
-      startDate: row.start,
-      asOf,
-    });
+    const completed = taskIsComplete(row.task);
+    const completedScore = completed
+      ? scoreCompletedAgainstDue({
+          dueDate: row.due,
+          actualCompletionDate: row.task.actualCompletionDate,
+          asOf,
+          dPlanned: row.dPlanned,
+          holidays,
+        })
+      : null;
+    const ps =
+      completedScore?.ps ??
+      computeTaskPunctualityScore({
+        pActual: row.pActual,
+        pTarget: row.pTarget,
+        startDate: row.start,
+        dueDate: row.due,
+        actualStartDate: row.task.actualStartDate,
+        actualCompletionDate: row.task.actualCompletionDate,
+        asOf,
+        holidays,
+        dPlanned: row.dPlanned,
+        completed,
+      });
+    const statusFlag =
+      completedScore?.statusFlag ??
+      resolveStatusFlag({
+        pActual: completed ? 100 : row.pActual,
+        ps,
+        startDate: row.start,
+        asOf,
+      });
     return {
       taskId: row.task.id,
       dPlanned: row.dPlanned,
@@ -342,7 +494,13 @@ export function computeProjectScheduleHealth(
     (sum, row) => sum + row.pTarget * row.weight,
     0,
   );
-  const projectPs = n === 0 ? 100 : projectLevelPs(pActualProject, pTargetProject);
+  const everyTaskComplete = n > 0 && prepared.every((row) => taskIsComplete(row.task));
+  const projectCompletion = everyTaskComplete
+    ? scoreCompletedProject(prepared, asOf, holidays)
+    : null;
+  const projectPs =
+    projectCompletion?.ps ??
+    (n === 0 ? 100 : projectLevelPs(pActualProject, pTargetProject));
 
   let earliestStart: LocalDateString | null = null;
   for (const row of prepared) {
@@ -353,14 +511,15 @@ export function computeProjectScheduleHealth(
   }
 
   const statusFlag =
-    n === 0
+    projectCompletion?.statusFlag ??
+    (n === 0
       ? "SF-01"
       : resolveStatusFlag({
           pActual: pActualProject,
           ps: projectPs,
           startDate: earliestStart,
           asOf,
-        });
+        }));
 
   const byId = new Map(metrics.map((row) => [row.taskId, row]));
 

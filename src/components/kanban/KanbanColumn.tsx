@@ -5,7 +5,7 @@ import { Droppable } from "@hello-pangea/dnd";
 import { ArrowUp, Plus } from "lucide-react";
 import type { Task, TaskStatus } from "@/src/lib/types";
 import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress";
-import TaskCard from "./TaskCard";
+import TaskCard, { type KanbanDensity } from "./TaskCard";
 
 export type KanbanColumnProps = {
   id: TaskStatus;
@@ -16,6 +16,8 @@ export type KanbanColumnProps = {
   onAddTask?: () => void;
   addTaskHint?: string;
   readOnly?: boolean;
+  density?: KanbanDensity;
+  expanded?: boolean;
 };
 
 export default function KanbanColumn({
@@ -27,6 +29,8 @@ export default function KanbanColumn({
   onAddTask,
   addTaskHint,
   readOnly = false,
+  density = "compact",
+  expanded = false,
 }: KanbanColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -45,9 +49,15 @@ export default function KanbanColumn({
   }, [tasks.length]);
 
   return (
-    <section className="relative flex max-h-[min(70vh,44rem)] min-h-[28rem] w-full min-w-[16.5rem] flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/40">
-      <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-zinc-200 bg-zinc-50/95 px-3 py-3 backdrop-blur sm:px-4 dark:border-zinc-700 dark:bg-zinc-900/95">
-        <div className="flex items-center justify-between gap-2">
+    <section
+      className={`relative flex min-h-[24rem] w-full min-w-[16.5rem] flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/40 ${
+        expanded
+          ? "h-[calc(100dvh-15rem)]"
+          : "h-[calc(100dvh-9rem)]"
+      }`}
+    >
+      <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50/95 px-3 py-2 backdrop-blur sm:px-4 dark:border-zinc-700 dark:bg-zinc-900/95">
+        <div className="flex min-w-0 items-center gap-2">
           <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
             {title}
           </h2>
@@ -63,10 +73,11 @@ export default function KanbanColumn({
             type="button"
             onClick={onAddTask}
             title={addTaskHint}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            aria-label={`Add task to ${title}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
           >
             <Plus className="size-3.5" aria-hidden />
-            Add Task
+            Add
           </button>
         ) : null}
       </header>
@@ -80,7 +91,9 @@ export default function KanbanColumn({
             }}
             {...provided.droppableProps}
             className={[
-              "relative flex flex-1 flex-col gap-2.5 overflow-y-auto p-2.5 sm:p-3",
+              density === "compact"
+                ? "relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2"
+                : "relative flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5 sm:p-3",
               "transition-colors",
               snapshot.isDraggingOver ? "bg-sky-50/70 dark:bg-sky-950/30" : "",
             ]
@@ -109,6 +122,7 @@ export default function KanbanColumn({
                   metrics={metricsById?.get(task.id)}
                   onClick={onTaskClick}
                   isDragDisabled={readOnly}
+                  density={density}
                 />
               ))
             )}

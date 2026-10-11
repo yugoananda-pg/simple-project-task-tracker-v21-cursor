@@ -1,6 +1,6 @@
 import "server-only";
 
-import { prisma } from "@/src/lib/prisma";
+import { isDatabaseUnreachable, prisma, retryOnceIfUnreachable } from "@/src/lib/prisma";
 
 export function normaliseCustomAssigneeName(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
@@ -29,9 +29,17 @@ export async function rememberCustomAssignee(
 }
 
 export async function listCustomAssigneeNames(): Promise<string[]> {
-  const rows = await prisma.customAssignee.findMany({
-    select: { name: true },
-    orderBy: { name: "asc" },
-  });
-  return rows.map((row) => row.name);
+  try {
+    const rows = await retryOnceIfUnreachable(() =>
+      prisma.customAssignee.findMany({
+        select: { name: true },
+        orderBy: { name: "asc" },
+      }),
+    );
+    return rows.map((row) => row.name);
+  } catch (error) {
+    // Suggestions are optional. A closed pooler socket must not take down the project page.
+    if (isDatabaseUnreachable(error)) return [];
+    throw error;
+  }
 }

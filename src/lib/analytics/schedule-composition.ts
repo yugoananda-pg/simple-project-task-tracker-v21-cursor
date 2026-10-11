@@ -19,6 +19,7 @@ export type CompositionTask = {
   bucket: TaskBucket;
   assigneeId: string | null;
   assigneeName: string;
+  assignees?: Array<{ userId: string | null; name: string }>;
   initialStartDate: string | null;
   initialDueDate: string | null;
   updatedStartDate: string | null;

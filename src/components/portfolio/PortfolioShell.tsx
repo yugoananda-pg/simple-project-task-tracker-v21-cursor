@@ -48,7 +48,13 @@ function buildHref(next: {
   return `/portfolio?${params.toString()}`;
 }
 
-export default function PortfolioShell({ dto }: { dto: PortfolioDto }) {
+export default function PortfolioShell({
+  dto,
+  exportedBy,
+}: {
+  dto: PortfolioDto;
+  exportedBy: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -68,20 +74,20 @@ export default function PortfolioShell({ dto }: { dto: PortfolioDto }) {
 
   return (
     <section className="mx-auto w-full px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Portfolio
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            {subtitle}{" "}
-            {dto.includeCompleted
-              ? "Completed projects are included."
-              : "Active projects only."}
-          </p>
-        </div>
+      <div className="min-w-0">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Portfolio
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          {subtitle}{" "}
+          {dto.includeCompleted
+            ? "Completed projects are included."
+            : "Active projects only."}
+        </p>
+      </div>
 
-        <div className="flex flex-wrap items-end gap-4">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           {tabs.length > 1 ? (
             <nav
               aria-label="Portfolio view"
@@ -119,40 +125,38 @@ export default function PortfolioShell({ dto }: { dto: PortfolioDto }) {
           ) : null}
 
           {dto.scope === "pm" ? (
-            <div>
-              <label
-                htmlFor="portfolio-pm"
-                className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
-              >
-                Project Manager
-              </label>
-              <select
-                id="portfolio-pm"
-                value={dto.pm?.id ?? ""}
-                disabled={isPending || dto.pmOptions.length === 0}
-                onChange={(event) =>
-                  go({
-                    scope: "pm",
-                    pm: event.target.value,
-                    completed: dto.includeCompleted,
-                  })
-                }
-                className="w-64 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
-              >
-                {dto.pmOptions.length === 0 ? (
-                  <option value="">No Project Managers to show</option>
-                ) : null}
-                {dto.pmOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name} ({option.projectCount})
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+            <select
+              id="portfolio-pm"
+              aria-label="Project Manager"
+              value={dto.pm?.id ?? ""}
+              disabled={isPending || dto.pmOptions.length === 0}
+              onChange={(event) =>
+                go({
+                  scope: "pm",
+                  pm: event.target.value,
+                  completed: dto.includeCompleted,
+                })
+              }
+              className="w-64 max-w-full rounded-lg border border-zinc-300 bg-white py-2 pl-3 text-sm text-zinc-900 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+            >
+              {dto.pmOptions.length === 0 ? (
+                <option value="">No Project Managers to show</option>
+              ) : null}
+              {dto.pmOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name} ({option.projectCount})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div
+              id="portfolio-project-filter"
+              className={isPending ? "pointer-events-none opacity-60" : undefined}
+            />
+          )}
 
           {dto.canIncludeCompleted ? (
-            <label className="inline-flex cursor-pointer items-center gap-2 pb-2 text-sm text-zinc-700 dark:text-zinc-200">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
               <input
                 type="checkbox"
                 checked={dto.includeCompleted}
@@ -170,7 +174,14 @@ export default function PortfolioShell({ dto }: { dto: PortfolioDto }) {
             </label>
           ) : null}
         </div>
+        <div
+          id="portfolio-export"
+          className={
+            isPending ? "pointer-events-none shrink-0 opacity-60" : "shrink-0"
+          }
+        />
       </div>
+      <div id="portfolio-filter-hint" className="empty:hidden" />
 
       <div className="relative mt-8 min-h-[12rem]">
         {isPending ? (
@@ -190,6 +201,7 @@ export default function PortfolioShell({ dto }: { dto: PortfolioDto }) {
             // A new scope, PM, or cohort starts with a clean project filter.
             key={`${dto.scope}:${dto.pm?.id ?? ""}:${dto.includeCompleted}`}
             dto={dto}
+            exportedBy={exportedBy}
           />
         </div>
       </div>

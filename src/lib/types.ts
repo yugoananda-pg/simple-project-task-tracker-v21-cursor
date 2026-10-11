@@ -136,6 +136,11 @@ export interface TaskComment {
   createdAt: string;
 }
 
+export type TaskPic = {
+  userId: string | null;
+  name: string;
+};
+
 export interface Task {
   id: string;
   projectId: string;
@@ -146,6 +151,8 @@ export interface Task {
   bucket: TaskBucket;
   assigneeId: string | null;
   assigneeName: string;
+  /** Every person on the task. The first entry is also stored on assigneeId / assigneeName. */
+  assignees: TaskPic[];
   initialStartDate: string | null;
   initialDueDate: string | null;
   updatedStartDate: string | null;

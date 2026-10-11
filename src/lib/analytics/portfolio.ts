@@ -24,6 +24,7 @@ import {
 import {
   computeProjectScheduleHealth,
   formatPercent1,
+  formatScore2,
   resolveHolidaySet,
   STATUS_FLAGS,
   type ScheduleTaskInput,
@@ -54,6 +55,7 @@ export type PortfolioTask = ScheduleTaskInput & {
   bucket: TaskBucket;
   assigneeId: string | null;
   assigneeName: string;
+  assignees?: Array<{ userId: string | null; name: string }>;
 };
 
 export type PortfolioMilestone = {
@@ -170,7 +172,7 @@ export type MacroRow = {
   pTarget: number;
   delta: number;
   statusFlag: StatusFlagId;
-  /** Emerald at 95% punctuality or better, amber below that. */
+  /** Emerald at a score of 0.95 (stored as 95) or better, amber below that. */
   tone: "on" | "late";
   overdueTasks: number;
   activeIssues: number;
@@ -188,7 +190,7 @@ function spanOf(
 }
 
 function actualSpan(
-  tasks: ReadonlyArray<PortfolioTask>,
+  tasks: ReadonlyArray<ScheduleTaskInput>,
   lifecycleStatus: "ACTIVE" | "COMPLETED",
   today: LocalDateString,
 ): MacroActual | null {
@@ -338,6 +340,102 @@ function groupBy<T>(
 }
 
 // ---------------------------------------------------------------------------
+// Process-group timeline (project Analytics)
+// ---------------------------------------------------------------------------
+
+export const PROCESS_GROUP_ORDER: ReadonlyArray<{
+  bucket: TaskBucket;
+  label: string;
+}> = [
+  { bucket: "initiating", label: "Initiating" },
+  { bucket: "planning", label: "Planning" },
+  { bucket: "executing", label: "Executing" },
+  { bucket: "monitoring", label: "Monitoring" },
+  { bucket: "closing", label: "Closing" },
+];
+
+export type ProcessGroupRow = {
+  bucket: TaskBucket;
+  name: string;
+  taskCount: number;
+  initial: MacroSpan | null;
+  updated: MacroSpan | null;
+  actual: MacroActual | null;
+  /** Always empty. Present so the row can use the same axis and bar code as a project row. */
+  milestones: MacroMilestone[];
+  /** Null when the group has no tasks. */
+  ps: number | null;
+  pActual: number;
+  pTarget: number;
+  statusFlag: StatusFlagId | null;
+  tone: "on" | "late";
+  overdueTasks: number;
+};
+
+/**
+ * One row per PMBOK process group, always all five in order. Each bar spans the
+ * earliest start to the latest end of the group's tasks, the same rule the
+ * portfolio macro timeline uses for a project. Figures are the group's own
+ * weighted progress and Punctuality Score.
+ */
+export function buildProcessGroupRows(input: {
+  tasks: ReadonlyArray<
+    ScheduleTaskInput & { bucket: TaskBucket; status: TaskStatus }
+  >;
+  lifecycleStatus: "ACTIVE" | "COMPLETED";
+  holidayKeys: Iterable<string> | HolidaySet;
+  today: LocalDateString;
+}): ProcessGroupRow[] {
+  const holidays = resolveHolidaySet(input.holidayKeys);
+  return PROCESS_GROUP_ORDER.map(({ bucket, label }): ProcessGroupRow => {
+    const tasks = input.tasks.filter((task) => task.bucket === bucket);
+    if (tasks.length === 0) {
+      return {
+        bucket,
+        name: label,
+        taskCount: 0,
+        initial: null,
+        updated: null,
+        actual: null,
+        milestones: [],
+        ps: null,
+        pActual: 0,
+        pTarget: 0,
+        statusFlag: null,
+        tone: "on",
+        overdueTasks: 0,
+      };
+    }
+    const health = computeProjectScheduleHealth(tasks, holidays, input.today);
+    return {
+      bucket,
+      name: label,
+      taskCount: tasks.length,
+      initial: spanOf(
+        tasks.map((task) => task.initialStartDate),
+        tasks.map((task) => task.initialDueDate),
+      ),
+      updated: spanOf(
+        tasks.map((task) => getEffectiveStartDate(task)),
+        tasks.map((task) => getEffectiveDueDate(task)),
+      ),
+      actual: actualSpan(tasks, input.lifecycleStatus, input.today),
+      milestones: [],
+      ps: health.projectPs,
+      pActual: health.pActualProject,
+      pTarget: health.pTargetProject,
+      statusFlag: health.statusFlag,
+      tone: health.projectPs >= 95 ? "on" : "late",
+      overdueTasks: tasks.filter((task) => {
+        if (task.status === "done") return false;
+        const due = getEffectiveDueDate(task);
+        return due != null && compareLocalDates(due, input.today) < 0;
+      }).length,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Axis
 // ---------------------------------------------------------------------------
 
@@ -372,14 +470,19 @@ function monthStartDay(year: number, month: number): number {
 }
 
 export function buildMacroAxis(
-  rows: ReadonlyArray<MacroRow>,
+  rows: ReadonlyArray<
+    Pick<MacroRow, "initial" | "updated" | "actual" | "milestones">
+  >,
   today: LocalDateString,
+  /** Extra days the axis must cover, such as milestone lines on the process-group timeline. */
+  extraDates?: readonly (string | null | undefined)[],
 ): MacroAxis | null {
   const days: number[] = [];
   const push = (value: string | null | undefined) => {
     const day = dayNumber(value);
     if (day != null) days.push(day);
   };
+  for (const value of extraDates ?? []) push(value);
   for (const row of rows) {
     for (const span of [row.initial, row.updated]) {
       if (!span) continue;
@@ -546,7 +649,7 @@ export function buildPortfolioInsights(input: {
     insights.push({
       id: "ps",
       tone: input.ps >= 95 ? "good" : input.ps >= 85 ? "watch" : "urgent",
-      text: `Portfolio punctuality is ${formatPercent1(input.ps)} (${flag}) across ${input.rows.length} ${plural(input.rows.length, "project")} and ${input.taskCount} ${plural(input.taskCount, "task")}. Actual progress is ${formatPercent1(input.pActual)} against a target of ${formatPercent1(input.pTarget)} (difference ${formatPercent1(input.delta)}).`,
+      text: `Portfolio punctuality score is ${formatScore2(input.ps)} (${flag}) across ${input.rows.length} ${plural(input.rows.length, "project")} and ${input.taskCount} ${plural(input.taskCount, "task")}. Actual progress is ${formatPercent1(input.pActual)} against a target of ${formatPercent1(input.pTarget)} (difference ${formatPercent1(input.delta)}).`,
     });
 
     const behind = input.rows
@@ -558,14 +661,14 @@ export function buildPortfolioInsights(input: {
         id: "behind",
         tone: behind[0].ps < 85 ? "urgent" : "watch",
         text: `Lowest punctuality: ${listNames(
-          behind.map((row) => `${row.name} (${formatPercent1(row.ps)})`),
+          behind.map((row) => `${row.name} (${formatScore2(row.ps)})`),
         )}.`,
       });
     } else {
       insights.push({
         id: "all-on-track",
         tone: "good",
-        text: "Every project with tasks is at 95.0% punctuality or better.",
+        text: "Every project with tasks has a punctuality score of 0.95 or better.",
       });
     }
   }
@@ -635,7 +738,7 @@ export function buildPortfolioInsights(input: {
     insights.push({
       id: "pm-spread",
       tone: "neutral",
-      text: `Punctuality by PM runs from ${formatPercent1(lowest.ps)} (${lowest.pmName}) to ${formatPercent1(highest.ps)} (${highest.pmName}).`,
+      text: `Punctuality score by PM runs from ${formatScore2(lowest.ps)} (${lowest.pmName}) to ${formatScore2(highest.ps)} (${highest.pmName}).`,
     });
   }
 

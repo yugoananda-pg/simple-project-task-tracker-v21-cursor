@@ -53,5 +53,5 @@ export default async function PortfolioPage({
     );
   }
 
-  return <PortfolioShell dto={result.data} />;
+  return <PortfolioShell dto={result.data} exportedBy={user.name} />;
 }

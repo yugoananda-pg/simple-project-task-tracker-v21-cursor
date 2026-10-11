@@ -2,8 +2,8 @@
 
 **Document Identifier:** `doc/dev_req.md`  
 **Product Title:** Simple Project Task Tracker 2.1 (Executive Portfolio Intelligence System)  
-**Document Version:** 2.1.27
-**Status:** Approved Technical Requirements Specification — Waves **4A** and **4B** as-built and UAT-accepted; Wave **4C-1** List as-built; Wave **4C-1b** Excel import as-built; Wave **4C-2a** per-project Analytics as-built 8 Oct 2026 (UAT pack not yet accepted); Wave **4C-2b** dashboard access as-built 9 Oct 2026 (UAT not yet accepted); Wave **4C-3** portfolio, macro timeline and About as-built 9 Oct 2026 (UAT not yet accepted); Wave **4C-4 onward** remain binding but not yet implemented
+**Document Version:** 2.1.46
+**Status:** Approved Technical Requirements Specification — Waves **4A** and **4B** as-built and UAT-accepted; Wave **4C-1** List as-built; Wave **4C-1b** Excel import as-built; Wave **4C-2a** per-project Analytics as-built 8 Oct 2026 (UAT pack not yet accepted); Wave **4C-2b** dashboard access as-built 9 Oct 2026 (UAT not yet accepted); Wave **4C-3** portfolio, macro timeline and About as-built 9 Oct 2026 (UAT not yet accepted); Wave **4C-3a** feedback package (score format, Analytics layout, Gantt and Kanban density) as-built 9 Oct 2026 (UAT not yet accepted); Wave **4C-4** executive PDF and PowerPoint export as-built 10 Oct 2026 (UAT not yet accepted); Wave **4C-U** close-out remains binding
 **Amendment:** Universal mutation audit trail; Completed Projects workspace; soft-delete / restore / five-year completed retention; Purged Project Register; Super PM completed-visibility governance; per-project Issue Log; Issue Intelligence on the per-project Analytics dashboard; **agile per-wave usable increments with UAT at each wave exit**; IDE / delivery alignment with Cursor and as-built UAT  
 **IDE Target:** Cursor (Agent / IDE browser automation for UAT)  
 **Language Standard:** Professional Australian English (`en-AU`)  
@@ -168,20 +168,31 @@ The Punctuality Score measures execution efficiency against timeline commitments
   100.0\% & \text{if } T_{\text{now}} \ge T_{\text{start}_i} \text{ and } P_{\text{target}_i} = 0 \text{ (Commencement Day)}
   \end{cases}$$
 
-#### 2. Completed Tasks ($P_{\text{actual}} = 100\%$):
-For completed tasks, punctuality compares planned commitment to the **schedule span** from planned start through actual completion (not merely the length of active work). This ensures a task finished long after its due date is classified late even if actual start and completion fall on the same day:
-$$\text{PS}_i = \frac{D_{\text{planned}_i}}{D_{\text{actual}_i}} \times 100\%$$
-Where:
-$$D_{\text{actual}_i} = \max\left(1, \sum_{t = T_{\text{start}_i}}^{T_{\text{actualCompletion}_i}} \operatorname{IsWorkDay}(t)\right)$$
+#### 2. Completed Tasks ($P_{\text{actual}} = 100\%$, or status Done):
+A finished task is judged by its handover against the planned due date (updated due, otherwise initial due). The length of the actual effort, including an early start, does not decide the score. If the actual finish is unrecorded, today is used. $D_{\text{planned}}$ is at least 1. $D_{\text{ahead}}$ is the working days strictly after the actual finish through the due date. $D_{\text{overdue}}$ is the working days strictly after the due date through the actual finish.
 
-*( $T_{\text{start}_i}$ is the effective planned start. If planned start is missing, fall back to $T_{\text{actualStart}_i}$. If actual completion is unrecorded, use the completion timestamp’s local calendar date.)*
+* **Finished strictly before the due date** ($T_{\text{actualCompletion}} < T_{\text{due}}$). The flag is Completed Ahead of Schedule. The score is at least 105 (shown as 1.05):
+  $$\text{PS}_i = \max\left(105,\ 105 + \frac{D_{\text{ahead}}}{D_{\text{planned}_i}} \times 100\right)$$
+* **Finished on the due date** ($T_{\text{actualCompletion}} = T_{\text{due}}$). The flag is Completed On Time:
+  $$\text{PS}_i = 100$$
+* **Finished after the due date** ($T_{\text{actualCompletion}} > T_{\text{due}}$). The task is late even when the score is still close to 100:
+  $$\text{PS}_i = \frac{D_{\text{planned}_i}}{D_{\text{planned}_i} + D_{\text{overdue}}} \times 100$$
+  Completed Late when this score is at least 85. Completed Severely Late when it is below 85.
+
+When no due date exists, the score falls back to planned working days divided by the working days from the planned start through the actual finish.
+
+> [!NOTE]
+> **Display convention (release 2.1.31).** The formulas above and the status-flag thresholds work on the 0–100 scale. A Punctuality Score is a score, not a ratio of progress, and people read `89.3%` as progress. Every surface therefore shows PS as a two-decimal number, $\text{PS}/100$ rounded to two places: `89.3` is shown as `0.89`, and `1.00` means exactly on schedule. Actual progress, Target progress and the difference stay percentages. Unfinished work uses the bands $\text{PS} \ge 1.05$, $0.95 \le \text{PS} < 1.05$, $0.85 \le \text{PS} < 0.95$, and $\text{PS} < 0.85$. Storage stays on the 0–100 scale. From 2.1.33 a finished task or project is classified by the due-date comparison above. Release 2.1.28 used three decimals (`0.893`, `1.000`).
 
 #### 3. Project-Level Aggregate Punctuality Score:
+While any task is unfinished, the project score stays the weighted actual-versus-target ratio:
 $$\text{Project PS} = \begin{cases}
 100.0\% & \text{if } P_{\text{target}_{\text{project}}} = 0 \text{ and } P_{\text{actual}_{\text{project}}} = 0 \\
 100.0\% + P_{\text{actual}_{\text{project}}} & \text{if } P_{\text{target}_{\text{project}}} = 0 \text{ and } P_{\text{actual}_{\text{project}}} > 0 \\
 \frac{P_{\text{actual}_{\text{project}}}}{P_{\text{target}_{\text{project}}}} \times 100\% & \text{if } P_{\text{target}_{\text{project}}} > 0
 \end{cases}$$
+
+When every task is complete, the project uses the same deadline comparison as a finished task. The project due date is the latest planned due. The handover is the latest actual finish. The planned duration is the working days from the earliest planned start to that latest due. An early start on a task does not make the project late when that handover is on or before the project due date.
 
 ---
 
@@ -198,10 +209,13 @@ Every task and project is classified into exactly one of eleven deterministic st
 | **SF-05** | **Slipping** | $85\% \le \text{PS} < 95\%$ | $0\% < P_{\text{actual}} < 100\%$ | Warning (Amber) | Amber badge (`bg-amber-100 text-amber-950` / dark `text-amber-100`) |
 | **SF-06** | **Critically Delayed** | $\text{PS} < 85\%$ | $0\% < P_{\text{actual}} < 100\%$ | Critical (Red) | Rose badge (`bg-rose-100 text-rose-950` / dark `text-rose-100`) |
 | **SF-07** | **Ahead of Schedule** | $\text{PS} \ge 105\%$ | $0\% < P_{\text{actual}} < 100\%$ | Positive (Teal) | Teal badge (`bg-teal-100 text-teal-950` / dark `text-teal-100`) |
-| **SF-08** | **Completed Ahead of Schedule** | $\text{PS} \ge 105\%$ | $P_{\text{actual}} = 100\%$ | Completed (Blue) | Indigo badge (`bg-indigo-100 text-indigo-950` / dark `text-indigo-100`) |
-| **SF-09** | **Completed On Time** | $95\% \le \text{PS} < 105\%$ | $P_{\text{actual}} = 100\%$ | Completed (Zinc) | Zinc badge (`bg-zinc-200 text-zinc-900` / dark `bg-zinc-800 text-zinc-100`) |
-| **SF-10** | **Completed Late** | $85\% \le \text{PS} < 95\%$ | $P_{\text{actual}} = 100\%$ | Overdue (Amber) | Amber badge (`bg-amber-200 text-amber-950` / dark `text-amber-50`) |
-| **SF-11** | **Completed Severely Late** | $\text{PS} < 85\%$ | $P_{\text{actual}} = 100\%$ | Severe (Red) | Rose badge (`bg-rose-200 text-rose-950` / dark `text-rose-50`) |
+| **SF-08** | **Completed Ahead of Schedule** | $\text{PS} \ge 105$ | Finished strictly before the planned due date | Completed (Blue) | Indigo badge (`bg-indigo-100 text-indigo-950` / dark `text-indigo-100`) |
+| **SF-09** | **Completed On Time** | $\text{PS} = 100$ | Finished on the planned due date | Completed (Zinc) | Zinc badge (`bg-zinc-200 text-zinc-900` / dark `bg-zinc-800 text-zinc-100`) |
+| **SF-10** | **Completed Late** | $\text{PS} \ge 85$ | Finished after the planned due date | Overdue (Amber) | Amber badge (`bg-amber-200 text-amber-950` / dark `text-amber-50`) |
+| **SF-11** | **Completed Severely Late** | $\text{PS} < 85$ | Finished after the planned due date | Severe (Red) | Rose badge (`bg-rose-200 text-rose-950` / dark `text-rose-50`) |
+
+> [!NOTE]
+> The **PS Range** column is on the stored 0–100 scale. On screen those numbers are divided by 100 (FR-UI-08). Unfinished work still uses PS ≥ 1.05, 0.95 ≤ PS < 1.05, 0.85 ≤ PS < 0.95, and PS < 0.85. A finished task or project follows the due-date comparison in §3.5: after the due date the flag is Late or Severely Late, even when the score is still 0.85 or higher.
 
 > [!NOTE]
 > Badge tokens must keep readable contrast in light and dark themes. Do not use low-opacity dark washes (`*-950/30`) with mid-tone text on Kanban or List surfaces. Where Status Flags are shown, surfaces shall **not** also show a separate **Overdue** pill (List, Kanban, Gantt).
@@ -313,13 +327,13 @@ UI percentages in this pane are reported to one decimal place, consistent with p
 * **FR-GOV-05 [Dynamic Project Membership & Management]:**
   * Super PMs possess unconditional read, write, and administrative rights across every project (absolute privileges), including opening any project by URL. The **home-page list** still uses the same scoped filters as a PM (below) so Portfolio scope is meaningful.
   * Super PMs can reassign the designated PM of any project to any **approved, active** user (PM or Super PM for ownership).
-  * **PM / Super PM landing scope (default — “My projects”):** Active projects the user **owns**, or Active projects that have at least one task with `assigneeId` equal to that user. Administrative rights (`admin`) on the home card apply to owned projects; Super PM remains `admin` on every project they open.
+  * **PM / Super PM landing scope (default — “My projects”):** Active projects the user **owns**, or Active projects that have at least one task on which they are a PIC (`Task.assigneeId` or `TaskAssignee.userId`). Administrative rights (`admin`) on the home card apply to owned projects; Super PM remains `admin` on every project they open.
   * **Portfolio scope browser:** On the home page, a PM or Super PM may select **All projects** (every Active project), or another PM/Super PM’s owned Active portfolio. **← Back to projects** from a project hub shall restore that last non-default scope. Navigating via the header brand, **Projects**, or a typed homepage URL shall reset to **My projects**. Edit privileges are unchanged by the list filter (owning PM / Super PM / assignee rules still apply). Peer portfolios remain read-only at project level for a non-owning PM; assignees may still mutate their own tasks.
-  * **Member:** Sees only projects where they are a `ProjectMember`. Project-level access is **read**. They may mutate **only** tasks assigned to them (and comment on those tasks). They may raise issues on member projects. They do **not** get the peer portfolio browser.
+  * **Member:** Sees only projects where they are a `ProjectMember`. Project-level access is **read**. They may mutate **only** tasks on which they are a PIC (and comment on those tasks). They may raise issues on member projects. They do **not** get the peer portfolio browser.
   * **Viewer:** Sees only Active projects where a Super PM or owning PM has granted them a `ProjectMember` row. Access is strictly read-only (no task mutations, no comments, no issues). They do **not** get the peer portfolio browser.
   * **Viewer grant UI (preferred — Super PM):** Settings → **Viewer project visibility** (`/settings/viewer-visibility`). The Super PM selects an approved Viewer and checks the Active programmes they may open. Saves sync that Viewer’s Active-project `ProjectMember` rows only (other roster members untouched; soft-deleted / Completed memberships left alone). This avoids asking every owning PM to edit each project after a new Viewer is approved.
   * **Viewer grant UI (alternate — owning PM / Super PM):** Edit Project → team roster still adds or removes a Viewer on a single project.
-  * Project membership and registered task or issue PIC accounts may target **only** approved, active human accounts (not pending, rejected, deactivated, or the System actor). Edit Project roster checkboxes list directory users; **task/issue PIC pickers** list the project roster plus the owning PM and every active Super PM, then previously used custom names. Server Actions reject other **account** targets. A custom PIC is a display name with a null user id (`assigneeId` / `picId`), remembered in `CustomAssignee` so the same name can be chosen again. Custom names are not user accounts and do not grant access. Visibility must remain relational (`ProjectMember`); `User.projectVisibility: String[]` is forbidden.
+  * Project membership and registered task or issue PIC accounts may target **only** approved, active human accounts (not pending, rejected, deactivated, or the System actor). Edit Project roster checkboxes list directory users; **task/issue PIC pickers** list the project roster plus the owning PM and every active Super PM, then previously used custom names. A task may have several PICs (2.1.44). An issue still has one PIC. Server Actions reject other **account** targets. A custom PIC is a display name with a null user id (`TaskAssignee.userId` / `picId`), remembered in `CustomAssignee` so the same name can be chosen again. Custom names are not user accounts and do not grant access. Visibility must remain relational (`ProjectMember`); `User.projectVisibility: String[]` is forbidden.
 * **FR-GOV-06 [Safe Account Deactivation, Reactivation & Purge]:**
   * Direct cascade deletion of active user accounts is strictly prohibited. Self-deactivation and modification of the System actor are forbidden.
   * **PM / Super PM deactivation:** The Super PM is warned that every owned project must be assigned to another approved, active PM or Super PM (not the target). Under Settings → Users & privileges → **Safe deletion**, Review & deactivate lists each owned project; the Super PM selects a replacement per project. Tasks and issue PIC fields on those projects that were assigned to the target move to the new owner. Tasks and PIC on non-owned projects move to each project's owning PM. Memberships are removed. Receiving PMs are emailed (aggregated by recipient) with project names and transferred task titles. Another Super PM may be deactivated only if at least one active, approved Super PM remains.
@@ -408,12 +422,13 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * Columns (Australian English): No., Task, Status (To Do / Doing / Done), Actual %, Target %, Initial start, Initial due, Initial WD, Updated start, Updated due, Updated WD, Actual start, Actual finish, Actual WD, PS, Status flag.
   * **WD** columns shall show inclusive working days between the pair of dates (weekends and registered holidays excluded), using $D_{\text{planned}}=\max(1,\ldots)$ so the same start and end date shows **1** (never zero). Examples: 12→16 Oct 2026 (Mon–Fri) = 5 WD; 12→12 Oct 2026 = 1 WD. Actual WD uses Actual start → Actual finish; show an em dash only when either date is missing.
   * The List table scrollport shall freeze the column header row (vertical scroll) and the Task name column together with No./drag (horizontal scroll). Sticky panes use opaque fills so scrolling cells do not show through; a right freeze edge on the Task column appears while scrolled horizontally (not on process-group or Add-row rows). Process-group header rows stick under the column header (vertical) and keep their label in the freeze rail while scrolling horizontally. The group header is a label only. Each group has one **Add row** at the bottom. Hovering the **existing bottom grid line** of a row thickens that same border and shows a **+** (no extra spacer row). Clicking opens an instant local draft at that index (not persisted until complete). Drafts require title + initial start + initial due; leaving an incomplete touched draft offers Continue editing / Discard. Empty projects still show all five process groups with emphasised **Add row**. Inline delete (hover trash + confirm) removes a task via `deleteTask` with the same permission rules as the drawer. List date cells are uncontrolled while typing so day/month/year keyboard entry is not clobbered. Actual date rules: no future dates; actual finish requires actual start; finish ≥ start. Violations revert the field and show a dismissible toast/banner (~7s). Entering a valid **actual finish** while Status is not Done or Actual % is not 100% shall prompt to mark the task Done at 100%; Confirm applies the finish date with those side effects; Cancel restores the previous field value. Project and task punctuality scores recalculate from the updated task set on every successful mutation.
-  * Above the List table, show the live **Project punctuality score** (aggregate Project PS). Initial WD, Updated WD, and Actual WD columns are centre-aligned.
+  * Above the List table, show the live **Project punctuality score** (aggregate Project PS) in the score format of FR-UI-08, with a hover title that says what it is. The **PS** column uses the same format and its header explains the score on hover. Initial WD, Updated WD, and Actual WD columns are centre-aligned.
   * Transient List / task mutation errors (for example future Actual dates) shall be dismissible and auto-clear within a few seconds.
   * Updated start/due are the schedule baseline for Punctuality Score; on create they default to the initial dates.
+  * Hovering a Task name shows the complete title at once, with no browser delay, including when the cell trims a long name (2.1.41). The same instant tip is on the Gantt Task column.
   * Inline editing shall be supported for Task title, Status, Actual %, and all six date fields. Target %, WD, PS, and Status flag are computed and not editable. A task flagged **Due to Commence** leaves the PS cell blank. The engine still scores that task at $100\%$; only the cell is hidden.
   * Users may add a task at the end of any process group or insert a row; drag-and-drop shall reorder within or across process groups (`listSortOrder`, independent of Kanban `sortOrder`).
-  * Fields not on the grid (PIC, priority, description, checklist, comments) remain available via an optional Details control that opens the existing task drawer — the drawer is not required for schedule-column edits.
+  * Fields not on the grid (PIC, priority, description, checklist, comments) are edited in the same task drawer as a Kanban card (2.1.42). Every List row has a **Details** button beside the task name. Choosing it, or choosing the task name on a read-only row, opens that drawer. The name tip does not cover the button. The drawer is not required for schedule-column edits. Drawer field edits stay local until the panel closes (2.1.45).
 * **FR-UI-04 [Five-View Project Workspace]:**
   * The project hub shall expose five peer views with no layout shift: **List**, **Kanban**, **Gantt**, **Issue Log**, **Analytics**.
   * Issue Log is the system of record for unplanned impediments (Module J). Issues shall not appear as Gantt task bars in Release 2.1.
@@ -422,28 +437,46 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * Home, project hub, completed projects, and the app header use the full viewport width with a small side gutter (`px-4` / `sm:px-6` / `lg:px-8`). Settings forms stay on a narrower reading width. Project description prose may stay capped so lines remain readable.
 * **FR-UI-05 [Per-Project Gantt task rail]:**
   * Only the **Task** column is frozen while the chart scrolls sideways. **Progress** sits beside it and scrolls away with the timeline, so a long project keeps more of the date scale on screen.
-  * **Task column:** task title (wrapping / multi-line so wording is readable), the task’s 11-state Status Flag pill, Kanban status, and PIC name. The **Custom** badge for unregistered PICs shall be hidden on this surface.
+  * **Task column:** task title (wrapping / multi-line so wording is readable), the task’s 11-state Status Flag pill, Kanban status, and PIC names. When several people are assigned, the first name shows with a +N count; hover lists every name (2.1.44). Hovering the title shows the complete name at once (2.1.41). The **Custom** badge for unregistered PICs shall be hidden on this surface.
   * **Progress column:** stacked Actual and Target progress badges for that task ($P_{\text{actual}}$, $P_{\text{target}}$), using the same capped target engine as elsewhere.
   * Row heights for Task, Progress, and timeline bars shall stay aligned.
-  * The Gantt scrollport shall use a moderately tall viewport (`max-height ≈ 100vh − 200px`) so more rows are visible without monopolising the screen.
-  * The solid **Today** line and dashed milestone lines shall span the task/group body height only (bottom aligned to the last table row), remaining sticky under the date header while scrolling.
+  * The Gantt scrollport height follows the window: `max-height = 100dvh − 14.5rem` (`100dvh − 6rem` in Expanded view, FR-UI-07), so the chart fills the screen below the tabs instead of a fixed share of it.
+  * **Density (2.1.28):** a segmented control offers **Comfortable** (task row 60 px, group header 30 px, bars 8 px, full task label) and **Compact** (row 44 px, group header 26 px, bars 6 px). The default is Comfortable. Before 2.1.28 every row was 96 px and every group header 36 px. In both densities the three bars (Initial, Updated, Actual) stay centred in the row and aligned with the Task and Progress cells.
+  * **Fit-to-width:** the date columns are scaled up so that a short timeline fills the width of the card. They are never scaled below their natural width, so a long timeline still scrolls sideways. The scale is recomputed when the card is resized.
+  * **Group collapse:** each process-group header collapses and expands its tasks. **Collapse all groups** and **Expand all groups** act on every group at once. Collapsed groups keep their header row. Collapse state is not stored.
+  * The solid **Today** line and dashed milestone lines shall span the task/group body height only (bottom aligned to the last visible table row), remaining sticky under the date header while scrolling.
+  * Hovering a timeline bar shows the task name, then that bar’s start date and end date (2.1.43). Initial, Updated and Actual each name their own pair. The project title is not repeated. A long task name wraps inside the card.
+* **FR-UI-06 [Kanban density — 2.1.28]:**
+  * A segmented control offers **Compact** (default) and **Comfortable**. Compact clamps the task title to two lines, shows the status flag and the Actual and Target badges together on one wrapping row, drops the card divider, and uses a smaller avatar. Comfortable keeps the earlier card.
+  * Each column keeps its own vertical scroll and a header that stays in view. The column height follows the window (`100dvh − 9rem`, or `100dvh − 15rem` in Expanded view) so no column runs off the bottom of the page.
+  * Drag and drop between and within columns, the click-to-open drawer and read-only behaviour are unchanged.* **FR-UI-07 [Expanded view and stored preferences — 2.1.28]:**
+  * Kanban and Gantt each have **Expand view** / **Exit expanded view**. Expanded hides the project header, the milestone strip and the read-only notice, shows one slim line (back arrow, project name, Read-only chip when it applies, Status Flag, Actual and Target badges) above the tabs, and gives the board or chart the freed height. It applies only on Kanban and Gantt; List, Issue Log and Analytics always show the normal page. The state is shared by the two views while the page is open and is not stored.
+  * Gantt and Kanban density are stored per browser in `localStorage` under `sptt.gantt.density` and `sptt.kanban.density`. A missing or invalid value falls back to the default. The stored value shall not cause a server/client markup mismatch (the first render uses the default; the stored value applies after hydration).
+* **FR-UI-08 [Punctuality Score display — 2.1.31]:**
+  * Every surface that shows a Punctuality Score (project and task) shows it as a number with two decimals — the stored 0–100 score divided by 100, for example `0.89` for `89.3`, `1.05`, `1.00`, `0.83` — and never with a percent sign. `1.00` is exactly on schedule. Surfaces: List banner and **PS** column, Analytics headline card, process-group labels, key takeaways, Issue Intelligence labels, Portfolio headline and **Comparison by PM**.
+  * Actual, Target and their difference stay percentages. The four bands are $\text{PS} \ge 1.05$, $0.95 \le \text{PS} < 1.05$, $0.85 \le \text{PS} < 0.95$, and $\text{PS} < 0.85$.
+  * Wherever the score is the headline, its meaning is available on hover and keyboard focus (FR-ANL-03).
+* **FR-UI-09 [Task update feedback — 2.1.32, drawer draft 2.1.45, selective restore 2.1.46]:**
+  * While the project page checks a finished date, saves a List or Kanban task change, or creates a task, it shows a light wash and a centred pill: a spinner plus “Updating the task…” (or “Creating task…”). The same idea as the Portfolio scope pill in FR-UI-01. The error toast stays above the wash.
+  * **Task drawer (2.1.45, selective restore 2.1.46):** title, description, process group, priority, status, progress, PICs and dates stay in the panel until the person closes it or opens another task. One write then goes to the server. Range checks use that finished set, so a start date may sit later than the current end while the other date is still being typed. The wash appears for that one write. On close, each value that breaks a rule returns to the previous saved value. Every other change in that close is saved. When either end of a broken pair would still be valid on its own, both changed ends of that pair return to the previous values, so the save does not guess which date to keep. A short message names the restored fields. Checklist items and comments still save as they are added.
+  * The Next.js Dev Tools “Rendering…” badge is not this cue. A refused date on List still returns the field to the previous acceptable value and shows the message (release 2.1.31). The pill is visible while that update is drawn.
 
 ---
 
 ### Module I: Excel task import (FR-IMP) — Wave 4C-1b
 
 * **FR-IMP-01 [Workbook contract]:**
-  * A PM or Super PM who can create projects opens **+ New Project** and chooses **From Excel**. The workbook creates a new Active project; it does not add tasks to a project that already exists. The project name is cell B1. Description starts empty. The signed-in user owns the project.
+  * A PM or Super PM who can create projects opens **+ New Project** and chooses **From Excel**. A Viewer or a Member is not offered **+ New Project**, and the server refuses the create. The workbook creates a new Active project; it does not add tasks to a project that already exists. The project name is cell B1. Description starts empty. The owner is the signed-in PM or Super PM who uploaded the file.
   * Accepted file: `.xlsx`, sheet named `Tasks` when present, otherwise the first sheet. At most 500 task rows and 2 MB.
   * **Structure is checked before any task row is read.** Cell A1 is `Project Name:` and B1 is the name. Row 2 is exactly: Process Group, Task, Progress, Initial Start Date, Initial End Date, Updated Start Date, Updated Finish Date, Actual Start Date, Actual End Date. Task values start at row 3. A wrong label blocks the import. The file served by **Download template** is `templates/task-import-template.xlsx`.
   * A blank task name is skipped. A blank or unrecognised process group is stored as Executing and called out in the preview. `Initiation` is accepted as Initiating. Blank progress is 0%. Progress above 100% is stored as 100% and noted. Blank updated dates copy the initial dates. Status is derived from progress (0% To Do, 1–99% Doing, 100% Done). There is no PIC or Status column; every imported task is unassigned, including on update.
   * Dates accept Excel date cells, formula results, `YYYY-MM-DD`, and Australian `D/M/YYYY`.
 * **FR-IMP-02 [Preview then commit]:**
-  * Choosing a file runs validation and writes nothing. The preview names the project from B1 and lists each task, plus errors and row warnings. **Create project** stays disabled while any row has an error.
+  * Choosing a file runs validation and writes nothing. The preview names the project from B1 and lists each task, plus errors and row warnings. Each error is shown to the person uploading (a structure problem has no row number; a task problem is prefixed `Row N:`). Above that list the preview says the workbook is not imported, that the file must be fixed and chosen again, and that **Create project** stays off until the workbook is clean. **Create project** stays disabled while any row has an error. A commit that still finds errors is refused with *Fix the workbook before creating the project.* and up to six of those errors.
   * Duplicate titles inside one process group error.
   * Within each process group, file order becomes `listSortOrder`.
 * **FR-IMP-03 [Integrity]:**
-  * Block the file when the template labels are wrong, or when any task row has: a missing initial span; an inverted span; a future actual date; actual end before actual start; progress of 0% with an actual start or actual end; progress from 1% to 99% with no actual start; an actual end while progress is under 100%; progress of 100% with no actual start or no actual end.
+  * Block the file when the template labels are wrong, or when any task row has: a missing initial span; an end date earlier than its start (initial, updated, or actual); a date that does not exist or sits outside 2000–2100; a future actual date; an actual end with no actual start; progress of 0% with an actual start or actual end; progress from 1% to 99% with no actual start; an actual end while progress is under 100%; progress of 100% with no actual start or no actual end.
   * Commit is one transaction with audit stamps and the same progress-clock update as other task writes.
 
 ---
@@ -453,6 +486,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
 * **FR-ANL-01 [Per-Project Schedule S-Curve Graph]:**
   * The Per-Project Analytics view shall incorporate a cumulative progress **Schedule S-Curve** chart powered by Recharts.
   * **X-Axis:** Calendar working timeline from the project's earliest *task* start date to latest *task* completion/due date.
+  * The S-curve and the task burn-down do not draw milestone lines. Those lines sit on the process-group timeline (FR-ANL-13). Issues are not milestones.
   * **Y-Axis:** Cumulative Percentage ($0\%$ to $100\%$).
   * **Series 1 (Target S-Curve):** Cumulative $\sum W_i \times P_{\text{target}_i}(t)$ rendered as a dashed neutral line. $W_i$ is **task** weight only.
   * **Series 2 (Actual Realisation Curve):** Cumulative $\sum W_i \times P_{\text{actual}_i}(t)$ rendered as a solid emerald/amber line terminating at $T_{\text{now}}$.
@@ -464,6 +498,10 @@ UI percentages in this pane are reported to one decimal place, consistent with p
 * **FR-ANL-03 [Schedule Intelligence header]:**
   * The Schedule pane header shall display the aggregate Punctuality Score ($\text{Project PS}$), the Target vs. Actual progress divergence ($\Delta = P_{\text{actual}} - P_{\text{target}}$), and the project's overall Status Flag.
   * Those three figures remain task-derived. Issue counts shall **not** appear in this header (they belong in FR-ANL-05).
+  * **Presentation (2.1.28),** implemented once in `ScheduleHeadline.tsx` and used by the project Analytics tab and `/portfolio`:
+    1. **Actual minus target** (half width): the difference as a large signed figure in points with a verdict (*behind target*, *ahead of target*, *exactly on target*), and two labelled bars, **Actual** and **Target**, each with a large percentage. Progress must be readable without hovering, so it is never confused with the score.
+    2. **Project punctuality** (one quarter; *Portfolio punctuality* on `/portfolio`): the score in the FR-UI-08 format, the line *Score. 1.00 is on schedule.*, and a small gauge. On hover and on keyboard focus a dark card opens at once, with no delay. It is titled Punctuality Score (PS). It says 1.00 is right on schedule, a score above 1.00 is ahead, and a score below 1.00 is slipping. Two short lines follow: in progress, actual progress against elapsed working days; completed, planned duration against the actual finish. Four coloured bands: $\text{PS} \ge 1.05$ Ahead / Completed early, $0.95 \le \text{PS} < 1.05$ On track / Completed on time, $0.85 \le \text{PS} < 0.95$ Slipping / Completed late, and $\text{PS} < 0.85$ Critically delayed / Completed severely late. A note says the score uses planned working days only (weekends and public holidays excluded), that an early handover is never penalised, and that issue work is excluded. It does not show a formula. The same card explains the List PS heading and the portfolio comparison heading. The top band (indigo) and the on-schedule band (emerald) are distinct colours. The card is positioned in the window: it opens below the score when there is room, and above it when the score sits near the bottom, and it shifts sideways so it is not cut off. It stays inside narrow screens.
+    3. **Status flag** (one quarter): a large badge and the full-sentence meaning of the flag (one sentence per SF-01 to SF-11), with the task count.
 * **FR-ANL-04 [Two-pane Analytics layout]:**
   * `ProjectAnalyticsView.tsx` shall render two labelled panes on the **same** Analytics hub tab, stacked vertically with no layout shift when either pane is empty:
     1. **Schedule Intelligence** — FR-ANL-01, FR-ANL-02, FR-ANL-03, FR-ANL-11.
@@ -505,17 +543,33 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * `src/lib/analytics/insights.ts` produces at most five rule-based takeaways. Each line cites the figure it used. No language-model call.
   * Charts are 280px tall inside section cards, and every chart has the same figure in a sentence beside it.
   * Hovering a chart shows a white card. Series colour is only the swatch. The words are near-black (`#18181b` / `#3f3f46`) so a pale series stays readable.
-  * `dashboardAccess` includes `PROJECT` before the Analytics tab or `loadProjectAnalytics` returns figures (FR-GOV-04, as-built 4C-2b). PDF export remains Wave 4C-4. The pure helpers that build the series (`buildScheduleSeries`, `buildScheduleComposition`, `buildIssueIntelligence`) are shared with `/portfolio` (FR-PORT-04).
+  * `dashboardAccess` includes `PROJECT` before the Analytics tab or `loadProjectAnalytics` returns figures (FR-GOV-04, as-built 4C-2b). The same figures feed the executive report (FR-EXP-01). The pure helpers that build the series (`buildScheduleSeries`, `buildScheduleComposition`, `buildIssueIntelligence`) are shared with `/portfolio` (FR-PORT-04).
 * **FR-ANL-11 [Schedule composition]:**
   * **Task status** doughnut: count of To Do, Doing, and Done, with the task total in the hole. Issues are excluded.
   * **Effort by process group** bar: planned working days ($D_i$) for Initiating through Closing. Dates are the updated pair when set, otherwise the initial pair. Undated tasks add 0. The length is the same one used to weight the Schedule S-Curve.
   * **Overdue tasks** list: tasks that are not Done and whose effective due date is before today. Columns are task name, PIC, and calendar days late, most late first. Empty copy: *No tasks are past their due date.*
 * **FR-ANL-12 [Analytics visual design and cost — 2.1.25]:**
-  * Layout, top to bottom, on Schedule Intelligence: three header tiles (punctuality; actual minus target with an Actual bar and a Target bar; status flag); the **Project note** beside **Key takeaways**; Schedule S-Curve and Task burn-down; Task status and Effort by process group; **Overdue tasks** beside **Milestones**. Issue Intelligence follows: twelve KPIs (six health figures, then six status counts and last activity), then the chart rows and the activity stream.
+  * Layout, top to bottom, on Schedule Intelligence (revised 2.1.28): three headline cards (actual minus target with an Actual bar and a Target bar; punctuality; status flag; FR-ANL-03); **Schedule by process group** (FR-ANL-13); **Key takeaways** beside the **Project note**, the same width and the same height on screens 1024 px and wider (revised 2.1.40; the 2.1.28 build used a two-to-one grid), stacking with takeaways first below that; Schedule S-Curve and Task burn-down; Task status and Effort by process group; **Overdue tasks** beside **Milestones**. Issue Intelligence follows: twelve KPIs (six health figures, then six status counts and last activity), then the chart rows and the activity stream.
   * One palette. Reference lines (target, ideal) are neutral dashed slate. Progress is emerald. Remaining task work is sky and remaining issue work is amber. Issue status and severity bars use fixed per-value colours that match the KPI dots. Cards, borders, and hover shadows come from one set of CSS variables, so light and dark mode stay in step.
   * Hover and focus: cards ease border and shadow; KPI tiles also lift by 1px; tables highlight the row; one teal focus ring is used app-wide. Motion honours `prefers-reduced-motion`.
   * Responsive: tiles and charts reflow from one column to six without horizontal page scroll; wide tables scroll inside their card.
   * Cost: the Analytics pane is code-split and mounted only while the tab is visible, so Recharts and the series maths cost nothing on List, Kanban, Gantt, or Issue Log. The chunk is fetched when the tab is hovered or focused. Trend charts draw without animation and chart components are memoised.
+* **FR-ANL-13 [Schedule by process group — 2.1.28]:**
+  * A simplified Gantt of the project sits directly under the headline cards, above every chart and the note, so it is among the first things a reader sees. It shows the five process groups (Initiating, Planning, Executing, Monitoring, Closing), not tasks.
+  * Each group has three bars, the same as the macro timeline (FR-PORT-03): **Initial plan** (grey), **Updated plan** (blue) and **Actual** (green when the group's score is 0.95 or more, amber below it, hatched while still running to Today). A bar runs from the **earliest start** to the **latest end** among that group's tasks for that pair of dates. The Actual bar runs from the earliest actual start to the latest actual finish; a group with unfinished work runs on, hatched, to Today while the project is Active. A group with no tasks or no dates in a pair has no bar for it and reads *No tasks* when empty.
+  * The name cell shows the group, its task count, its group score (FR-UI-08, weighted by planned working days of that group's tasks) and its overdue count. The red **Today** line crosses every row. Hover or focus a bar for its dates.
+  * **Milestone lines (2.1.36):** Each project milestone is one dashed vertical line across all five rows. The day is the achieved date when set, otherwise the updated target. Pending is amber, achieved is emerald, the same two styles as the Gantt. The line carries no name. Hover or focus shows the name and the date. The legend names only the kinds that appear: *Milestone (pending)* and *Milestone (achieved)*. A project with no milestones shows neither lines nor that legend. The S-curve and the burn-down do not carry these lines.
+  * The axis is built from the same rows by `buildMacroAxis`, and it also covers each milestone day so a line past the last task is still on the chart. The pure function `buildProcessGroupRows` (in `src/lib/analytics/portfolio.ts`) returns the rows. A project with no dated task and no milestone shows *No task has dates yet. Add task dates to draw this timeline.* Dates outside 2000–2100 are ignored (FR-DAT-01).
+  * Issues are excluded. On phones the name column narrows and the chart scrolls sideways inside its card.
+* **FR-EXP-01 [Executive PDF and PowerPoint — Wave 4C-4, 2.1.37]:**
+  * Anyone who can open the project Analytics tab or `/portfolio` may download a report of that screen. There is no extra privilege. The file uses the figures already on the page, including the ticked projects on All projects.
+  * One **Export report** control offers **PDF** or **PowerPoint**. The libraries load only on click. A spinner and an `aria-live` status run while the file is built. Escape closes the menu. On a project it sits with Schedule Intelligence. On `/portfolio` it sits at the right of one control bar under the title (2.1.39).
+  * Both files are the same 16:9 slides (1920 × 1080 units). The PDF is not A4. A light off-white print theme is used in both. Text is wrapped once against Helvetica metrics and handed to both renderers as finished lines, so nothing is cropped or reflowed. Characters the PDF font cannot print are swapped for a plain equivalent.
+  * Every slide states the report name, the scope, who exported it, the Australian date and time, and the page number. Milestone lines on a printed timeline carry a number. The key under the chart puts the date immediately after the name (2.1.40). A long name wraps onto a second line and the date follows that line, or sits on the next line when it does not fit beside it. The portfolio key also names the project.
+  * No second calculation. Scores, flags, series, takeaways and issue figures come from `weighted-progress.ts`, `schedule-series.ts`, `schedule-composition.ts`, `insights.ts`, `issue-intelligence.ts` and `portfolio.ts`. Issue work stays out of the schedule slides.
+  * The project file covers summary, schedule, process-group timeline, milestones, overdue and at-risk tasks with PIC workload, and issues. The portfolio file covers summary, the macro timeline (paginated), S-curve and burn-down, PM or project ranking, milestones, tasks and issues. Empty panes are omitted.
+  * **Written note (2.1.40, first added 2.1.38):** an empty project note, PM portfolio note, or All projects note is left out of the file. A short note is a card on the first slide, directly under Key takeaways (under What stands out on a portfolio). A note is short when that card is at most 240px tall and the takeaways above it can still show every point in full. A longer note is the next slide, one slide only; the last line then says the rest is on the screen. Headings and lists are kept, and the card names who last updated it and the Australian date. On All projects the note is the scope note, including when fewer projects are ticked.
+  * Engine: `src/lib/export/executive-deck-generator.ts`. Heavy libraries are `jspdf` and `pptxgenjs`.
 
 ---
 
@@ -530,16 +584,16 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   2. **All projects** (`/portfolio?scope=all`): the same readout across every Active project the caller may see, a filter to compare fewer projects, and a **Comparison by PM** table (projects, tasks, punctuality, actual and target, overdue tasks, critical issues, Status Flag; lowest punctuality first). Completed programmes stay out unless the caller has `completedProjectAccess = ALL` and switches **Include Completed projects** on (`&completed=1`).
   * Per-project analytics stay on the project hub (FR-ANL). Comparison of individual projects is a filter on All projects, not a third route.
 * **FR-PORT-03 [Executive Multi-Project Macro Gantt]:**
-  * Positioned at the top of both views, under six KPI cards (projects, portfolio punctuality, actual minus target, Status Flag, overdue tasks, active issues).
+  * Positioned at the top of both views, under the same three headline cards as the project Analytics tab (FR-ANL-03: actual minus target with Actual and Target bars, portfolio punctuality with its hover explainer, Status Flag) and a row of three KPI cards (projects, overdue tasks, active issues). Before 2.1.28 this was six equal KPI cards.
   * **Three-Tier Project Bars:** three horizontal bars per project:
     1. *Initial Planned Span* (grey): earliest `initialStartDate` to latest `initialDueDate`.
     2. *Updated Planned Span* (blue): earliest `updatedStartDate` to latest `updatedDueDate`.
-    3. *Actual Realisation Span* (green at project punctuality 95% or better, amber below): earliest `actualStartDate` (else earliest actual finish) to latest `actualCompletionDate`. While work has started and not finished, the bar runs to the vertical **Today** line and the running part is hatched.
+    3. *Actual Realisation Span* (green at a project punctuality score of 0.95 or better, amber below): earliest `actualStartDate` (else earliest actual finish) to latest `actualCompletionDate`. While work has started and not finished, the bar runs to the vertical **Today** line and the running part is hatched.
   * Beside each row: Target, Actual and Status Flag for that project. The project name links to the hub and wraps to two lines.
   * **Milestone Diamond Overlays:** project milestones sit on the bars as diamonds: achieved (green), achieved late (amber), past target (red), upcoming (outlined).
   * **Instant Tooltips (0 ms):** hover or keyboard focus on a bar or diamond opens a card with no delay. A milestone card shows name, description, project, target, achieved date and variance in working days. The card follows its target when the page scrolls.
   * A date outside the years 2000 to 2100 is ignored when drawing the axis (FR-DAT-01).
-* **FR-PORT-04 [Rolled-up analytics]:** below the timeline each view shows the same blocks as the project hub, computed over the pooled tasks: key takeaways (rule-based, `insights.ts` and `portfolio.ts`), Schedule S-Curve, task burn-down, task status doughnut, effort by process group, overdue tasks (with a Project column), milestones, and Issue Intelligence (KPIs, fix realisation, burn-down, status, severity, PIC load, category, fix schedule flag, recent activity with the project named). Each task is weighted by its planned working days, so the portfolio score is the project score applied to the pooled set. Issues stay out of the schedule figures.
+* **FR-PORT-04 [Rolled-up analytics]:** below the timeline each view shows the same blocks as the project hub, computed over the pooled tasks: key takeaways (rule-based, `insights.ts` and `portfolio.ts`; the same width as the portfolio note on wide screens, as in FR-ANL-12), Schedule S-Curve, task burn-down, task status doughnut, effort by process group, overdue tasks (with a Project column), milestones, and Issue Intelligence (KPIs, fix realisation, burn-down, status, severity, PIC load, category, fix schedule flag, recent activity with the project named). Each task is weighted by its planned working days, so the portfolio score is the project score applied to the pooled set. Issues stay out of the schedule figures.
   * The figures are computed in the browser from the viewer’s local today (the view loads client-side only), which avoids a server and browser disagreement near midnight.
   * Payload control: progress history keeps the last event per task per day; issue history rows carry no summary; the stream takes the latest 200 rows.
 * **FR-PORT-05 [Portfolio notes]:** one note per scope, stored as sanitised HTML in `PortfolioNote` (`scopeKey` `ALL` or `PM:<lowercase uuid>`), shown as report prose with an **Edit** popup (same editor as FR-ANL-10). Maximum 20,000 characters (server check and database CHECK). Last save wins; the card shows who saved and when.
@@ -548,6 +602,7 @@ UI percentages in this pane are reported to one decimal place, consistent with p
   * Everyone else sees the note read-only.
 * **FR-PORT-06 [Entry points]:** header **Portfolio** link (FR-PORT-01 gate); the home page scope control shows **Analytics for this scope →** (My projects and a PM go to By PM, All projects goes to All projects) when the matching tick is held; the project hub shows “Project Manager: <name>” under the title, linking to that PM’s portfolio when the caller holds `PM_PORTFOLIO`.
 * **FR-PORT-07 [Presentation]:** dark and light themes, charts at fixed pixel heights, every figure also stated in words, and a header that fits a 390 px phone width without horizontal scrolling. Colour is never the only carrier of meaning (Status Flag and milestone state also carry text).
+  * **Toolbar (2.1.39):** under the title, one bar holds the scope toggle, the Project Manager list or the project filter, **Include Completed projects**, and **Export report** at the right. The hint for a filtered set sits on the line under that bar. Every native dropdown uses the same chevron inset as Export report: 12px between the icon and the button edge.
 
 ---
 
@@ -1100,12 +1155,23 @@ model Task {
 
   project              Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee             User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignees            TaskAssignee[]
   subtasks             Subtask[]
   comments             TaskComment[]
   relatedIssues        Issue[]       @relation("IssueRelatedTask")
 
   @@index([projectId])
   @@index([projectId, status, sortOrder])
+}
+
+model TaskAssignee {
+  id           String  @id @default(uuid()) @db.Uuid
+  taskId       String  @db.Uuid
+  userId       String? @db.Uuid
+  assigneeName String  @default("")
+  sortOrder    Int     @default(0)
+  task         Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model Subtask {
@@ -1341,7 +1407,7 @@ model PurgedProject {
 ### 7.3 Localisation & Ergonomics
 * **Locale:** Australian English (`en-AU`).
 * **Date Representation:** Form displays and tooltips must render calendar dates in `DD/MM/YYYY` format using `date-fns/format`.
-* **Date fields:** Every editable calendar field (List, task drawer, Issue Log create form and register, issue drawer, milestone dialog, holiday form) uses a native date input with a calendar button fixed at the right end. Clicking the field or that button opens an in-page month grid. Previous and next month only change the month on display; the date is written when a day is chosen. Typing a date in the field still works. The browser’s own picker glyph is hidden so it does not cover the button.
+* **Date fields (2.1.31, busy cue 2.1.32, drawer draft 2.1.45):** Every editable calendar field (List, task drawer, Issue Log create form and register, issue drawer, milestone dialog, holiday form) uses one control. The value is shown as day / month / year. Clicking a part selects it, and the first keystroke replaces that part. A year is not saved until all four digits are in. A range or year-limit error is not shown while a part is still active. On List and other instant fields, the check runs when the picker closes, or when day, month and year are no longer active. If the finished date breaks a rule, the field returns to the previous acceptable value and the message is shown then. In the task drawer, start and end dates are checked together when the panel closes. Each date that breaks a rule returns to its previous value, and every other change is saved (FR-UI-09, 2.1.46). An unfinished year restores the previous date and shows no error. A calendar button at the right opens a fixed-height picker. Its month and year are buttons: the month opens a twelve-month grid, and the year opens the years 2000–2100. A stored year outside that range opens the year list. Previous and next move the view only, and the box does not change height, so those arrows stay put. The date is written when a day is chosen, or when the person leaves a complete day, month and year.
 * **Spelling:** All user-facing interface text, error messages, and documentation must adhere strictly to Australian spelling (e.g. *programme*, *prioritise*, *visualisation*, *colour*).
 
 ### 7.4 Accessibility (WCAG 2.1 AA Compliance)
@@ -1385,9 +1451,10 @@ flowchart TD
         C1["W4C-1 High-density grid"]
         C2["W4C-2 Per-project Analytics"]
         C3["W4C-3 Portfolio, macro Gantt, About"]
-        C4["W4C-4 PDF export"]
+        C3a["W4C-3a Feedback: views, score format"]
+        C4["W4C-4 PDF and PowerPoint export"]
         CU["W4C-U UAT plus regression"]
-        C1 --> C2 --> C3 --> C4 --> CU
+        C1 --> C2 --> C3 --> C3a --> C4 --> CU
     end
     CU --> Done([Release 2.1 accepted 12 Oct 2026])
 ```
@@ -1410,15 +1477,16 @@ Stakeholder-usable increment: Super PMs approve users, delegate privileges, hand
 5. Execute the Wave 4B UAT pack (UAT-405, UAT-405A–D, UAT-406–407, UAT-412–422). Issue Intelligence charts remain Wave 4C.
 6. **As-built:** Wave 4B UAT pack accepted (including job-assisted UAT-413 / 418) — see `doc/dev_uat.md`.
 
-### Wave 4C: Executive visualisation (planned 01–12 Oct 2026; **4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 as-built**)
-Stakeholder-usable increment: high-density task grid, full Analytics (Schedule and Issue Intelligence), `/portfolio` with macro Gantt, About modal.
+### Wave 4C: Executive visualisation (planned 01–12 Oct 2026; **4C-1 through 4C-4 as-built**)
+Stakeholder-usable increment: high-density task grid, full Analytics (Schedule and Issue Intelligence), `/portfolio` with macro Gantt, About modal, executive PDF and PowerPoint.
 1. High-density inline-edit task grid. **As-built.**
 2. Excel create-project import. **As-built.**
 3. `ProjectAnalyticsView.tsx` Schedule Intelligence and Issue Intelligence (`issue-intelligence.ts`, `schedule-series.ts`, `schedule-composition.ts`, `insights.ts`, `TaskProgressEvent`, `AnalyticsNote`), including the task-status pie, effort bars, and overdue list (FR-ANL-11). **As-built 8 Oct 2026.** UAT-423–425 not yet accepted.
 4. Dashboard access on the Analytics tab and Viewer All Active (FR-GOV-04, FR-GOV-04B). **As-built 9 Oct 2026.** UAT not yet accepted.
 5. `/portfolio` (By PM, All projects), macro timeline, rolled-up analytics, portfolio notes, entry points, and the About modal (FR-PORT-01 to FR-PORT-07, FR-ADM-02) with `PortfolioNote`, row-level security on the three tables that lacked it, and the date guard (FR-DAT-01). **As-built 9 Oct 2026.** UAT-409 and UAT-410 not yet accepted.
-6. PDF export (**W4C-4**) is the next package.
-7. Execute the Wave 4C UAT pack (UAT-408–410, UAT-423–427) and **UAT-R** when PDF export ships.
+6. **4C-3a feedback package (2.1.28):** Punctuality Score shown as a three-decimal score (FR-UI-08); Schedule headline cards and the process-group timeline on Analytics, with takeaways beside the note (twice the width in 2.1.28; the same width from 2.1.40; FR-ANL-03, FR-ANL-12, FR-ANL-13); Gantt density, group collapse and fit-to-width (FR-UI-05); Kanban density (FR-UI-06); Expanded view and stored view preferences (FR-UI-07). **As-built 9 Oct 2026.** UAT-428–431 not yet accepted.
+7. Executive PDF and PowerPoint (**W4C-4**, FR-EXP-01). **As-built 10 Oct 2026.** UAT-432 not yet accepted.
+8. Execute the Wave 4C UAT pack (UAT-408–410, UAT-423–432). **UAT-R** remains the close-out gate.
 
 ---
 
@@ -1432,7 +1500,7 @@ Each scenario is executed in the wave that first makes it exercisable in the run
 | :--- | :---: | :--- | :--- | :--- |
 | **UAT-401** | 4A | Holiday Engine | Super PM defines a national holiday on Tuesday in `/settings/holidays`; create a task running Mon–Wed. | Duration evaluates to 2 working days (not 3) **on the task row**; weekend days excluded. |
 | **UAT-402** | 4A | Weighted Progress | Project with Task A (10 days) and Task B (2 days). | Task A weight evaluates to $83.3\%$; Task B evaluates to $16.7\%$ on the live List view. |
-| **UAT-403** | 4A | Punctuality Score | As of **20/09/2026**, create Task A with **Updated Start** `07/09/2026`, **Updated Due** `18/09/2026` (10 working days Mon–Fri), set progress to $50\%$. | $P_{\text{target}} = 100\%$ (capped; never exceeds $100\%$ after the due date); $\text{PS} = 50.0\%$; Status Flag **Critically Delayed** on the task List/Kanban and the landing card. |
+| **UAT-403** | 4A | Punctuality Score | As of **20/09/2026**, create Task A with **Updated Start** `07/09/2026`, **Updated Due** `18/09/2026` (10 working days Mon–Fri), set progress to $50\%$. | $P_{\text{target}} = 100\%$ (capped; never exceeds $100\%$ after the due date); $\text{PS} = 50.0$ internally, **displayed `0.500`** (FR-UI-08); Status Flag **Critically Delayed** on the task List/Kanban and the landing card. |
 | **UAT-404** | 4A | Status Flag SF-01 | Task due to start next week with $P_{\text{actual}} = 0\%$. | Status Flag displays **Due to Commence** with Sky Blue badge in the running app. |
 | **UAT-411** | 4A | Audit stamps | User A creates a task; User B edits its priority. | **List** shows **Created by** = User A’s login name (unchanged) and **Updated by** = User B’s login name. The task drawer does not show audit stamps. Persisted IDs remain UUIDs; the List UI resolves names (or “Former user” / “System (automated)”). |
 | **UAT-405** | 4B | Approval Queue | Register with a real mailbox; confirm email via `/auth/confirm` (token_hash); attempt sign-in before approval. Super PM then approves with role PM. Optionally reject a second applicant and use **Delete permanently**. | Before confirm: not in Super PM queue. After confirm: appears in PENDING; sign-in refused (signed out / login notice). After approve: applicant receives approval email naming role; can sign in with registered credentials and open `/`. Fake/unreachable emails never enter the queue. Rejected/pending applicants can be removed without Safe deletion. |
@@ -1492,4 +1560,23 @@ Each scenario is executed in the wave that first makes it exercisable in the run
 | 2.1.25 | 8 Oct 2026 | Issue Log rows are one line. Analytics visual refresh (FR-ANL-12): one palette, note and takeaways up front, shared card and hover styling, lazy-loaded and visible-only Analytics pane. |
 | 2.1.26 | 9 Oct 2026 | FR-GOV-04 enforced on the Analytics tab. FR-GOV-04B Viewer `projectVisibilityMode` (`SELECTED` or `ALL_ACTIVE`). Role defaults: Super PM and PM all three scopes; Member and Viewer `PROJECT` only. |
 | 2.1.27 | 9 Oct 2026 | W4C-3 as-built. FR-PORT-01 to FR-PORT-07 rewritten to the build (access, data scope, rolled-up analytics, portfolio notes, entry points); FR-ADM-02 About modal; new FR-DAT-01 plausible dates (2000–2100); `PortfolioNote` model; UAT-409 and UAT-410 made executable. |
-*End of System Requirements Specification (`doc/dev_req.md`). Waves 4A and 4B are as-built and UAT-accepted; Wave 4C-1, 4C-1b, 4C-2a, 4C-2b, and 4C-3 are as-built; Wave 4C-4 (PDF) and close-out remain binding pending development.*
+| 2.1.28 | 9 Oct 2026 | W4C-3a feedback package. New FR-UI-06 (Kanban density), FR-UI-07 (Expanded view, stored preferences), FR-UI-08 (Punctuality Score shown as a three-decimal score; flag bands read 0.850, 0.950, 1.050); FR-UI-05 extended (viewport-fitted Gantt, Compact and Comfortable rows, fit-to-width, group collapse); FR-ANL-03 and FR-ANL-12 revised (headline cards, takeaways at twice the width of the note); new FR-ANL-13 (Schedule by process group); FR-PORT-03 headline cards. §3.5 gains the display convention. UAT-428 to UAT-431 added; UAT-403 expects `0.500`. |
+| 2.1.29 | 9 Oct 2026 | Date fields: click day, month or year to edit that part; a year is saved only after four digits; an unfinished year restores the previous date with no error. The calendar keeps a fixed height, and its month and year are buttons (years 2000–2100). A stored year outside that range opens the year list. Previous and next do not write the date. |
+| 2.1.30 | 9 Oct 2026 | Opening a project no longer reports a stored actual-date pair. Excel import rejects a future actual date, an end earlier than its start, an actual end with no start, and a date outside 2000–2100. Saving a task rejects an initial or updated due before its start. |
+| 2.1.31 | 10 Oct 2026 | PS is shown with two decimals (`1.05`, `1.00`, `0.83`). The punctuality explainer floats inside the window and lists PS ≥ 1.05, 0.95 ≤ PS < 1.05, 0.85 ≤ PS < 0.95, and PS < 0.85, with indigo for the top band and emerald for the on-schedule band. Per-project S-curve and burn-down draw amber pending and emerald achieved milestone lines. A date-rule message waits until the picker closes or the day, month and year are no longer active, then the field returns to the previous acceptable value. Excel preview states that a failing workbook is not imported. Viewer and Member cannot create a project; the owner is the signed-in PM or Super PM who uploaded the file. |
+| 2.1.32 | 10 Oct 2026 | FR-UI-09. While a task date is checked or a task change is saved, the project page shows a spinner pill (“Updating the task…”, or “Creating task…”). The Next.js Dev Tools “Rendering…” badge is not the cue. |
+| 2.1.33 | 10 Oct 2026 | A finished task or project is scored against its planned due date. Finishing on or before that date is never Late, including when work started early. Finishing after that date is Late or Severely Late. Unfinished work keeps the actual-versus-target score. |
+| 2.1.34 | 10 Oct 2026 | The Project Punctuality hover says, in plain words, that progress, planned working days, and the calendar all move the score. It does not show a formula. |
+| 2.1.35 | 10 Oct 2026 | The Punctuality Score hover is a short dark card: the 1.00 rule, in-progress and completed lines, four coloured bands, and a working-day note. It opens at once on the Analytics card, the List heading, and the portfolio comparison. |
+| 2.1.36 | 10 Oct 2026 | Per-project milestone lines leave the S-curve and the burn-down. They cross the five process-group rows instead. Pending stays amber and achieved stays emerald. |
+| 2.1.37 | 10 Oct 2026 | W4C-4. One Export report control on project Analytics and `/portfolio` builds a 16:9 PDF or PowerPoint in the browser. Same slides, light print theme, numbered milestone key, footer with who exported and when. FR-EXP-01. UAT-432 added; UAT-R stays the close-out gate. |
+| 2.1.38 | 10 Oct 2026 | The executive report includes the written note when the project, the PM portfolio, or All projects has one. It is the slide after the summary. An empty note is left out. FR-EXP-01. |
+| 2.1.39 | 10 Oct 2026 | Portfolio controls sit on one bar under the title, with Export report at the right. Native dropdowns use the same chevron inset as that button. |
+| 2.1.40 | 11 Oct 2026 | Report notes: empty notes are omitted; a short note sits under the takeaways on the first slide; a long note is one following slide. Milestone dates sit with the title. On Analytics and Portfolio, Key takeaways and the note are the same width. |
+| 2.1.41 | 11 Oct 2026 | List and Gantt Task names show the complete title the moment the pointer is over them. |
+| 2.1.42 | 11 Oct 2026 | List rows open the same task drawer as Kanban, from a Details button beside the task name. |
+| 2.1.43 | 11 Oct 2026 | A Gantt timeline-bar hover names the task, then that bar’s start and end dates. |
+| 2.1.44 | 11 Oct 2026 | A task may have several PICs. Cards and the Gantt show stacked initials and a +N count. Workload by PIC counts the task for each person. |
+| 2.1.45 | 11 Oct 2026 | Task drawer field edits stay local until the panel closes. Date pairs are checked together then. |
+| 2.1.46 | 11 Oct 2026 | On close, only the drawer values that break a rule return to the previous saved values. Every other change is saved. |
+*End of System Requirements Specification (`doc/dev_req.md`). Waves 4A and 4B are as-built and UAT-accepted; Wave 4C-1 through 4C-4 are as-built; Wave 4C-U close-out remains binding.*

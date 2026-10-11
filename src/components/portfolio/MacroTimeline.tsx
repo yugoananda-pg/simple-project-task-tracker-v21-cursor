@@ -19,7 +19,10 @@ import {
   type MilestoneState,
 } from "@/src/lib/analytics/portfolio";
 import { milestoneVarianceLabel } from "@/src/lib/analytics/schedule-series";
-import { formatPercent1 } from "@/src/lib/analytics/weighted-progress";
+import {
+  formatPercent1,
+  type StatusFlagId,
+} from "@/src/lib/analytics/weighted-progress";
 import { calendarDaysLate } from "@/src/lib/analytics/schedule-composition";
 import { dayNumber } from "@/src/lib/analytics/portfolio";
 import { formatAuDate } from "@/src/lib/gantt/date-utils";
@@ -134,15 +137,46 @@ function milestoneTip(
   return <TipBody title={milestone.name} lines={lines} />;
 }
 
+/** What a bar row needs. Projects and process groups both fit this shape. */
+export type TimelineRowBase = Pick<
+  MacroRow,
+  "name" | "initial" | "updated" | "actual" | "milestones" | "tone"
+>;
+
+/** A milestone drawn once, as a dashed line across every row. */
+export type TimelineMarker = {
+  id: string;
+  name: string;
+  /** yyyy-mm-dd. Achieved milestones use the achieved day; pending use the target. */
+  date: string;
+  achieved: boolean;
+};
+
+/** Adds the figures shown at the right of a row. */
+export type TimelineRow = TimelineRowBase & {
+  taskCount: number;
+  pTarget: number;
+  pActual: number;
+  statusFlag: StatusFlagId | null;
+};
+
 type RowProps = {
-  row: MacroRow;
+  row: TimelineRowBase;
   axis: MacroAxis;
   today: string;
+  rowHeight: number;
   onTip: (event: { currentTarget: HTMLElement }, content: ReactNode) => void;
   onTipEnd: () => void;
 };
 
-function TrackRowBase({ row, axis, today, onTip, onTipEnd }: RowProps) {
+function TrackRowBase({
+  row,
+  axis,
+  today,
+  rowHeight,
+  onTip,
+  onTipEnd,
+}: RowProps) {
   const actualColour =
     row.tone === "on" ? MACRO_COLOURS.actualOn : MACRO_COLOURS.actualLate;
 
@@ -204,12 +238,12 @@ function TrackRowBase({ row, axis, today, onTip, onTipEnd }: RowProps) {
   return (
     <div
       className="relative border-b border-zinc-100 dark:border-zinc-800/70"
-      style={{ height: ROW_HEIGHT }}
+      style={{ height: rowHeight }}
     >
       <span className="sr-only">{summary}</span>
       <div
         className="absolute inset-x-0"
-        style={{ top: (ROW_HEIGHT - 32) / 2, height: 32 }}
+        style={{ top: (rowHeight - 32) / 2, height: 32 }}
       >
         {bar("initial", "Initial planned span", row.initial, MACRO_COLOURS.initial)}
         {bar("updated", "Updated planned span", row.updated, MACRO_COLOURS.updated)}
@@ -335,7 +369,11 @@ function LegendSwatch({
   );
 }
 
-export function MacroLegend() {
+export function MacroLegend({
+  withMilestones = true,
+}: {
+  withMilestones?: boolean;
+}) {
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5" aria-label="Legend">
       <li>
@@ -353,13 +391,13 @@ export function MacroLegend() {
       <li>
         <LegendSwatch
           style={{ backgroundColor: MACRO_COLOURS.actualOn }}
-          label="Actual, punctuality 95% or more"
+          label="Actual, score 0.95 or more"
         />
       </li>
       <li>
         <LegendSwatch
           style={{ backgroundColor: MACRO_COLOURS.actualLate }}
-          label="Actual, below 95%"
+          label="Actual, score below 0.95"
         />
       </li>
       <li>
@@ -368,6 +406,8 @@ export function MacroLegend() {
           label="Still running to today"
         />
       </li>
+      {withMilestones ? (
+        <>
       <li>
         <LegendSwatch
           diamond
@@ -399,20 +439,33 @@ export function MacroLegend() {
           label="Upcoming"
         />
       </li>
+        </>
+      ) : null}
     </ul>
   );
 }
 
-export default function MacroTimeline({
+export function TimelineGrid<T extends TimelineRow>({
   rows,
   axis,
   today,
-  showOwner,
+  rowKey,
+  nameHeading,
+  renderName,
+  rowHeight = ROW_HEIGHT,
+  nameWidthClass = "w-40 sm:w-64",
+  markers = [],
 }: {
-  rows: MacroRow[];
+  rows: T[];
   axis: MacroAxis;
   today: string;
-  showOwner: boolean;
+  rowKey: (row: T) => string;
+  nameHeading: string;
+  renderName: (row: T) => ReactNode;
+  rowHeight?: number;
+  nameWidthClass?: string;
+  /** Dashed milestone lines across the rows. The portfolio timeline leaves this empty. */
+  markers?: readonly TimelineMarker[];
 }) {
   const [tip, setTip] = useState<Tip | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -429,6 +482,11 @@ export default function MacroTimeline({
   // Follow the bar when the page or the track scrolls. Focusing a diamond
   // scrolls it into view, so hiding on scroll would also hide the tip for
   // keyboard users.
+  const placedMarkers = markers.map((marker) => ({
+    marker,
+    pct: axis.pct(marker.date),
+  }));
+
   const anchor = tip?.anchor ?? null;
   useEffect(() => {
     if (!anchor) return;
@@ -455,39 +513,19 @@ export default function MacroTimeline({
     <div ref={scrollRef} className="overflow-x-auto">
       <div className="flex min-w-[64rem]">
         {/* Names */}
-        <div className="sticky left-0 z-20 w-64 shrink-0 border-r border-zinc-100 bg-[var(--sptt-card-bg)] dark:border-zinc-800/70">
+        <div
+          className={`sticky left-0 z-20 shrink-0 border-r border-zinc-100 bg-[var(--sptt-card-bg)] dark:border-zinc-800/70 ${nameWidthClass}`}
+        >
           <div className="flex h-9 items-end border-b border-zinc-200 px-5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-            Project
+            {nameHeading}
           </div>
           {rows.map((row) => (
             <div
-              key={row.projectId}
+              key={rowKey(row)}
               className="flex flex-col justify-center border-b border-zinc-100 px-5 dark:border-zinc-800/70"
-              style={{ height: ROW_HEIGHT }}
+              style={{ height: rowHeight }}
             >
-              <Link
-                href={`/projects/${row.projectId}`}
-                className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-50"
-                title={row.name}
-              >
-                {row.name}
-              </Link>
-              <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                {row.lifecycleStatus === "COMPLETED" ? (
-                  <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
-                    Completed
-                  </span>
-                ) : null}
-                <span className="truncate">
-                  {[
-                    row.customProjectId.trim() || null,
-                    showOwner ? row.ownerName : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ") ||
-                    `${row.taskCount} ${row.taskCount === 1 ? "task" : "tasks"}`}
-                </span>
-              </span>
+              {renderName(row)}
             </div>
           ))}
         </div>
@@ -522,25 +560,89 @@ export default function MacroTimeline({
                   style={{ left: `${tick.pct}%` }}
                 />
               ))}
-              {axis.todayPct != null ? (
-                <span
-                  className="absolute inset-y-0 z-[5] w-0.5 bg-rose-500/80"
-                  style={{ left: `${axis.todayPct}%` }}
-                />
-              ) : null}
             </div>
             <div className="relative px-0">
               {rows.map((row) => (
                 <TrackRow
-                  key={row.projectId}
+                  key={rowKey(row)}
                   row={row}
                   axis={axis}
                   today={today}
+                  rowHeight={rowHeight}
                   onTip={onTip}
                   onTipEnd={onTipEnd}
                 />
               ))}
             </div>
+            {placedMarkers.length > 0 ? (
+              <div className="pointer-events-none absolute inset-0 z-[4]">
+                {placedMarkers.map(({ marker, pct }) => {
+                  const colour = marker.achieved
+                    ? "var(--sptt-milestone-achieved)"
+                    : "var(--sptt-milestone-pending)";
+                  return (
+                    <button
+                      key={marker.id}
+                      type="button"
+                      className="pointer-events-auto absolute inset-y-0 w-3 -translate-x-1/2 cursor-help bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                      style={{ left: `${pct}%` }}
+                      aria-label={`${marker.name}. ${marker.achieved ? "Achieved" : "Pending"} ${formatAuDate(marker.date)}.`}
+                      onMouseEnter={(event) =>
+                        onTip(
+                          event,
+                          <TipBody
+                            title={marker.name}
+                            lines={[
+                              [
+                                marker.achieved ? "Achieved" : "Target",
+                                formatAuDate(marker.date),
+                              ],
+                              [
+                                "Status",
+                                marker.achieved ? "Achieved" : "Pending",
+                              ],
+                            ]}
+                          />,
+                        )
+                      }
+                      onFocus={(event) =>
+                        onTip(
+                          event,
+                          <TipBody
+                            title={marker.name}
+                            lines={[
+                              [
+                                marker.achieved ? "Achieved" : "Target",
+                                formatAuDate(marker.date),
+                              ],
+                              [
+                                "Status",
+                                marker.achieved ? "Achieved" : "Pending",
+                              ],
+                            ]}
+                          />,
+                        )
+                      }
+                      onMouseLeave={onTipEnd}
+                      onBlur={onTipEnd}
+                    >
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l-[1.5px] border-dashed"
+                        style={{ borderColor: colour }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            {axis.todayPct != null ? (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 z-[5] w-0.5 bg-rose-500/80"
+                style={{ left: `${axis.todayPct}%` }}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -553,22 +655,30 @@ export default function MacroTimeline({
           </div>
           {rows.map((row) => (
             <div
-              key={row.projectId}
+              key={rowKey(row)}
               className="flex items-center border-b border-zinc-100 text-sm tabular-nums dark:border-zinc-800/70"
-              style={{ height: ROW_HEIGHT }}
+              style={{ height: rowHeight }}
             >
-              <span className="w-20 px-3 text-right text-zinc-600 dark:text-zinc-300">
-                {formatPercent1(row.pTarget)}
-              </span>
-              <span className="w-20 px-3 text-right font-medium text-zinc-900 dark:text-zinc-50">
-                {formatPercent1(row.pActual)}
-              </span>
-              <span className="w-52 px-3">
-                <StatusFlagBadge
-                  flag={row.statusFlag}
-                  className="whitespace-nowrap"
-                />
-              </span>
+              {row.statusFlag == null ? (
+                <span className="px-3 text-zinc-400 dark:text-zinc-500">
+                  No tasks
+                </span>
+              ) : (
+                <>
+                  <span className="w-20 px-3 text-right text-zinc-600 dark:text-zinc-300">
+                    {formatPercent1(row.pTarget)}
+                  </span>
+                  <span className="w-20 px-3 text-right font-medium text-zinc-900 dark:text-zinc-50">
+                    {formatPercent1(row.pActual)}
+                  </span>
+                  <span className="w-52 px-3">
+                    <StatusFlagBadge
+                      flag={row.statusFlag}
+                      className="whitespace-nowrap"
+                    />
+                  </span>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -588,5 +698,55 @@ export default function MacroTimeline({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Portfolio macro timeline: one row per project. */
+export default function MacroTimeline({
+  rows,
+  axis,
+  today,
+  showOwner,
+}: {
+  rows: MacroRow[];
+  axis: MacroAxis;
+  today: string;
+  showOwner: boolean;
+}) {
+  return (
+    <TimelineGrid
+      rows={rows}
+      axis={axis}
+      today={today}
+      rowKey={(row) => row.projectId}
+      nameHeading="Project"
+      renderName={(row) => (
+        <>
+          <Link
+            href={`/projects/${row.projectId}`}
+            className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-50"
+            title={row.name}
+          >
+            {row.name}
+          </Link>
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            {row.lifecycleStatus === "COMPLETED" ? (
+              <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                Completed
+              </span>
+            ) : null}
+            <span className="truncate">
+              {[
+                row.customProjectId.trim() || null,
+                showOwner ? row.ownerName : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") ||
+                `${row.taskCount} ${row.taskCount === 1 ? "task" : "tasks"}`}
+            </span>
+          </span>
+        </>
+      )}
+    />
   );
 }

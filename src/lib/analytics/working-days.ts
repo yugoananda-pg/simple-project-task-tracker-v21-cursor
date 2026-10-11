@@ -140,6 +140,23 @@ export function plannedWorkingDuration(
 }
 
 /**
+ * Working days strictly after `from` through `to`.
+ * The anchor day is not counted, so this is how many working days `to` sits
+ * after `from`. The same day, or an inverted range, is 0.
+ */
+export function workingDaysAfter(
+  from: LocalDateString | null | undefined,
+  to: LocalDateString | null | undefined,
+  holidays: HolidaySet = new Set(),
+): number {
+  if (!from || !to) return 0;
+  if (compareLocalDates(to, from) <= 0) return 0;
+  const span = countWorkingDaysInclusive(from, to, holidays);
+  if (isWorkDay(from, holidays)) return Math.max(0, span - 1);
+  return span;
+}
+
+/**
  * Elapsed working days from start through asOf (inclusive), or 0 if asOf < start.
  */
 export function elapsedWorkingDays(

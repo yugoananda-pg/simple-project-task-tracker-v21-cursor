@@ -9,17 +9,20 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
 import type { ProjectMemberUser } from "@/src/lib/actions/projects";
 import {
-  getTaskPicDisplayName,
-  isCustomPic,
-  type TaskPicInfo,
+  listTaskPics,
+  normalisePicName,
+  picKey,
+  picLabel,
+  type TaskPic,
 } from "@/src/lib/assignee-display";
 import type { Task } from "@/src/lib/types";
 import PicLabel from "@/src/components/tasks/PicLabel";
 
-type PicRecord = Pick<Task, "id" | "assigneeId" | "assigneeName">;
+type PicRecord = Pick<Task, "id" | "assigneeId" | "assigneeName" | "assignees">;
 
 type AssigneePicFieldProps = {
   task: PicRecord;
@@ -29,18 +32,17 @@ type AssigneePicFieldProps = {
   disabled?: boolean;
   label?: string;
   hideHint?: boolean;
+  /** Issues still have one PIC. Tasks use several chips. */
+  single?: boolean;
   labelClassName: string;
   fieldClassName: string;
-  onCommit: (patch: Pick<Task, "assigneeId" | "assigneeName">) => void;
+  onCommit: (
+    patch: Pick<Task, "assigneeId" | "assigneeName" | "assignees">,
+  ) => void;
 };
 
-function displayNameForTask(task: TaskPicInfo): string {
-  const name = getTaskPicDisplayName(task);
-  return name === "Unassigned" ? "" : name;
-}
-
-function menuPositionFor(input: HTMLInputElement): CSSProperties {
-  const rect = input.getBoundingClientRect();
+function menuPositionFor(anchor: HTMLElement): CSSProperties {
+  const rect = anchor.getBoundingClientRect();
   const gap = 4;
   const preferredMax = 288;
   const spaceBelow = window.innerHeight - rect.bottom - 12;
@@ -68,42 +70,42 @@ export default function AssigneePicField({
   members,
   suggestions = [],
   disabled = false,
-  label = "Assignee (PIC)",
+  label = "Assignees (PIC)",
   hideHint = false,
+  single = false,
   labelClassName,
   fieldClassName,
   onCommit,
 }: AssigneePicFieldProps) {
-  const [query, setQuery] = useState(() => displayNameForTask(task));
+  const selected = listTaskPics(task);
+  const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const blurTimer = useRef<number | null>(null);
-  const skipBlurCommit = useRef(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Keep the closed-field label in sync when the task assignee changes externally.
-  useEffect(() => {
-    if (!open) {
-      setQuery(displayNameForTask(task));
-    }
-  }, [task.assigneeId, task.assigneeName, open, task]);
+  const selectedKeys = useMemo(
+    () => new Set(selected.map(picKey)),
+    [selected],
+  );
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return members;
-    return members.filter(
-      (member) =>
+    return members.filter((member) => {
+      if (selectedKeys.has(`user:${member.id}`)) return false;
+      if (!needle) return true;
+      return (
         member.name.toLowerCase().includes(needle) ||
-        member.email.toLowerCase().includes(needle),
-    );
-  }, [members, query]);
+        member.email.toLowerCase().includes(needle)
+      );
+    });
+  }, [members, query, selectedKeys]);
 
   const suggestionMatches = useMemo(() => {
     const memberNames = new Set(
@@ -111,34 +113,34 @@ export default function AssigneePicField({
     );
     const needle = query.trim().toLowerCase();
     return suggestions
-      .map((name) => name.trim().replace(/\s+/g, " "))
+      .map((name) => normalisePicName(name))
       .filter((name) => {
         const key = name.toLowerCase();
         if (!key || memberNames.has(key)) return false;
+        if (selectedKeys.has(`custom:${key}`)) return false;
         if (!needle) return true;
         return key.includes(needle);
       })
       .slice(0, 20);
-  }, [members, query, suggestions]);
+  }, [members, query, selectedKeys, suggestions]);
 
   useLayoutEffect(() => {
-    if (!open || !inputRef.current) return;
+    if (!open || !rootRef.current) return;
 
     function placeMenu() {
-      const input = inputRef.current;
-      if (!input) return;
-      setMenuStyle(menuPositionFor(input));
+      const anchor = rootRef.current;
+      if (!anchor) return;
+      setMenuStyle(menuPositionFor(anchor));
     }
 
     placeMenu();
     window.addEventListener("resize", placeMenu);
-    // Capture scroll from the drawer body so the menu tracks the field.
     window.addEventListener("scroll", placeMenu, true);
     return () => {
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
     };
-  }, [open, filtered.length, suggestionMatches.length, query]);
+  }, [open, filtered.length, suggestionMatches.length, query, selected.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -151,54 +153,46 @@ export default function AssigneePicField({
         return;
       }
       setOpen(false);
-      setQuery(displayNameForTask(task));
+      setQuery("");
     }
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [open, task]);
+  }, [open]);
 
-  function clearBlurTimer() {
-    if (blurTimer.current != null) {
-      window.clearTimeout(blurTimer.current);
-      blurTimer.current = null;
-    }
+  function commit(next: TaskPic[]) {
+    const first = next[0];
+    onCommit({
+      assignees: next,
+      assigneeId: first?.userId ?? null,
+      assigneeName: first?.name ?? "",
+    });
   }
 
-  function openPicker() {
-    clearBlurTimer();
-    skipBlurCommit.current = false;
-    // Empty search so the full roster is visible immediately.
+  function addPic(pic: TaskPic) {
+    const key = picKey(pic);
+    if (selectedKeys.has(key)) return;
+    commit(single ? [pic] : [...selected, pic]);
     setQuery("");
-    if (inputRef.current) {
-      setMenuStyle(menuPositionFor(inputRef.current));
-    }
-    setOpen(true);
+    setOpen(!single);
+    inputRef.current?.focus();
   }
 
-  function commitRegistered(member: ProjectMemberUser) {
-    skipBlurCommit.current = true;
-    clearBlurTimer();
-    setQuery(member.name);
-    setOpen(false);
-    onCommit({ assigneeId: member.id, assigneeName: member.name });
+  function removePic(pic: TaskPic) {
+    const key = picKey(pic);
+    commit(selected.filter((item) => picKey(item) !== key));
   }
 
-  function commitCustomOrClear(raw: string) {
-    const trimmed = raw.trim();
-    if (!trimmed) {
-      setQuery("");
-      onCommit({ assigneeId: null, assigneeName: "" });
-      return;
-    }
+  function addTyped() {
+    const trimmed = normalisePicName(query);
+    if (!trimmed) return;
     const exact = members.find(
       (member) => member.name.toLowerCase() === trimmed.toLowerCase(),
     );
     if (exact) {
-      commitRegistered(exact);
+      addPic({ userId: exact.id, name: exact.name });
       return;
     }
-    setQuery(trimmed);
-    onCommit({ assigneeId: null, assigneeName: trimmed });
+    addPic({ userId: null, name: trimmed });
   }
 
   if (disabled) {
@@ -206,7 +200,7 @@ export default function AssigneePicField({
       <div className="w-full min-w-0 max-w-full">
         <p className={labelClassName}>{label}</p>
         <div className="mt-1 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-100">
-          <PicLabel task={task} />
+          <PicLabel task={task} visibleNames={4} />
         </div>
       </div>
     );
@@ -226,92 +220,62 @@ export default function AssigneePicField({
             ? "No assignable people on this project"
             : query.trim()
               ? `${filtered.length} match${filtered.length === 1 ? "" : "es"}`
-              : `${members.length} team member${members.length === 1 ? "" : "s"}`}
+              : "Choose people to add"}
         </li>
-        <li>
-          <button
-            type="button"
-            className="flex w-full px-3 py-2 text-left text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            onMouseDown={(event) => {
-              event.preventDefault();
-              skipBlurCommit.current = true;
-            }}
-            onClick={() => {
-              clearBlurTimer();
-              setQuery("");
-              setOpen(false);
-              onCommit({ assigneeId: null, assigneeName: "" });
-            }}
-          >
-            Unassigned
-          </button>
-        </li>
-        {filtered.map((member) => {
-          const selected = task.assigneeId === member.id;
-          return (
-            <li key={member.id}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className={[
-                  "flex w-full flex-col px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900",
-                  selected ? "bg-slate-50 dark:bg-slate-900/40" : "",
-                ].join(" ")}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  skipBlurCommit.current = true;
-                }}
-                onClick={() => commitRegistered(member)}
-              >
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                  {member.name}
-                  {selected ? " · current" : ""}
-                </span>
-                <span className="text-[11px] text-zinc-500">{member.email}</span>
-              </button>
-            </li>
-          );
-        })}
+        {selected.length > 0 ? (
+          <li>
+            <button
+              type="button"
+              className="flex w-full px-3 py-2 text-left text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                commit([]);
+                setQuery("");
+              }}
+            >
+              Clear all
+            </button>
+          </li>
+        ) : null}
+        {filtered.map((member) => (
+          <li key={member.id}>
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              className="flex w-full flex-col px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => addPic({ userId: member.id, name: member.name })}
+            >
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {member.name}
+              </span>
+              <span className="text-[11px] text-zinc-500">{member.email}</span>
+            </button>
+          </li>
+        ))}
         {suggestionMatches.length > 0 ? (
           <li className="border-t border-zinc-100 px-3 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
             Previously used
           </li>
         ) : null}
-        {suggestionMatches.map((name) => {
-          const selected =
-            !task.assigneeId &&
-            task.assigneeName.trim().toLowerCase() === name.toLowerCase();
-          return (
-            <li key={name.toLowerCase()}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className={[
-                  "flex w-full px-3 py-2 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900",
-                  selected ? "bg-slate-50 dark:bg-slate-900/40" : "",
-                ].join(" ")}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  skipBlurCommit.current = true;
-                }}
-                onClick={() => {
-                  clearBlurTimer();
-                  commitCustomOrClear(name);
-                  setOpen(false);
-                }}
-              >
-                {name}
-                {selected ? " · current" : ""}
-              </button>
-            </li>
-          );
-        })}
+        {suggestionMatches.map((name) => (
+          <li key={name.toLowerCase()}>
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              className="flex w-full px-3 py-2 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => addPic({ userId: null, name })}
+            >
+              {name}
+            </button>
+          </li>
+        ))}
         {query.trim() &&
         !members.some(
-          (member) =>
-            member.name.toLowerCase() === query.trim().toLowerCase(),
+          (member) => member.name.toLowerCase() === query.trim().toLowerCase(),
         ) &&
         !suggestionMatches.some(
           (name) => name.toLowerCase() === query.trim().toLowerCase(),
@@ -320,23 +284,16 @@ export default function AssigneePicField({
             <button
               type="button"
               className="flex w-full px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                skipBlurCommit.current = true;
-              }}
-              onClick={() => {
-                clearBlurTimer();
-                commitCustomOrClear(query);
-                setOpen(false);
-              }}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={addTyped}
             >
-              Use custom PIC: “{query.trim()}”
+              Add custom PIC: “{normalisePicName(query)}”
             </button>
           </li>
         ) : null}
-        {members.length > 0 && filtered.length === 0 ? (
+        {members.length > 0 && filtered.length === 0 && !query.trim() ? (
           <li className="px-3 py-2 text-sm text-zinc-500">
-            No match. Keep typing, or choose a custom PIC above.
+            Everyone on the roster is already assigned.
           </li>
         ) : null}
       </ul>
@@ -344,111 +301,91 @@ export default function AssigneePicField({
 
   return (
     <div ref={rootRef} className="relative w-full min-w-0 max-w-full">
-      <label htmlFor={`assignee-${task.id}`} className={labelClassName}>
-        {label}
-      </label>
-      <input
-        ref={inputRef}
-        id={`assignee-${task.id}`}
-        type="text"
-        role="combobox"
-        aria-expanded={open}
-        aria-controls={`assignee-list-${task.id}`}
-        aria-autocomplete="list"
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          if (!open && inputRef.current) {
-            setMenuStyle(menuPositionFor(inputRef.current));
-          }
-          setOpen(true);
-        }}
-        onFocus={openPicker}
-        onClick={openPicker}
-        onBlur={() => {
-          if (skipBlurCommit.current) {
-            skipBlurCommit.current = false;
-            return;
-          }
-          blurTimer.current = window.setTimeout(() => {
-            setOpen(false);
-            if (!query.trim()) {
-              // Leaving an empty search restores the previous assignee label
-              // (does not clear assignment unless the user chose Unassigned).
-              setQuery(displayNameForTask(task));
-              return;
-            }
-            const exact = members.find(
-              (member) =>
-                member.name.toLowerCase() === query.trim().toLowerCase(),
-            );
-            if (exact) {
-              commitRegistered(exact);
-              return;
-            }
-            const exactSuggestion = suggestionMatches.find(
-              (name) => name.toLowerCase() === query.trim().toLowerCase(),
-            );
-            if (exactSuggestion) {
-              commitCustomOrClear(exactSuggestion);
-              return;
-            }
-            setQuery(displayNameForTask(task));
-          }, 150);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            clearBlurTimer();
-            if (filtered[0] && query.trim()) {
-              const needle = query.trim().toLowerCase();
-              const exact = filtered.find(
-                (member) => member.name.toLowerCase() === needle,
-              );
-              if (exact) {
-                commitRegistered(exact);
+      <p className={labelClassName}>{label}</p>
+      <div
+        className={`${fieldClassName} flex min-h-[2.5rem] flex-wrap items-center gap-1.5 py-1.5`}
+        onClick={() => inputRef.current?.focus()}
+      >
+        {selected.map((pic) => (
+          <span
+            key={picKey(pic)}
+            className="inline-flex max-w-full items-center gap-1 rounded-full bg-zinc-100 py-0.5 pl-2 pr-1 text-[11px] font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100"
+          >
+            <span className="min-w-0 truncate">{picLabel(pic)}</span>
+            <button
+              type="button"
+              aria-label={`Remove ${picLabel(pic)}`}
+              className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-50"
+              onClick={(event) => {
+                event.stopPropagation();
+                removePic(pic);
+              }}
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          id={`assignee-${task.id}`}
+          type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={`assignee-list-${task.id}`}
+          aria-autocomplete="list"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              if (filtered[0] && query.trim()) {
+                const needle = query.trim().toLowerCase();
+                const exact = filtered.find(
+                  (member) => member.name.toLowerCase() === needle,
+                );
+                addPic({
+                  userId: (exact ?? filtered[0]!).id,
+                  name: (exact ?? filtered[0]!).name,
+                });
                 return;
               }
-              const exactSuggestion = suggestionMatches.find(
-                (name) => name.toLowerCase() === needle,
-              );
-              if (exactSuggestion) {
-                commitCustomOrClear(exactSuggestion);
-                setOpen(false);
-                return;
-              }
-              if (filtered.length === 1) {
-                commitRegistered(filtered[0]!);
-                return;
-              }
+              addTyped();
             }
-            commitCustomOrClear(query);
-            setOpen(false);
+            if (event.key === "Backspace" && !query && selected.length > 0) {
+              removePic(selected[selected.length - 1]!);
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setOpen(false);
+              setQuery("");
+            }
+          }}
+          className="min-w-[8rem] flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400"
+          placeholder={
+            single
+              ? selected.length === 0
+                ? "Choose a PIC…"
+                : "Replace PIC…"
+              : selected.length === 0
+                ? "Add people…"
+                : "Add another…"
           }
-          if (event.key === "Escape") {
-            event.preventDefault();
-            clearBlurTimer();
-            setOpen(false);
-            setQuery(displayNameForTask(task));
-          }
-        }}
-        className={fieldClassName}
-        placeholder={
-          open
-            ? "Type to filter the team…"
-            : "Click to choose assignee…"
-        }
-        autoComplete="off"
-        maxLength={120}
-      />
+          autoComplete="off"
+          maxLength={120}
+        />
+      </div>
 
       {listbox ? createPortal(listbox, document.body) : null}
 
       {hideHint ? null : (
         <p className="mt-1 break-words text-[11px] text-zinc-500 dark:text-zinc-400">
-          {isCustomPic(task)
-            ? "Custom unregistered PIC — press Enter to save typed names."
-            : "Click the field to see the full team and previously used names. Type to filter, then press Enter to save a new name."}
+          {single
+            ? "Choose one person, or type a custom PIC and press Enter."
+            : "Add as many people as the task needs. Choose a name, or type a custom PIC and press Enter."}
         </p>
       )}
     </div>

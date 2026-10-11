@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
 import { X } from "lucide-react";
@@ -23,9 +24,10 @@ import {
 } from "@/src/lib/actions/comments";
 import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress";
 import {
-  actualDateRangeError,
   buildProgressStatusPatch,
   isFutureLocalDate,
+  restoreBrokenDateChanges,
+  restoredFieldsMessage,
   toLocalDateString,
 } from "@/src/lib/task-defaults";
 import type {
@@ -41,8 +43,15 @@ export type TaskDetailDrawerProps = {
   open: boolean;
   scheduleMetrics?: TaskScheduleMetrics;
   onClose: () => void;
-  /** Live field updates for Planner-style task details. */
-  onTaskChange?: (taskId: string, patch: Partial<Task>) => void;
+  /** Writes the finished drawer draft. Returns false when the save is rejected. */
+  onTaskChange?: (
+    taskId: string,
+    patch: Partial<Task>,
+  ) => void | Promise<boolean>;
+  /** Parent calls this to flush before closing or switching tasks. */
+  commitRef?: MutableRefObject<(() => Promise<boolean>) | null>;
+  /** Shown after close when some fields were restored and the rest were saved. */
+  onRestoreNotice?: (message: string) => void;
   onToggleSubtask?: (
     taskId: string,
     subtaskId: string,
@@ -215,6 +224,7 @@ function AuDateField({
   disallowFuture = false,
   validate,
   resetToken = 0,
+  onRevealUpdate,
 }: {
   id: string;
   label: string;
@@ -224,6 +234,7 @@ function AuDateField({
   disallowFuture?: boolean;
   validate?: (next: string | null) => string | null;
   resetToken?: number;
+  onRevealUpdate?: (work: () => void) => void;
 }) {
   const externalValue = toDateInputValue(value);
   const [caption, setCaption] = useState(externalValue);
@@ -259,9 +270,43 @@ function AuDateField({
   }
 
   function revertInvalid(message: string) {
-    setError(message);
-    setCaption(externalValue);
-    setEpoch((n) => n + 1);
+    const apply = () => {
+      setError(message);
+      setCaption(externalValue);
+      setEpoch((n) => n + 1);
+    };
+    if (onRevealUpdate) onRevealUpdate(apply);
+    else apply();
+  }
+
+  function applyRaw(raw: string, allowIncompleteRevert: boolean) {
+    if (raw === "") {
+      const message = rejection("");
+      if (message) {
+        revertInvalid(message);
+        return;
+      }
+      setCaption("");
+      setError(null);
+      if (externalValue !== "") onCommit(null);
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      if (!allowIncompleteRevert) return;
+      setCaption(externalValue);
+      setError(null);
+      setEpoch((n) => n + 1);
+      return;
+    }
+    const message = rejection(raw);
+    if (message) {
+      revertInvalid(message);
+      return;
+    }
+    setError(null);
+    setCaption(raw);
+    // Skip no-op commits so a remount/blur cannot re-queue the same date.
+    if (raw !== externalValue) onCommit(raw);
   }
 
   return (
@@ -275,57 +320,8 @@ function AuDateField({
         defaultValue={externalValue}
         max={disallowFuture ? today : undefined}
         disabled={disabled}
-        onBlur={(event) => {
-          const raw = event.target.value;
-          if (raw === "") {
-            const message = rejection("");
-            if (message) {
-              revertInvalid(message);
-              return;
-            }
-            setCaption("");
-            setError(null);
-            if (externalValue !== "") onCommit(null);
-            return;
-          }
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-            setCaption(externalValue);
-            setError(null);
-            setEpoch((n) => n + 1);
-            return;
-          }
-          const message = rejection(raw);
-          if (message) {
-            revertInvalid(message);
-            return;
-          }
-          setError(null);
-          setCaption(raw);
-          // Skip no-op commits so a remount/blur cannot re-queue the same date.
-          if (raw !== externalValue) onCommit(raw);
-        }}
-        onChange={(event) => {
-          // Native date pickers emit a complete YYYY-MM-DD on change — commit
-          // immediately so picks are not lost if the field never receives blur.
-          // Incomplete keyboard segments stay local (often "") and must not commit.
-          const raw = event.target.value;
-          if (raw === "") {
-            setCaption("");
-            setError(null);
-            return;
-          }
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-            return;
-          }
-          const message = rejection(raw);
-          if (message) {
-            revertInvalid(message);
-            return;
-          }
-          setCaption(raw);
-          setError(null);
-          if (raw !== externalValue) onCommit(raw);
-        }}
+        onChange={(event) => applyRaw(event.target.value, false)}
+        onBlur={(event) => applyRaw(event.target.value, true)}
         className={`${fieldClassName} [color-scheme:light] dark:[color-scheme:dark]`}
       />
       <p className="mt-1 break-words text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
@@ -346,6 +342,8 @@ export default function TaskDetailDrawer({
   scheduleMetrics,
   onClose,
   onTaskChange,
+  commitRef,
+  onRestoreNotice,
   onToggleSubtask,
   onAddSubtask,
   readOnly = false,
@@ -371,8 +369,18 @@ export default function TaskDetailDrawer({
   const [progressDraft, setProgressDraft] = useState("0");
   const [syncedProgress, setSyncedProgress] = useState(0);
   const [isEditingProgress, setIsEditingProgress] = useState(false);
+  const [fieldDraft, setFieldDraft] = useState<Partial<Task>>({});
+  const [localDateReset, setLocalDateReset] = useState(0);
+  const [pendingFinish, setPendingFinish] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const fieldDraftRef = useRef<Partial<Task>>({});
+  fieldDraftRef.current = fieldDraft;
 
-  const activeTask = task;
+  const sourceTask = task;
+  const activeTask = sourceTask
+    ? { ...sourceTask, ...fieldDraft }
+    : sourceTask;
   const isVisible = open && activeTask !== null;
   const activeCommentsTaskId = isVisible && activeTask ? activeTask.id : null;
   const commentsLoading =
@@ -385,6 +393,11 @@ export default function TaskDetailDrawer({
     setProgressDraft(String(activeTask.progress));
     setSyncedProgress(activeTask.progress);
     setIsEditingProgress(false);
+    setFieldDraft({});
+    fieldDraftRef.current = {};
+    setPendingFinish(null);
+    setDraftError(null);
+    setLocalDateReset(0);
     setChecklistDraft("");
     setCommentDraft("");
     setComments([]);
@@ -399,6 +412,11 @@ export default function TaskDetailDrawer({
     setProgressDraft("0");
     setSyncedProgress(0);
     setIsEditingProgress(false);
+    setFieldDraft({});
+    fieldDraftRef.current = {};
+    setPendingFinish(null);
+    setDraftError(null);
+    setLocalDateReset(0);
     setChecklistDraft("");
     setCommentDraft("");
     setComments([]);
@@ -442,6 +460,7 @@ export default function TaskDetailDrawer({
   }, [activeCommentsTaskId]);
 
   const onCloseRef = useRef(onClose);
+  const requestCloseRef = useRef<() => Promise<boolean>>(async () => true);
   useEffect(() => {
     onCloseRef.current = onClose;
   });
@@ -452,7 +471,7 @@ export default function TaskDetailDrawer({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      onCloseRef.current();
+      void requestCloseRef.current();
     }
 
     const previousOverflow = document.body.style.overflow;
@@ -479,15 +498,141 @@ export default function TaskDetailDrawer({
     totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
   const canEdit = !readOnly && Boolean(onTaskChange);
   const canPostComment = !readOnly;
+  const hasUnsavedChanges =
+    Object.keys(fieldDraft).length > 0 ||
+    (sourceTask != null && titleDraft.trim() !== sourceTask.title) ||
+    (sourceTask != null && descriptionDraft !== sourceTask.description);
 
   function patchTask(patch: Partial<Task>) {
-    if (!activeTask || !canEdit || !onTaskChange) return;
+    if (!sourceTask || !canEdit) return;
     const synced =
       patch.status !== undefined || patch.progress !== undefined
-        ? buildProgressStatusPatch(activeTask, patch)
+        ? buildProgressStatusPatch({ ...sourceTask, ...fieldDraftRef.current }, patch)
         : patch;
-    onTaskChange(activeTask.id, synced);
+    setDraftError(null);
+    setFieldDraft((current) => {
+      const next = { ...current, ...synced };
+      fieldDraftRef.current = next;
+      return next;
+    });
   }
+
+  function collectPendingPatch(): Partial<Task> {
+    if (!sourceTask) return {};
+    const next: Partial<Task> = { ...fieldDraftRef.current };
+    const title = titleDraft.trim();
+    if (title && title !== (next.title ?? sourceTask.title)) {
+      next.title = title;
+    }
+    if (descriptionDraft !== (next.description ?? sourceTask.description)) {
+      next.description = descriptionDraft;
+    }
+    if (isEditingProgress) {
+      const parsed = Number.parseInt(progressDraft, 10);
+      if (!Number.isNaN(parsed)) {
+        Object.assign(
+          next,
+          buildProgressStatusPatch({ ...sourceTask, ...next }, { progress: parsed }),
+        );
+      }
+    }
+    for (const field of DATE_FIELDS) {
+      const input = document.getElementById(`${field.key}-${sourceTask.id}`);
+      if (!(input instanceof HTMLInputElement)) continue;
+      const raw = input.value.trim();
+      const current =
+        next[field.key] !== undefined ? next[field.key] : sourceTask[field.key];
+      if (raw === "") {
+        if (current != null) next[field.key] = null;
+        continue;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || raw === current) continue;
+      next[field.key] = raw;
+    }
+    return next;
+  }
+
+  async function flushDraft(): Promise<boolean> {
+    if (!sourceTask || !canEdit || !onTaskChange) return true;
+    if (pendingFinish) return false;
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement) {
+      const dateIds = DATE_FIELDS.map((field) => `${field.key}-${sourceTask.id}`);
+      if (dateIds.includes(focused.id)) focused.blur();
+    }
+    const patch = collectPendingPatch();
+    const restored: Array<{ label: string; reason: string }> = [];
+    if (!titleDraft.trim() && sourceTask.title) {
+      setTitleDraft(sourceTask.title);
+      restored.push({
+        label: "Title",
+        reason: "A task needs a title.",
+      });
+    } else if ((patch.title?.length ?? 0) > 200) {
+      delete patch.title;
+      setTitleDraft(sourceTask.title);
+      restored.push({
+        label: "Title",
+        reason: "A title must be 200 characters or fewer.",
+      });
+    }
+
+    const dates = restoreBrokenDateChanges(sourceTask, patch);
+    for (const item of dates.restored) {
+      delete patch[item.key as keyof Task];
+    }
+    if (dates.restored.length > 0) {
+      setFieldDraft((current) => {
+        const next = { ...current };
+        for (const item of dates.restored) {
+          delete next[item.key as keyof Task];
+        }
+        fieldDraftRef.current = next;
+        return next;
+      });
+      setLocalDateReset((token) => token + 1);
+      restored.push(...dates.restored);
+    }
+
+    const notice = restoredFieldsMessage(
+      restored,
+      Object.keys(patch).length > 0,
+    );
+    if (Object.keys(patch).length === 0) {
+      if (notice) onRestoreNotice?.(notice);
+      setDraftError(null);
+      return true;
+    }
+
+    setIsCommitting(true);
+    try {
+      const result = await onTaskChange(sourceTask.id, patch);
+      if (result === false) {
+        if (notice) setDraftError(notice);
+        return false;
+      }
+      setFieldDraft({});
+      fieldDraftRef.current = {};
+      setDraftError(null);
+      if (notice) onRestoreNotice?.(notice);
+      return true;
+    } finally {
+      setIsCommitting(false);
+    }
+  }
+
+  async function requestClose(): Promise<boolean> {
+    const ok = await flushDraft();
+    if (!ok) return false;
+    onCloseRef.current();
+    return true;
+  }
+  requestCloseRef.current = requestClose;
+
+  useEffect(() => {
+    if (!commitRef) return;
+    commitRef.current = flushDraft;
+  });
 
   function commitProgressValue(raw: string | number) {
     if (!activeTask) return;
@@ -501,6 +646,18 @@ export default function TaskDetailDrawer({
     setProgressDraft(String(progress));
     setSyncedProgress(progress);
     patchTask({ progress });
+  }
+
+  function commitDateField(key: DateFieldKey, next: string | null) {
+    if (
+      key === "actualCompletionDate" &&
+      next &&
+      (activeTask?.status !== "done" || (activeTask?.progress ?? 0) < 100)
+    ) {
+      setPendingFinish(next);
+      return;
+    }
+    patchTask({ [key]: next });
   }
 
   function handleAddChecklistItem(event: FormEvent) {
@@ -552,7 +709,9 @@ export default function TaskDetailDrawer({
         type="button"
         aria-label="Close task details"
         tabIndex={isVisible ? 0 : -1}
-        onClick={onClose}
+        onClick={() => {
+          void requestClose();
+        }}
         className={[
           "absolute inset-0 bg-zinc-950/55 transition-opacity duration-300 ease-out dark:bg-black/70",
           isVisible ? "opacity-100" : "opacity-0",
@@ -588,6 +747,10 @@ export default function TaskDetailDrawer({
                     <span className="ml-2 rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                       Read-only
                     </span>
+                  ) : hasUnsavedChanges ? (
+                    <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                      Unsaved
+                    </span>
                   ) : null}
                 </p>
                 <h2
@@ -608,13 +771,24 @@ export default function TaskDetailDrawer({
               </div>
               <button
                 type="button"
-                onClick={onClose}
-                className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:focus-visible:outline-zinc-100"
+                onClick={() => {
+                  void requestClose();
+                }}
+                disabled={isCommitting}
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:focus-visible:outline-zinc-100"
                 aria-label="Close"
               >
                 <X className="size-4" aria-hidden />
               </button>
             </header>
+
+            {draftError ? (
+              <div className="border-b border-red-200 bg-red-50 px-4 py-2.5 dark:border-red-500/40 dark:bg-red-950/40 sm:px-5">
+                <p className="text-xs font-medium text-red-800 dark:text-red-200">
+                  {draftError}
+                </p>
+              </div>
+            ) : null}
 
             {readOnly ? (
               <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80 sm:px-5">
@@ -834,6 +1008,19 @@ export default function TaskDetailDrawer({
                         ? "Doing"
                         : "Done"}
                   </p>
+                  {canEdit ? (
+                    <p className="mt-2 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                      Field changes stay here until you close the panel. A value that
+                      breaks a rule returns to its previous value. Every other
+                      change is saved. Checklist items and comments still save
+                      as you add them.
+                    </p>
+                  ) : null}
+                  {draftError ? (
+                    <p className="mt-2 text-[11px] font-medium text-red-600 dark:text-red-400">
+                      {draftError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <AssigneePicField
@@ -853,7 +1040,9 @@ export default function TaskDetailDrawer({
                 <h3 className={sectionTitleClassName}>Dates</h3>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   Use the date picker, or type a calendar date. Shown below as
-                  DD/MM/YYYY (Australian English).
+                  DD/MM/YYYY (Australian English). Start and end dates are
+                  checked together when you close the panel. Each date that
+                  breaks a rule returns to its previous value.
                 </p>
                 <div className="mt-3 grid w-full min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
                   {DATE_FIELDS.map((field) => (
@@ -867,24 +1056,8 @@ export default function TaskDetailDrawer({
                         field.key === "actualStartDate" ||
                         field.key === "actualCompletionDate"
                       }
-                      resetToken={dateResetToken}
-                      validate={
-                        field.key === "actualStartDate" ||
-                        field.key === "actualCompletionDate"
-                          ? (next) =>
-                              actualDateRangeError(
-                                field.key === "actualStartDate"
-                                  ? next
-                                  : activeTask.actualStartDate,
-                                field.key === "actualCompletionDate"
-                                  ? next
-                                  : activeTask.actualCompletionDate,
-                              )
-                          : undefined
-                      }
-                      onCommit={(next) =>
-                        patchTask({ [field.key]: next })
-                      }
+                      resetToken={dateResetToken + localDateReset}
+                      onCommit={(next) => commitDateField(field.key, next)}
                     />
                   ))}
                 </div>
@@ -1103,6 +1276,31 @@ export default function TaskDetailDrawer({
           </div>
         ) : null}
       </aside>
+
+      <ConfirmDialog
+        open={pendingFinish != null}
+        title="Mark task as Done?"
+        message="Entering an actual finish date will set Status to Done and Actual progress to 100%. Project and task punctuality scores will recalculate. Continue?"
+        confirmLabel="Mark as Done"
+        cancelLabel="Cancel"
+        tone="primary"
+        onCancel={() => {
+          setPendingFinish(null);
+          setLocalDateReset((n) => n + 1);
+        }}
+        onConfirm={() => {
+          if (!pendingFinish) return;
+          const finish = pendingFinish;
+          setPendingFinish(null);
+          patchTask({
+            actualCompletionDate: finish,
+            status: "done",
+            progress: 100,
+          });
+          setProgressDraft("100");
+          setSyncedProgress(100);
+        }}
+      />
 
       <ConfirmDialog
         open={deleteDialogOpen && activeTask !== null}

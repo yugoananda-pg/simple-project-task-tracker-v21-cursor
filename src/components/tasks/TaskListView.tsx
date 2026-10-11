@@ -16,17 +16,20 @@ import {
   type DraggableProvidedDragHandleProps,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { GripVertical, Plus, Trash2, X } from "lucide-react";
+import { GripVertical, PanelRight, Plus, Trash2, X } from "lucide-react";
 
+import PunctualityScoreTip from "@/src/components/schedule/PunctualityScoreTip";
 import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
 import ConfirmDialog from "@/src/components/ui/ConfirmDialog";
 import DateField from "@/src/components/ui/DateField";
+import TaskNameTip from "@/src/components/ui/TaskNameTip";
 import {
   plannedWorkingDuration,
   toHolidaySet,
 } from "@/src/lib/analytics/working-days";
 import {
   formatPercent1,
+  formatScore2,
   type TaskScheduleMetrics,
 } from "@/src/lib/analytics/weighted-progress";
 import {
@@ -244,6 +247,9 @@ function ListDateInput({
 
   async function commit(raw: string) {
     const next = raw === "" ? null : raw;
+    // A stored date, even a bad one, is not a new edit. Checking it on
+    // focus loss stacks the same error for every field on the page.
+    if ((next ?? "") === external) return;
     if (next !== null && !/^\d{4}-\d{2}-\d{2}$/.test(next)) {
       if (inputRef.current) inputRef.current.value = external;
       return;
@@ -279,10 +285,6 @@ function ListDateInput({
       onBlur={(event) => {
         focusedRef.current = false;
         commit(event.target.value);
-      }}
-      onChange={(event) => {
-        const raw = event.target.value;
-        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) void commit(raw);
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
@@ -851,38 +853,53 @@ function RowCells({
         }}
         className={`${CELL} sticky z-[26] ${STICKY_CELL} ${showFreezeEdge ? STICKY_FREEZE_EDGE : ""} [--freeze-fill:#fff] dark:[--freeze-fill:#09090b]`}
       >
-        <div className="flex flex-col gap-0.5 py-0.5">
-          {canEdit ? (
-            <textarea
-              aria-label={`Title for ${refNo}`}
-              title={task.title}
-              rows={2}
-              className={`${INPUT} min-h-[2.5rem] resize-y whitespace-pre-wrap break-words font-medium leading-snug text-zinc-900 dark:text-zinc-50`}
-              defaultValue={task.title}
-              key={`title-${task.id}-${task.updatedAt}`}
-              onBlur={(event) => {
-                const next = event.target.value.trim().replace(/\s+/g, " ");
-                if (next && next !== task.title) {
-                  onTaskChange?.(task.id, { title: next });
-                } else {
-                  event.target.value = task.title;
-                }
-              }}
-            />
-          ) : (
-            <span
-              title={task.title}
-              className="block whitespace-normal break-words px-1 font-medium leading-snug text-zinc-900 dark:text-zinc-50"
-            >
-              {task.title}
-            </span>
-          )}
+        <div className="flex items-start gap-1 py-0.5">
+          <div className="min-w-0 flex-1">
+            {canEdit ? (
+              <TaskNameTip name={task.title} hoverOnly>
+                <textarea
+                  aria-label={`Title for ${refNo}`}
+                  rows={2}
+                  className={`${INPUT} min-h-[2.5rem] resize-y whitespace-pre-wrap break-words font-medium leading-snug text-zinc-900 dark:text-zinc-50`}
+                  defaultValue={task.title}
+                  key={`title-${task.id}-${task.updatedAt}`}
+                  onBlur={(event) => {
+                    const next = event.target.value.trim().replace(/\s+/g, " ");
+                    if (next && next !== task.title) {
+                      onTaskChange?.(task.id, { title: next });
+                    } else {
+                      event.target.value = task.title;
+                    }
+                  }}
+                />
+              </TaskNameTip>
+            ) : onOpenDetails ? (
+              <TaskNameTip name={task.title}>
+                <button
+                  type="button"
+                  onClick={() => onOpenDetails(task)}
+                  className="block w-full whitespace-normal break-words rounded px-1 text-left font-medium leading-snug text-zinc-900 hover:underline dark:text-zinc-50"
+                >
+                  {task.title}
+                </button>
+              </TaskNameTip>
+            ) : (
+              <TaskNameTip name={task.title}>
+                <span className="block whitespace-normal break-words px-1 font-medium leading-snug text-zinc-900 dark:text-zinc-50">
+                  {task.title}
+                </span>
+              </TaskNameTip>
+            )}
+          </div>
           {onOpenDetails ? (
             <button
               type="button"
+              aria-label={`Open details for ${task.title}`}
+              title="Open task details"
               onClick={() => onOpenDetails(task)}
-              className="self-start px-1 text-[10px] font-medium text-slate-600 underline-offset-2 hover:underline dark:text-slate-300"
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
             >
+              <PanelRight className="size-3" aria-hidden />
               Details
             </button>
           ) : null}
@@ -1003,7 +1020,7 @@ function RowCells({
           {metrics
             ? metrics.statusFlag === "SF-01"
               ? ""
-              : formatPercent1(metrics.ps)
+              : formatScore2(metrics.ps)
             : "—"}
         </span>
       </td>
@@ -1239,12 +1256,9 @@ export default function TaskListView({
           <span className="font-medium text-zinc-700 dark:text-zinc-200">
             Project punctuality score
           </span>
-          <span
-            className="tabular-nums text-base font-semibold text-zinc-900 dark:text-zinc-50"
-            title="Aggregate Project PS from task schedule health"
-          >
-            {formatPercent1(projectPs)}
-          </span>
+          <PunctualityScoreTip className="cursor-help rounded-sm tabular-nums text-base font-semibold text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-zinc-50">
+            {formatScore2(projectPs)}
+          </PunctualityScoreTip>
         </div>
       ) : null}
       {projectEmpty && canCreate ? (
@@ -1329,7 +1343,11 @@ export default function TaskListView({
               <th className={`${WD_CELL} min-w-[4rem] ${STICKY_HEAD}`}>
                 Actual WD
               </th>
-              <th className={`${CELL} min-w-[3.5rem] ${STICKY_HEAD}`}>PS</th>
+              <th className={`${CELL} min-w-[3.5rem] ${STICKY_HEAD}`}>
+                <PunctualityScoreTip className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                  PS
+                </PunctualityScoreTip>
+              </th>
               <th className={`${CELL} min-w-[8rem] ${STICKY_HEAD}`}>
                 Status flag
               </th>

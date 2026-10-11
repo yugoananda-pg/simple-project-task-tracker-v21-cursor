@@ -12,7 +12,7 @@ import { auditCreate, auditUpdate } from "@/src/lib/audit";
 import { NOTE_MAX_CHARS, sanitizeNoteHtml } from "@/src/lib/analytics/note-html";
 import type { IssueIntelActivity } from "@/src/lib/analytics/issue-intelligence";
 import type { ProgressEventPoint } from "@/src/lib/analytics/schedule-series";
-import { prisma } from "@/src/lib/prisma";
+import { isDatabaseUnreachable, prisma, retryOnceIfUnreachable } from "@/src/lib/prisma";
 import { hasDashboardScope } from "@/src/lib/dashboard-access";
 import { requireAdminProject, requireReadableProject } from "@/src/lib/rbac";
 
@@ -34,40 +34,50 @@ export async function loadProjectAnalytics(
     if (error instanceof ActionError) return null;
     throw error;
   }
-  const [events, activities, note] = await Promise.all([
-    prisma.taskProgressEvent.findMany({
-      where: { projectId },
-      orderBy: { occurredOn: "asc" },
-      select: {
-        taskId: true,
-        progress: true,
-        occurredOn: true,
-        source: true,
-      },
-    }),
-    prisma.issueActivity.findMany({
-      where: { projectId },
-      orderBy: { createdAt: "desc" },
-      take: 2000,
-      select: {
-        id: true,
-        issueId: true,
-        eventType: true,
-        summary: true,
-        createdAt: true,
-        createdBy: true,
-        payloadJson: true,
-      },
-    }),
-    prisma.analyticsNote.findUnique({
-      where: { projectId },
-      select: {
-        bodyHtml: true,
-        updatedAt: true,
-        updatedBy: true,
-      },
-    }),
-  ]);
+  let events;
+  let activities;
+  let note;
+  try {
+    [events, activities, note] = await retryOnceIfUnreachable(() =>
+      Promise.all([
+        prisma.taskProgressEvent.findMany({
+          where: { projectId },
+          orderBy: { occurredOn: "asc" },
+          select: {
+            taskId: true,
+            progress: true,
+            occurredOn: true,
+            source: true,
+          },
+        }),
+        prisma.issueActivity.findMany({
+          where: { projectId },
+          orderBy: { createdAt: "desc" },
+          take: 2000,
+          select: {
+            id: true,
+            issueId: true,
+            eventType: true,
+            summary: true,
+            createdAt: true,
+            createdBy: true,
+            payloadJson: true,
+          },
+        }),
+        prisma.analyticsNote.findUnique({
+          where: { projectId },
+          select: {
+            bodyHtml: true,
+            updatedAt: true,
+            updatedBy: true,
+          },
+        }),
+      ]),
+    );
+  } catch (error) {
+    if (isDatabaseUnreachable(error)) return null;
+    throw error;
+  }
 
   const actorIds = [
     ...new Set([
@@ -75,13 +85,21 @@ export async function loadProjectAnalytics(
       ...(note ? [note.updatedBy] : []),
     ]),
   ];
-  const actors =
-    actorIds.length === 0
-      ? []
-      : await prisma.user.findMany({
-          where: { id: { in: actorIds } },
-          select: { id: true, name: true },
-        });
+  let actors: { id: string; name: string }[] = [];
+  try {
+    actors =
+      actorIds.length === 0
+        ? []
+        : await retryOnceIfUnreachable(() =>
+            prisma.user.findMany({
+              where: { id: { in: actorIds } },
+              select: { id: true, name: true },
+            }),
+          );
+  } catch (error) {
+    if (isDatabaseUnreachable(error)) return null;
+    throw error;
+  }
   const nameById = new Map(actors.map((actor) => [actor.id, actor.name]));
 
   return {

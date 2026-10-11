@@ -1,21 +1,28 @@
 "use client";
 
 import { useMemo } from "react";
-import { CalendarClock, Lightbulb } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 
 import {
   ChartCard,
   Panel,
-  ProgressTrack,
   SectionHeading,
   TABLE_HEAD,
   TABLE_ROW,
 } from "@/src/components/analytics/panel";
-import { PALETTE, TrendChart, type TrendSeries } from "@/src/components/analytics/charts";
+import {
+  PALETTE,
+  TrendChart,
+  type TrendSeries,
+} from "@/src/components/analytics/charts";
 import IssueIntelligencePane from "@/src/components/analytics/IssueIntelligencePane";
 import ScheduleComposition from "@/src/components/analytics/ScheduleComposition";
-import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
+import ProcessGroupTimeline from "@/src/components/analytics/ProcessGroupTimeline";
+import ScheduleHeadline from "@/src/components/analytics/ScheduleHeadline";
+import Takeaways from "@/src/components/analytics/Takeaways";
 import ProjectNote from "@/src/components/analytics/ProjectNote";
+import ExportReportButton from "@/src/components/export/ExportReportButton";
+import type { ExportFormat } from "@/src/lib/export/executive-deck-generator";
 import type { IssueIntelActivity } from "@/src/lib/analytics/issue-intelligence";
 import { buildIssueIntelligence } from "@/src/lib/analytics/issue-intelligence";
 import { buildProjectInsights } from "@/src/lib/analytics/insights";
@@ -45,16 +52,21 @@ const BURN_DOWN_SERIES: readonly TrendSeries[] = [
 
 export type ProjectAnalyticsViewProps = {
   projectId: string;
+  projectName: string;
+  customProjectId: string;
+  ownerName: string | null;
   tasks: Task[];
   issues: Issue[];
   milestones: Milestone[];
   holidayDateKeys: string[];
+  lifecycleStatus: "ACTIVE" | "COMPLETED";
   events: ProgressEventPoint[];
   activities: IssueIntelActivity[];
   noteHtml: string;
   noteUpdatedAt: string | null;
   noteUpdatedByName: string | null;
   canEditNote: boolean;
+  exportedBy: string;
   chartsVisible?: boolean;
   onOpenIssueLog: () => void;
   onOpenIssue: (issueId: string) => void;
@@ -62,16 +74,21 @@ export type ProjectAnalyticsViewProps = {
 
 export default function ProjectAnalyticsView({
   projectId,
+  projectName,
+  customProjectId,
+  ownerName,
   tasks,
   issues,
   milestones,
   holidayDateKeys,
+  lifecycleStatus,
   events,
   activities,
   noteHtml,
   noteUpdatedAt,
   noteUpdatedByName,
   canEditNote,
+  exportedBy,
   chartsVisible = true,
   onOpenIssueLog,
   onOpenIssue,
@@ -146,96 +163,78 @@ export default function ProjectAnalyticsView({
       ),
     [milestones],
   );
-  const deltaTone =
-    health.delta >= 0
-      ? "text-emerald-600 dark:text-emerald-400"
-      : "text-rose-600 dark:text-rose-400";
-
   return (
     <div className="space-y-12">
       <section aria-labelledby="schedule-intelligence-heading" className="space-y-5">
-        <SectionHeading
-          id="schedule-intelligence-heading"
-          icon={CalendarClock}
-          title="Schedule Intelligence"
-          description="Task weights only. Issue work is reported in the pane below and does not move these figures."
-        />
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="sptt-card sptt-card-lift px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Project punctuality
-            </p>
-            <p className="mt-1.5 text-3xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
-              {formatPercent1(health.projectPs)}
-            </p>
-            <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-              Actual progress as a share of target
-            </p>
-          </div>
-          <div className="sptt-card sptt-card-lift px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Actual minus target
-            </p>
-            <p
-              className={`mt-1.5 text-3xl font-semibold tabular-nums tracking-tight ${deltaTone}`}
-            >
-              {formatPercent1(health.delta)}
-            </p>
-            <div className="mt-2 space-y-1">
-              <ProgressTrack
-                label="Actual"
-                value={health.pActualProject}
-                colour={PALETTE.actual}
-              />
-              <ProgressTrack
-                label="Target"
-                value={health.pTargetProject}
-                colour={PALETTE.reference}
-              />
-            </div>
-          </div>
-          <div className="sptt-card sptt-card-lift px-5 py-4 sm:col-span-2 lg:col-span-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Status flag
-            </p>
-            <div className="mt-3">
-              <StatusFlagBadge
-                flag={health.statusFlag}
-                className="px-2.5 py-1 text-xs"
-              />
-            </div>
-            <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-              {tasks.length === 1 ? "1 task" : `${tasks.length} tasks`} weighted by planned working days
-            </p>
-          </div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <SectionHeading
+            id="schedule-intelligence-heading"
+            icon={CalendarClock}
+            title="Schedule Intelligence"
+            description="Task weights only. Issue work is reported in the pane below and does not move these figures."
+          />
+          <ExportReportButton
+            onExport={async (format: ExportFormat) => {
+              const { downloadGeneratedReport, generateProjectDeck } = await import(
+                "@/src/lib/export/executive-deck-generator"
+              );
+              const file = await generateProjectDeck(
+                {
+                  project: {
+                    name: projectName,
+                    customProjectId,
+                    ownerName,
+                    lifecycleStatus,
+                  },
+                  tasks,
+                  issues,
+                  milestones,
+                  activities,
+                  events,
+                  holidayDateKeys,
+                  today,
+                  exportedBy,
+                  exportedAt: new Date(),
+                  note: {
+                    html: noteHtml,
+                    updatedAt: noteUpdatedAt,
+                    updatedByName: noteUpdatedByName,
+                  },
+                },
+                format,
+              );
+              downloadGeneratedReport(file);
+            }}
+          />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <ScheduleHeadline
+          ps={health.projectPs}
+          pActual={health.pActualProject}
+          pTarget={health.pTargetProject}
+          delta={health.delta}
+          statusFlag={health.statusFlag}
+          taskCount={tasks.length}
+        />
+
+        <ProcessGroupTimeline
+          tasks={tasks}
+          milestones={milestones}
+          lifecycleStatus={lifecycleStatus}
+          holidayDateKeys={holidayDateKeys}
+          today={today}
+        />
+
+        <div className="grid items-stretch gap-4 lg:grid-cols-2">
+          <Takeaways insights={insights} className="h-full" />
           <ProjectNote
             projectId={projectId}
             html={noteHtml}
             updatedAt={noteUpdatedAt}
             updatedByName={noteUpdatedByName}
             canEdit={canEditNote}
-            className="lg:col-span-2"
+            className="h-full"
           />
-          <Panel title="Key takeaways">
-            <ul className="space-y-3 px-5 py-4">
-              {insights.map((insight) => (
-                <li
-                  key={insight.id}
-                  className="flex gap-2.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-200"
-                >
-                  <Lightbulb
-                    className="mt-0.5 size-4 shrink-0 text-amber-500"
-                    aria-hidden
-                  />
-                  <span>{insight.text}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
         </div>
 
         {chartsVisible ? (
@@ -251,7 +250,11 @@ export default function ProjectAnalyticsView({
                   : "")
               }
             >
-              <TrendChart data={series.points} series={S_CURVE_SERIES} percent />
+              <TrendChart
+                data={series.points}
+                series={S_CURVE_SERIES}
+                percent
+              />
             </ChartCard>
             <ChartCard
               title="Task burn-down"
@@ -261,7 +264,10 @@ export default function ProjectAnalyticsView({
                   : "Add task dates to plot remaining effort."
               }
             >
-              <TrendChart data={series.points} series={BURN_DOWN_SERIES} />
+              <TrendChart
+                data={series.points}
+                series={BURN_DOWN_SERIES}
+              />
             </ChartCard>
           </div>
         ) : null}

@@ -1,6 +1,6 @@
 # Simple Project Task Tracker 2.0 — Technical Specification
 
-> **Deferred refresh (5 Oct 2026):** This document still describes the **Wave 3 / v2.0** baseline by stakeholder decision. Release **2.1** (Waves 4A–4B as-built; Wave 4C pending) is specified in `dev_plan.md`, `dev_req.md`, `dev_ref.md`, `dev_proc.md`, and `dev_uat.md`. A full rewrite of `dev_spec.md` to 2.1 will follow once Wave 4C and programme close-out are complete. Do **not** treat the version banner below as the current as-built stack.
+> **Deferred refresh (6 Oct 2026):** This document still describes the **Wave 3 / v2.0** baseline by stakeholder decision. Release **2.1** (Waves 4A–4B as-built; **Wave 4C-1** high-density List as-built; Wave **4C-2/3** pending) is specified in `dev_plan.md`, `dev_req.md`, `dev_ref.md`, `dev_proc.md`, and `dev_uat.md`. A full rewrite of `dev_spec.md` to 2.1 will follow once Wave 4C and programme close-out are complete. Do **not** treat the version banner below as the current as-built stack.
 
 **Document:** `dev_spec.md`  
 **Product:** Simple Project Task Tracker 2.0 *(baseline; see deferred note above)*  
@@ -254,7 +254,7 @@ Simple Project Task Tracker 2.0/
 | `src/components/kanban/KanbanColumn.tsx` | default, `KanbanColumnProps` | Droppable column; header count; “+ Add Task”; empty target |
 | `src/components/kanban/TaskCard.tsx` | default, `TaskCardProps` | Draggable card; priority/process group; PIC; due/overdue; progress cue |
 | `src/components/kanban/TaskDetailDrawer.tsx` | default, `TaskDetailDrawerProps` | Planner drawer: fields, progress, dates, checklist, comments, PIC, delete task |
-| `src/components/tasks/TaskListView.tsx` | default, `TaskListViewProps` | Traditional list rows → open drawer |
+| `src/components/tasks/TaskListView.tsx` | default, `TaskListViewProps` | W4C-1 high-density process-group table (freeze panes, Insert row, inline edit) |
 | `src/components/tasks/AssigneePicField.tsx` | default | Portal droplist on focus; type-to-filter; custom free-text PIC |
 | `src/components/tasks/PicLabel.tsx` | default | PIC display + subtle **Custom** badge for unregistered names |
 
@@ -729,8 +729,10 @@ Task mutations use `canMutateTask` (project `admin`, or registered assignee on a
 | **DB date round-trip** | Store at UTC noon (`localDateStringToDbDate`); map back with UTC Y/M/D getters |
 | **Backward status → To Do** | `progress = 0`; clear `actualStartDate` and `actualCompletionDate` |
 | **Backward status → Doing** | Progress 1% if was 0/100 (else keep mid); set start if null; **clear completion** |
-| **Forward → Done** | Progress 100; set completion (and start if null) to local today |
-| **Future actual / achieved dates** | Rejected on server (`VALIDATION`: “{label} cannot be in the future”) for task `actualStartDate` / `actualCompletionDate`, milestone `actualAchieved`, and issue `actualStartDate` / `actualResolutionDate`. Client date inputs use `max=today`. Planned targets (`initial*` / `updated*`) may still be future. Projects have no independent actual span — Gantt Actual uses task actuals. Shared helper: `assertActualDateNotFuture` in `src/lib/actions/date-validation.ts`. |
+| **Forward → Done** | Progress 100; set completion (and start if null) to local today unless an explicit actual finish/start is in the same patch (user-typed finish is preserved) |
+| **Actual finish while not Done** | Client prompts: Confirm → apply finish + `status=done` + `progress=100`; Cancel → restore prior field. Same prompt from List and task drawer. |
+| **Actual date range** | Finish requires start; finish ≥ start; neither may be future. Helper: `actualDateRangeError` in `src/lib/task-defaults.ts` (client + `updateTaskFields`). |
+| **Future actual / achieved dates** | Rejected on server (`VALIDATION`) for task `actualStartDate` / `actualCompletionDate`, milestone `actualAchieved`, and issue `actualStartDate` / `actualResolutionDate`. Client date inputs use `max=today`. Planned targets (`initial*` / `updated*`) may still be future. Projects have no independent actual span — Gantt Actual uses task actuals. |
 | **Effective due / overdue** | `updatedDueDate ?? initialDueDate`; done tasks not overdue |
 | **Registered PIC** | Must be project member |
 | **Cascade cleanup** | Deleting project/task removes dependent rows (no orphan tasks) |

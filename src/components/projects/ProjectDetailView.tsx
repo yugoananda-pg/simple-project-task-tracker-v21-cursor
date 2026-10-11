@@ -11,6 +11,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { flushSync } from "react-dom";
 
 import KanbanBoard from "@/src/components/kanban/KanbanBoard";
 import TaskDetailDrawer from "@/src/components/kanban/TaskDetailDrawer";
@@ -24,6 +25,12 @@ import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
 import ProgressPairBadges from "@/src/components/schedule/ProgressPairBadges";
 import TaskListView from "@/src/components/tasks/TaskListView";
 import ConfirmDialog from "@/src/components/ui/ConfirmDialog";
+import {
+  afterNextPaint,
+  beginWorkspaceBusy,
+  endWorkspaceBusy,
+  WorkspaceBusyOverlay,
+} from "@/src/components/ui/WorkspaceBusy";
 import { useToast } from "@/src/components/providers/ToastProvider";
 import type { ActionResult } from "@/src/lib/actions/errors";
 import { deleteProject } from "@/src/lib/actions/projects";
@@ -43,19 +50,21 @@ import {
   updateTaskStatus,
 } from "@/src/lib/actions/tasks";
 import { computeProjectScheduleHealth } from "@/src/lib/analytics/weighted-progress";
+import { taskHasUserPic } from "@/src/lib/assignee-display";
 import { canDeleteTaskUi } from "@/src/lib/permissions";
 import type { ProjectMemberUser } from "@/src/lib/actions/projects";
 import type { ProjectAccessLevel } from "@/src/lib/rbac";
 import {
   actualDateRangeError,
   buildProgressStatusPatch,
+  restoreBrokenDateChanges,
 } from "@/src/lib/task-defaults";
 import type { Issue, Milestone, Project, Task, TaskBucket, TaskStatus } from "@/src/lib/types";
 import {
   projectsHomeHrefFromScope,
   readPortfolioScopeClient,
 } from "@/src/lib/project-list-scope";
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
 
 export type ProjectDetailViewProps = {
   projectId: string;
@@ -69,6 +78,8 @@ export type ProjectDetailViewProps = {
   canRaiseIssues?: boolean;
   canManageProject: boolean;
   currentUserId: string | null;
+  /** Display name written on an exported report. */
+  currentUserName?: string | null;
   canReassignOwner?: boolean;
   memberUsers: ProjectMemberUser[];
   /** Owning PM, shown under the title. */
@@ -187,6 +198,7 @@ export default function ProjectDetailView({
   canRaiseIssues = false,
   canManageProject,
   currentUserId,
+  currentUserName = null,
   canReassignOwner = false,
   memberUsers: initialMemberUsers,
   ownerName = null,
@@ -207,6 +219,10 @@ export default function ProjectDetailView({
   const [milestones, setMilestones] = useState(initialMilestones);
   const [holidayDateKeys, setHolidayDateKeys] = useState(initialHolidayDateKeys);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  // Expanded view hides the project header and milestones on Kanban and Gantt.
+  const [expandedRequested, setExpandedRequested] = useState(false);
+  const isExpanded =
+    expandedRequested && (viewMode === "kanban" || viewMode === "gantt");
   const viewOptions = useMemo(
     () =>
       VIEW_OPTIONS.filter(
@@ -232,7 +248,7 @@ export default function ProjectDetailView({
   const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
-  const [isCreatingTask, startCreateTransition] = useTransition();
+  const [, startCreateTransition] = useTransition();
   /** Soft-nav home keeps last Portfolio scope; brand / Projects use bare `/`. */
   const [projectsHomeHref, setProjectsHomeHref] = useState("/");
   /** Confirm: actual finish while task is not yet Done / 100%. */
@@ -243,20 +259,50 @@ export default function ProjectDetailView({
   const [dateResetToken, setDateResetToken] = useState(0);
   /** Serialize task writes so sequential date blurs cannot race and revert each other. */
   const taskMutationQueueRef = useRef(Promise.resolve());
+  const drawerCommitRef = useRef<(() => Promise<boolean>) | null>(null);
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
+  /** Busy calls started by this view, so unmount cannot leave the overlay up. */
+  const workspaceBusyRef = useRef(0);
+  const viewAliveRef = useRef(true);
 
   useEffect(() => {
     setProjectsHomeHref(projectsHomeHrefFromScope(readPortfolioScopeClient()));
   }, []);
 
   useEffect(() => {
+    viewAliveRef.current = true;
     return () => {
+      viewAliveRef.current = false;
       if (actionErrorTimerRef.current) {
         clearTimeout(actionErrorTimerRef.current);
       }
+      while (workspaceBusyRef.current > 0) {
+        workspaceBusyRef.current -= 1;
+        endWorkspaceBusy();
+      }
     };
   }, []);
+
+  function startWorkspaceBusy(label: string) {
+    workspaceBusyRef.current += 1;
+    beginWorkspaceBusy(label);
+  }
+
+  function stopWorkspaceBusy() {
+    if (workspaceBusyRef.current === 0) return;
+    workspaceBusyRef.current -= 1;
+    endWorkspaceBusy();
+  }
+
+  function revealTaskUpdate(work: () => void) {
+    startWorkspaceBusy("Updating the task…");
+    afterNextPaint(() => {
+      if (!viewAliveRef.current) return;
+      flushSync(work);
+      stopWorkspaceBusy();
+    });
+  }
 
   function clearActionError() {
     if (actionErrorTimerRef.current) {
@@ -266,17 +312,30 @@ export default function ProjectDetailView({
     setActionError(null);
   }
 
-  function reportActionError(message: string) {
+  function reportActionError(
+    message: string,
+    options?: { busyLabel?: string; resetDates?: boolean },
+  ) {
     if (actionErrorTimerRef.current) {
       clearTimeout(actionErrorTimerRef.current);
-    }
-    setActionError(message);
-    showToast(message, "error");
-    // Banner auto-clears; toast also auto-dismisses with its own close control.
-    actionErrorTimerRef.current = setTimeout(() => {
-      setActionError(null);
       actionErrorTimerRef.current = null;
-    }, 7000);
+    }
+    // Paint the spinner first. The banner update redraws every project view,
+    // which is the pause people otherwise only see as Next.js “Rendering…”.
+    startWorkspaceBusy(options?.busyLabel ?? "Working…");
+    afterNextPaint(() => {
+      if (!viewAliveRef.current) return;
+      flushSync(() => {
+        setActionError(message);
+        if (options?.resetDates) setDateResetToken((n) => n + 1);
+        showToast(message, "error");
+      });
+      actionErrorTimerRef.current = setTimeout(() => {
+        setActionError(null);
+        actionErrorTimerRef.current = null;
+      }, 7000);
+      stopWorkspaceBusy();
+    });
   }
 
   // Adopt server payloads without wiping newer local edits (date blur races /
@@ -332,7 +391,7 @@ export default function ProjectDetailView({
 
   function canEditTask(task: Task): boolean {
     if (canWriteTasks) return true;
-    if (currentUserId && task.assigneeId === currentUserId) return true;
+    if (taskHasUserPic(task, currentUserId)) return true;
     return false;
   }
   const canDeleteSelectedTask = canDeleteTaskUi(
@@ -371,45 +430,76 @@ export default function ProjectDetailView({
   function runTaskMutation(
     action: () => Promise<ActionResult<Task>>,
     optimisticPatch?: { taskId: string; patch: Partial<Task> },
-  ) {
+  ): Promise<boolean> {
     // Capture before setState — React may defer the updater, so reading
     // `snapshot` only inside the updater can leave it null on failure.
     const snapshot = optimisticPatch ? tasksRef.current : null;
+    const busyLabel = "Updating the task…";
 
-    if (optimisticPatch) {
-      tasksRef.current = tasksRef.current.map((task) =>
-        task.id === optimisticPatch.taskId
-          ? { ...task, ...optimisticPatch.patch }
-          : task,
-      );
-      setTasks(tasksRef.current);
-    }
-
-    taskMutationQueueRef.current = taskMutationQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        try {
-          const result = await action();
-          if (!result.success) {
-            if (optimisticPatch && snapshot) {
-              tasksRef.current = snapshot;
-              setTasks(snapshot);
-            }
-            reportActionError(
-              result.error ?? "Something went wrong. Please try again.",
-            );
-            return;
-          }
-          syncTask(result.data);
-          clearActionError();
-        } catch {
-          if (optimisticPatch && snapshot) {
-            tasksRef.current = snapshot;
-            setTasks(snapshot);
-          }
-          reportActionError("Something went wrong. Please try again.");
+    startWorkspaceBusy(busyLabel);
+    return new Promise((resolve) => {
+      afterNextPaint(() => {
+        if (!viewAliveRef.current) {
+          resolve(false);
+          return;
         }
+        if (optimisticPatch) {
+          const patch = optimisticPatch;
+          flushSync(() => {
+            tasksRef.current = tasksRef.current.map((task) =>
+              task.id === patch.taskId ? { ...task, ...patch.patch } : task,
+            );
+            setTasks(tasksRef.current);
+          });
+        }
+
+        taskMutationQueueRef.current = taskMutationQueueRef.current
+          .catch(() => undefined)
+          .then(async () => {
+            try {
+              const result = await action();
+              if (!viewAliveRef.current) {
+                resolve(false);
+                return;
+              }
+              if (!result.success) {
+                if (optimisticPatch && snapshot) {
+                  flushSync(() => {
+                    tasksRef.current = snapshot;
+                    setTasks(snapshot);
+                  });
+                }
+                reportActionError(
+                  result.error ?? "Something went wrong. Please try again.",
+                  { busyLabel },
+                );
+                resolve(false);
+                return;
+              }
+              syncTask(result.data);
+              clearActionError();
+              resolve(true);
+            } catch {
+              if (!viewAliveRef.current) {
+                resolve(false);
+                return;
+              }
+              if (optimisticPatch && snapshot) {
+                flushSync(() => {
+                  tasksRef.current = snapshot;
+                  setTasks(snapshot);
+                });
+              }
+              reportActionError("Something went wrong. Please try again.", {
+                busyLabel,
+              });
+              resolve(false);
+            } finally {
+              afterNextPaint(() => stopWorkspaceBusy());
+            }
+          });
       });
+    });
   }
 
   function applyLocalStatusChange(
@@ -551,9 +641,9 @@ export default function ProjectDetailView({
     });
   }
 
-  function applyTaskChange(taskId: string, patch: Partial<Task>) {
+  function applyTaskChange(taskId: string, patch: Partial<Task>): Promise<boolean> {
     const current = tasksRef.current.find((task) => task.id === taskId);
-    if (!current) return;
+    if (!current) return Promise.resolve(false);
 
     if (
       patch.actualStartDate !== undefined ||
@@ -569,9 +659,11 @@ export default function ProjectDetailView({
           : current.actualCompletionDate;
       const rangeError = actualDateRangeError(nextStart, nextFinish);
       if (rangeError) {
-        reportActionError(rangeError);
-        setDateResetToken((n) => n + 1);
-        return;
+        reportActionError(rangeError, {
+          busyLabel: "Updating the task…",
+          resetDates: true,
+        });
+        return Promise.resolve(false);
       }
     }
 
@@ -593,7 +685,7 @@ export default function ProjectDetailView({
       updatedAt: touchedAt,
     };
 
-    runTaskMutation(() => updateTaskFields(taskId, optimistic), {
+    return runTaskMutation(() => updateTaskFields(taskId, optimistic), {
       taskId,
       patch: optimistic,
     });
@@ -621,8 +713,10 @@ export default function ProjectDetailView({
         patch.actualCompletionDate ?? null,
       );
       if (rangeError) {
-        reportActionError(rangeError);
-        setDateResetToken((n) => n + 1);
+        reportActionError(rangeError, {
+          busyLabel: "Updating the task…",
+          resetDates: true,
+        });
         return;
       }
       setPendingActualFinish({
@@ -632,7 +726,22 @@ export default function ProjectDetailView({
       return;
     }
 
-    applyTaskChange(taskId, patch);
+    void applyTaskChange(taskId, patch);
+  }
+
+  async function handleDrawerCommit(
+    taskId: string,
+    patch: Partial<Task>,
+  ): Promise<boolean> {
+    const target = tasksRef.current.find((task) => task.id === taskId);
+    if (!target || !canEditTask(target)) return false;
+    const dates = restoreBrokenDateChanges(target, patch);
+    const next: Partial<Task> = { ...patch };
+    for (const item of dates.restored) {
+      delete next[item.key as keyof Task];
+    }
+    if (Object.keys(next).length === 0) return true;
+    return applyTaskChange(taskId, next);
   }
 
   function confirmActualFinishToDone() {
@@ -670,20 +779,27 @@ export default function ProjectDetailView({
   async function handleAddTaskInColumn(status: TaskStatus) {
     if (!canWriteTasks) return;
 
+    startWorkspaceBusy("Creating task…");
     startCreateTransition(async () => {
-      const result = await createTask({
-        projectId,
-        title: "New task",
-        status,
-      });
-      if (!result.success) {
-        reportActionError(result.error ?? "Unable to create task.");
-        return;
+      try {
+        const result = await createTask({
+          projectId,
+          title: "New task",
+          status,
+        });
+        if (!result.success) {
+          reportActionError(result.error ?? "Unable to create task.", {
+            busyLabel: "Creating task…",
+          });
+          return;
+        }
+        syncTask(result.data);
+        setSelectedTaskId(result.data.id);
+        setDrawerOpen(true);
+        clearActionError();
+      } finally {
+        afterNextPaint(() => stopWorkspaceBusy());
       }
-      syncTask(result.data);
-      setSelectedTaskId(result.data.id);
-      setDrawerOpen(true);
-      clearActionError();
     });
   }
 
@@ -698,22 +814,29 @@ export default function ProjectDetailView({
       return { success: false, error: "You do not have permission to add tasks." };
     }
 
-    const result = await createTask({
-      projectId,
-      title: input.title,
-      status: "todo",
-      bucket: input.bucket,
-      listIndex: input.listIndex,
-      initialStartDate: input.initialStartDate,
-      initialDueDate: input.initialDueDate,
-    });
-    if (!result.success) {
-      reportActionError(result.error ?? "Unable to create task.");
-      return { success: false, error: result.error };
+    startWorkspaceBusy("Creating task…");
+    try {
+      const result = await createTask({
+        projectId,
+        title: input.title,
+        status: "todo",
+        bucket: input.bucket,
+        listIndex: input.listIndex,
+        initialStartDate: input.initialStartDate,
+        initialDueDate: input.initialDueDate,
+      });
+      if (!result.success) {
+        reportActionError(result.error ?? "Unable to create task.", {
+          busyLabel: "Creating task…",
+        });
+        return { success: false, error: result.error };
+      }
+      syncTask(result.data);
+      clearActionError();
+      return { success: true, data: result.data };
+    } finally {
+      afterNextPaint(() => stopWorkspaceBusy());
     }
-    syncTask(result.data);
-    clearActionError();
-    return { success: true, data: result.data };
   }
 
   function handleReorderInList(
@@ -774,7 +897,7 @@ export default function ProjectDetailView({
     setTasks((current) => current.filter((task) => task.id !== taskId));
     setIsDeletingTask(false);
     if (selectedTaskId === taskId) {
-      closeDrawer();
+      finishCloseDrawer();
     }
     showToast("Task deleted successfully.");
   }
@@ -833,11 +956,19 @@ export default function ProjectDetailView({
   }
 
   function openTask(task: Task) {
+    if (drawerOpen && selectedTaskId && selectedTaskId !== task.id) {
+      void drawerCommitRef.current?.().then((ok) => {
+        if (!ok) return;
+        setSelectedTaskId(task.id);
+        setDrawerOpen(true);
+      });
+      return;
+    }
     setSelectedTaskId(task.id);
     setDrawerOpen(true);
   }
 
-  function closeDrawer() {
+  function finishCloseDrawer() {
     setDrawerOpen(false);
     window.setTimeout(() => {
       setSelectedTaskId(null);
@@ -866,7 +997,37 @@ export default function ProjectDetailView({
   }
 
   return (
-    <section className="mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">
+    <section
+      className={`mx-auto w-full px-4 sm:px-6 lg:px-8 ${isExpanded ? "py-3" : "py-8"}`}
+    >
+      <WorkspaceBusyOverlay />
+      {isExpanded ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <Link
+            href={projectsHomeHref}
+            suppressHydrationWarning
+            className="text-sm font-medium text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            aria-label="Back to projects"
+          >
+            ←
+          </Link>
+          <h1 className="min-w-0 truncate text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            {project.name}
+          </h1>
+          {isReadOnly ? (
+            <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              Read-only
+            </span>
+          ) : null}
+          <StatusFlagBadge flag={scheduleHealth.statusFlag} />
+          <ProgressPairBadges
+            actual={scheduleHealth.pActualProject}
+            target={scheduleHealth.pTargetProject}
+          />
+        </div>
+      ) : null}
+      {!isExpanded ? (
+      <>
       <Link
         href={projectsHomeHref}
         suppressHydrationWarning
@@ -987,7 +1148,10 @@ export default function ProjectDetailView({
         />
       </div>
 
-      <div className="mt-8 space-y-4">
+      </>
+      ) : null}
+
+      <div className={`${isExpanded ? "mt-3" : "mt-8"} space-y-4`}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-baseline gap-3">
             <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -1068,24 +1232,11 @@ export default function ProjectDetailView({
           </div>
         ) : null}
 
-        {isReadOnly && viewMode !== "analytics" ? (
+        {isReadOnly && viewMode !== "analytics" && !isExpanded ? (
           <ReadOnlyAccessNotice includeAnalytics={canViewProjectAnalytics} />
         ) : null}
 
         <div className="relative min-h-[28rem]">
-          {isCreatingTask ? (
-            <div
-              className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-white/55 backdrop-blur-[1px] dark:bg-zinc-950/50"
-              aria-busy="true"
-              aria-live="polite"
-            >
-              <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-                Creating task…
-              </div>
-            </div>
-          ) : null}
-
           <div
             role="tabpanel"
             aria-hidden={viewMode !== "kanban"}
@@ -1099,6 +1250,8 @@ export default function ProjectDetailView({
               onTaskClick={openTask}
               onAddTask={canWriteTasks ? handleAddTaskInColumn : undefined}
               readOnly={!canWriteTasks}
+              expanded={isExpanded}
+              onToggleExpanded={() => setExpandedRequested((value) => !value)}
             />
           </div>
 
@@ -1123,7 +1276,12 @@ export default function ProjectDetailView({
               onCreateTask={canWriteTasks ? handleCreateTaskInList : undefined}
               onDeleteTask={canWriteTasks ? handleDeleteTask : undefined}
               onOpenDetails={openTask}
-              onValidationError={reportActionError}
+              onValidationError={(message) =>
+                reportActionError(message, {
+                  busyLabel: "Updating the task…",
+                  resetDates: true,
+                })
+              }
               dateResetToken={dateResetToken}
             />
           </div>
@@ -1136,10 +1294,11 @@ export default function ProjectDetailView({
             <ProjectGanttView
               tasks={tasks}
               milestones={milestones}
-              projectName={project.name}
               metricsById={scheduleHealth.byId}
               onTaskClick={openTask}
               readOnly={isReadOnly}
+              expanded={isExpanded}
+              onToggleExpanded={() => setExpandedRequested((value) => !value)}
             />
           </div>
 
@@ -1174,16 +1333,21 @@ export default function ProjectDetailView({
             {canViewProjectAnalytics && viewMode === "analytics" ? (
               <ProjectAnalyticsView
                 projectId={projectId}
+                projectName={project.name}
+                customProjectId={project.customProjectId}
+                ownerName={ownerName}
                 tasks={tasks}
                 issues={initialIssues}
                 milestones={milestones}
                 holidayDateKeys={holidayDateKeys}
+                lifecycleStatus={project.lifecycleStatus}
                 events={analytics?.events ?? []}
                 activities={analytics?.activities ?? []}
                 noteHtml={analytics?.noteHtml ?? ""}
                 noteUpdatedAt={analytics?.noteUpdatedAt ?? null}
                 noteUpdatedByName={analytics?.noteUpdatedByName ?? null}
                 canEditNote={canManageProject}
+                exportedBy={currentUserName?.trim() || "Unknown"}
                 chartsVisible
                 onOpenIssueLog={openIssueLog}
                 onOpenIssue={openIssueFromAnalytics}
@@ -1197,10 +1361,12 @@ export default function ProjectDetailView({
         open={drawerOpen}
         task={selectedTask}
         scheduleMetrics={selectedTaskMetrics}
-        onClose={closeDrawer}
+        onClose={finishCloseDrawer}
+        commitRef={drawerCommitRef}
+        onRestoreNotice={(message) => showToast(message, "error")}
         onTaskChange={
           selectedTask && canEditTask(selectedTask)
-            ? handleTaskChange
+            ? handleDrawerCommit
             : undefined
         }
         onToggleSubtask={

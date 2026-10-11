@@ -148,6 +148,232 @@ export function actualDateRangeError(
   return null;
 }
 
+type TaskDateFields = {
+  initialStartDate: string | null;
+  initialDueDate: string | null;
+  updatedStartDate: string | null;
+  updatedDueDate: string | null;
+  actualStartDate: string | null;
+  actualCompletionDate: string | null;
+};
+
+function pickDate(
+  patch: Partial<TaskDateFields>,
+  current: TaskDateFields,
+  key: keyof TaskDateFields,
+): string | null {
+  return patch[key] !== undefined ? patch[key] ?? null : current[key];
+}
+
+/** Range checks for a finished set of dates — used when the drawer closes. */
+export function taskDatePatchError(
+  current: TaskDateFields,
+  patch: Partial<TaskDateFields>,
+): string | null {
+  const initialStart = pickDate(patch, current, "initialStartDate");
+  const initialDue = pickDate(patch, current, "initialDueDate");
+  if (initialStart && initialDue && initialDue < initialStart) {
+    return "Initial due date cannot be before the initial start date.";
+  }
+
+  const updatedStart = pickDate(patch, current, "updatedStartDate");
+  const updatedDue = pickDate(patch, current, "updatedDueDate");
+  if (updatedStart && updatedDue && updatedDue < updatedStart) {
+    return "Updated due date cannot be before the updated start date.";
+  }
+
+  return actualDateRangeError(
+    pickDate(patch, current, "actualStartDate"),
+    pickDate(patch, current, "actualCompletionDate"),
+  );
+}
+
+const DATE_FIELD_LABEL: Record<keyof TaskDateFields, string> = {
+  initialStartDate: "Initial start",
+  initialDueDate: "Initial due",
+  updatedStartDate: "Updated start",
+  updatedDueDate: "Updated due",
+  actualStartDate: "Actual start",
+  actualCompletionDate: "Actual completion",
+};
+
+export type RestoredField = {
+  key: string;
+  label: string;
+  reason: string;
+};
+
+function dateChanged(
+  patch: Partial<TaskDateFields>,
+  current: TaskDateFields,
+  key: keyof TaskDateFields,
+): boolean {
+  return patch[key] !== undefined && (patch[key] ?? null) !== current[key];
+}
+
+/**
+ * Smallest set of changed ends to drop so a start/end pair is valid again.
+ * When either end can be dropped on its own, both changed ends are dropped
+ * so a guess does not keep one of them.
+ */
+function spanKeysToRestore(
+  current: TaskDateFields,
+  patch: Partial<TaskDateFields>,
+  startKey: keyof TaskDateFields,
+  endKey: keyof TaskDateFields,
+): Array<keyof TaskDateFields> {
+  const start = pickDate(patch, current, startKey);
+  const end = pickDate(patch, current, endKey);
+  if (!(start && end && end < start)) return [];
+
+  const startChanged = dateChanged(patch, current, startKey);
+  const endChanged = dateChanged(patch, current, endKey);
+  if (startChanged && !endChanged) return [startKey];
+  if (endChanged && !startChanged) return [endKey];
+  if (!startChanged && !endChanged) return [];
+
+  const startFix = pickDate(
+    { ...patch, [startKey]: current[startKey] },
+    current,
+    startKey,
+  );
+  const endFix = pickDate(
+    { ...patch, [endKey]: current[endKey] },
+    current,
+    endKey,
+  );
+  const droppingStartFixes = !(startFix && end && end < startFix);
+  const droppingEndFixes = !(start && endFix && endFix < start);
+  if (droppingStartFixes && !droppingEndFixes) return [startKey];
+  if (droppingEndFixes && !droppingStartFixes) return [endKey];
+  return [startKey, endKey];
+}
+
+function pushRestore(
+  restored: RestoredField[],
+  seen: Set<string>,
+  key: keyof TaskDateFields,
+  reason: string,
+) {
+  if (seen.has(key)) return;
+  seen.add(key);
+  restored.push({ key, label: DATE_FIELD_LABEL[key], reason });
+}
+
+/**
+ * Drop only the date edits that break a rule. Other keys in `patch` stay,
+ * including a date whose pair is still valid.
+ */
+export function restoreBrokenDateChanges(
+  current: TaskDateFields,
+  patch: Partial<TaskDateFields>,
+): { patch: Partial<TaskDateFields>; restored: RestoredField[] } {
+  const next: Partial<TaskDateFields> = { ...patch };
+  const restored: RestoredField[] = [];
+  const seen = new Set<string>();
+  const implausible =
+    "Please enter a valid date between the years 2000 and 2100.";
+
+  for (const key of Object.keys(DATE_FIELD_LABEL) as Array<keyof TaskDateFields>) {
+    const value = next[key];
+    if (value && !isPlausibleLocalDate(value)) {
+      delete next[key];
+      pushRestore(restored, seen, key, implausible);
+    }
+  }
+
+  const spans: Array<{
+    start: keyof TaskDateFields;
+    end: keyof TaskDateFields;
+    reason: string;
+  }> = [
+    {
+      start: "initialStartDate",
+      end: "initialDueDate",
+      reason: "Initial due date cannot be before the initial start date.",
+    },
+    {
+      start: "updatedStartDate",
+      end: "updatedDueDate",
+      reason: "Updated due date cannot be before the updated start date.",
+    },
+  ];
+
+  for (const span of spans) {
+    for (const key of spanKeysToRestore(current, next, span.start, span.end)) {
+      delete next[key];
+      pushRestore(restored, seen, key, span.reason);
+    }
+  }
+
+  for (let guard = 0; guard < 4; guard += 1) {
+    const start = pickDate(next, current, "actualStartDate");
+    const finish = pickDate(next, current, "actualCompletionDate");
+    const actualError = actualDateRangeError(start, finish);
+    if (!actualError) break;
+    let keys: Array<keyof TaskDateFields> = [];
+    if (isFutureLocalDate(start) && next.actualStartDate !== undefined) {
+      keys = ["actualStartDate"];
+    } else if (
+      isFutureLocalDate(finish) &&
+      next.actualCompletionDate !== undefined
+    ) {
+      keys = ["actualCompletionDate"];
+    } else if (finish && !start) {
+      const startChanged = next.actualStartDate !== undefined;
+      const finishChanged = next.actualCompletionDate !== undefined;
+      if (startChanged && !finishChanged) keys = ["actualStartDate"];
+      else if (finishChanged && !startChanged) keys = ["actualCompletionDate"];
+      else if (!actualDateRangeError(current.actualStartDate, finish)) {
+        keys = ["actualStartDate"];
+      } else if (!actualDateRangeError(start, current.actualCompletionDate)) {
+        keys = ["actualCompletionDate"];
+      } else {
+        keys = ["actualStartDate", "actualCompletionDate"];
+      }
+    } else {
+      keys = spanKeysToRestore(
+        current,
+        next,
+        "actualStartDate",
+        "actualCompletionDate",
+      );
+    }
+    if (keys.length === 0) break;
+    for (const key of keys) {
+      delete next[key];
+      pushRestore(restored, seen, key, actualError);
+    }
+  }
+
+  return { patch: next, restored };
+}
+
+/** One sentence per rule, then a note when other edits are still saved. */
+export function restoredFieldsMessage(
+  items: Array<Pick<RestoredField, "label" | "reason">>,
+  keptOtherChanges: boolean,
+): string {
+  if (items.length === 0) return "";
+  const groups = new Map<string, string[]>();
+  for (const item of items) {
+    const labels = groups.get(item.reason) ?? [];
+    labels.push(item.label);
+    groups.set(item.reason, labels);
+  }
+  const sentences: string[] = [];
+  for (const [reason, labels] of groups) {
+    const names =
+      labels.length === 1
+        ? labels[0]!
+        : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+    const verb = labels.length === 1 ? "was" : "were";
+    sentences.push(`${names} ${verb} restored to the previous value. ${reason}`);
+  }
+  if (keptOtherChanges) sentences.push("Your other changes were saved.");
+  return sentences.join(" ");
+}
+
 /** Effective due date for overdue checks — prefer updated, else initial. */
 export function getEffectiveDueDate(task: {
   updatedDueDate: string | null;

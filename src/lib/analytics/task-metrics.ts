@@ -2,8 +2,11 @@ import { differenceInCalendarDays, startOfDay } from "date-fns";
 
 import {
   getTaskPicDisplayName,
-  getTaskPicKey,
+  getTaskPicKeys,
+  hasAssignedPic,
   isCustomPic,
+  listTaskPics,
+  picLabel,
 } from "@/src/lib/assignee-display";
 import { isTaskOverdue, parseTaskDate } from "@/src/lib/gantt/date-utils";
 import type { Task, TaskBucket, TaskStatus } from "@/src/lib/types";
@@ -77,10 +80,6 @@ const PROCESS_GROUP_ORDER: TaskBucket[] = [
   "closing",
 ];
 
-function hasAssignedPic(task: Task): boolean {
-  return Boolean(task.assigneeId || task.assigneeName?.trim());
-}
-
 export function daysOverdue(task: Task): number {
   if (task.status === "done") return 0;
   const due = parseTaskDate(
@@ -114,7 +113,7 @@ export function computeProjectAnalytics(tasks: Task[]): ProjectAnalyticsSnapshot
   const activeAssigneeKeys = new Set(
     tasks
       .filter((task) => task.status !== "done" && hasAssignedPic(task))
-      .map((task) => getTaskPicKey(task)),
+      .flatMap((task) => getTaskPicKeys(task)),
   );
 
   const statusCounts = (Object.keys(STATUS_META) as TaskStatus[]).map(
@@ -128,23 +127,31 @@ export function computeProjectAnalytics(tasks: Task[]): ProjectAnalyticsSnapshot
 
   const workloadMap = new Map<string, WorkloadRow>();
   for (const task of tasks) {
-    const key = getTaskPicKey(task);
-    const existing = workloadMap.get(key) ?? {
-      assigneeKey: key,
-      assigneeLabel: getTaskPicDisplayName(task),
-      isCustomPic: isCustomPic(task),
-      open: 0,
-      completed: 0,
-      total: 0,
-    };
+    const pics = listTaskPics(task);
+    const keys = getTaskPicKeys(task);
+    for (const key of keys) {
+      const pic = pics.find((item) => {
+        if (key.startsWith("user:")) return `user:${item.userId}` === key;
+        if (key.startsWith("custom:")) return `custom:${item.name.toLowerCase()}` === key;
+        return false;
+      });
+      const existing = workloadMap.get(key) ?? {
+        assigneeKey: key,
+        assigneeLabel: pic ? picLabel(pic) : getTaskPicDisplayName(task),
+        isCustomPic: pic ? !pic.userId : isCustomPic(task),
+        open: 0,
+        completed: 0,
+        total: 0,
+      };
 
-    existing.total += 1;
-    if (task.status === "done") {
-      existing.completed += 1;
-    } else {
-      existing.open += 1;
+      existing.total += 1;
+      if (task.status === "done") {
+        existing.completed += 1;
+      } else {
+        existing.open += 1;
+      }
+      workloadMap.set(key, existing);
     }
-    workloadMap.set(key, existing);
   }
 
   const workloadRows = [...workloadMap.values()].sort((a, b) => {

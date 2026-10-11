@@ -119,3 +119,92 @@ export function noteIsEmpty(html: string): boolean {
     .trim();
   return text.length === 0;
 }
+
+/** One block of a note, ready to lay out as plain report text. */
+export type NoteBlock =
+  | { kind: "heading"; level: 2 | 3; text: string }
+  | { kind: "paragraph"; text: string }
+  | { kind: "item"; marker: string; text: string };
+
+function decodeNoteText(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Turn a saved note into headings, paragraphs and list items.
+ * Bold, links and highlight stay as their words. An empty note is an empty list.
+ */
+export function noteHtmlToBlocks(html: string): NoteBlock[] {
+  if (noteIsEmpty(html)) return [];
+  const blocks: NoteBlock[] = [];
+  const lists: Array<{ ordered: boolean; n: number }> = [];
+  let mode: "p" | "h2" | "h3" | "li" | null = null;
+  let buf = "";
+
+  function flush() {
+    const text = decodeNoteText(buf);
+    buf = "";
+    const current = mode;
+    mode = null;
+    if (!text || !current) return;
+    if (current === "h2" || current === "h3") {
+      blocks.push({ kind: "heading", level: current === "h2" ? 2 : 3, text });
+      return;
+    }
+    if (current === "li") {
+      const list = lists[lists.length - 1];
+      const marker = list?.ordered ? `${list.n}.` : "•";
+      if (list?.ordered) list.n += 1;
+      blocks.push({ kind: "item", marker, text });
+      return;
+    }
+    blocks.push({ kind: "paragraph", text });
+  }
+
+  for (const part of html.split(/(<[^>]+>)/g)) {
+    if (!part) continue;
+    if (!part.startsWith("<")) {
+      buf += part;
+      continue;
+    }
+    const closing = part.startsWith("</");
+    const tag = /^<\/?([a-z0-9]+)/i.exec(part)?.[1]?.toLowerCase() ?? "";
+    if (tag === "br") {
+      buf += " ";
+      continue;
+    }
+    if (tag === "ul" || tag === "ol") {
+      if (!closing) lists.push({ ordered: tag === "ol", n: 1 });
+      else lists.pop();
+      continue;
+    }
+    if (tag === "li") {
+      if (closing) flush();
+      else {
+        flush();
+        mode = "li";
+      }
+      continue;
+    }
+    if (tag === "p" || tag === "h2" || tag === "h3") {
+      if (mode === "li") continue;
+      if (closing) flush();
+      else {
+        flush();
+        mode = tag;
+      }
+      continue;
+    }
+  }
+  if (mode == null && decodeNoteText(buf)) mode = "p";
+  flush();
+  return blocks;
+}

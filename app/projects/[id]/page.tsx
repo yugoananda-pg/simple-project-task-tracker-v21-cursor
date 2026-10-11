@@ -82,6 +82,7 @@ export default async function ProjectDetailPage({
         projectResult.success ? projectResult.data.canManage : false
       }
       currentUserId={sessionUser?.id ?? null}
+      currentUserName={sessionUser?.name ?? null}
       canReassignOwner={sessionUser?.globalRole === "super_pm"}
       memberUsers={
         projectResult.success ? projectResult.data.memberUsers : []

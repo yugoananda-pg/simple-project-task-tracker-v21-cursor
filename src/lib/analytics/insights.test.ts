@@ -21,6 +21,7 @@ test("takeaways cite the punctuality figure", () => {
   });
   const schedule = insights.find((item) => item.id === "ps");
   assert.ok(schedule);
-  assert.match(schedule.text, /88\.2%/);
+  assert.match(schedule.text, /score is 0\.88/);
+  assert.doesNotMatch(schedule.text, /88\.2%/);
   assert.match(schedule.text, /Slipping/);
 });

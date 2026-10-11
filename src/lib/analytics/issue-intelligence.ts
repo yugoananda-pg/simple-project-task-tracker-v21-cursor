@@ -13,6 +13,7 @@ import { includeToday, sampleDates } from "@/src/lib/analytics/schedule-series";
 import {
   computeTargetProgressPercent,
   computeTaskPunctualityScore,
+  formatScore2,
   resolveHolidaySet,
   round1,
   STATUS_FLAGS,
@@ -460,5 +461,5 @@ export function buildIssueIntelligence(input: {
 
 export function issuePsLabel(value: number | null): string {
   if (value == null) return "—";
-  return `${value.toFixed(1)}%`;
+  return formatScore2(value);
 }

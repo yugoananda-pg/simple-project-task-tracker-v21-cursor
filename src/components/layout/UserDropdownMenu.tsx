@@ -75,7 +75,7 @@ export default function UserDropdownMenu({
         type="button"
         onClick={() => setOpen((current) => !current)}
         disabled={isSigningOut}
-        className="relative inline-flex items-center gap-1.5 rounded-lg border border-slate-500/70 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:border-slate-300 hover:bg-slate-700/60 disabled:opacity-60"
+        className="relative inline-flex items-center gap-2 rounded-lg border border-slate-500/70 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:border-slate-300 hover:bg-slate-700/60 disabled:opacity-60"
         aria-expanded={open}
         aria-haspopup="menu"
       >

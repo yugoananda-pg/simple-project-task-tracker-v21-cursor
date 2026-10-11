@@ -46,6 +46,28 @@ test("actual progress follows recorded events and stops at today", () => {
   assert.ok((afterToday?.target ?? 0) >= (onFinish?.target ?? 0));
 });
 
+test("a milestone day is kept on the curve when the sample would skip it", () => {
+  const series = buildScheduleSeries({
+    today: "2026-10-08",
+    markerDates: ["2026-12-01"],
+    tasks: [
+      {
+        id: "t1",
+        progress: 10,
+        initialStartDate: "2026-01-01",
+        initialDueDate: "2026-10-01",
+        updatedStartDate: "2026-01-01",
+        updatedDueDate: "2026-10-01",
+        actualStartDate: "2026-01-01",
+        actualCompletionDate: null,
+      },
+    ],
+    events: [],
+  });
+  assert.ok(series.points.some((point) => point.date === "2026-12-01"));
+  assert.equal(series.latest, "2026-12-01");
+});
+
 test("progress on a day uses the latest event on or before that day", () => {
   const events = [
     {

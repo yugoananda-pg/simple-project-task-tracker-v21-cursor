@@ -138,6 +138,72 @@ describe("planTaskImport", () => {
     assert.equal(plan.untouchedCount, 1);
   });
 
+  it("rejects future actual dates, an end before its start, and a year outside 2000 to 2100", () => {
+    const plan = planTaskImport({
+      matrix: sheet([
+        row({
+          task: "Future start",
+          progress: 40,
+          actualStart: "2026-10-09",
+        }),
+        row({
+          task: "Future end",
+          progress: 100,
+          actualStart: "2026-08-01",
+          actualEnd: "2026-10-09",
+        }),
+        row({
+          task: "Backwards actual",
+          progress: 100,
+          actualStart: "2026-08-20",
+          actualEnd: "2026-08-02",
+        }),
+        row({
+          task: "Backwards plan",
+          start: "2026-08-15",
+          end: "2026-08-01",
+        }),
+        row({
+          task: "Backwards update",
+          updatedStart: "2026-09-10",
+          updatedEnd: "2026-09-01",
+        }),
+        row({
+          task: "Old year",
+          actualStart: "1902-12-12",
+        }),
+        row({
+          task: "Mistyped year",
+          start: "0227-12-12",
+          end: "2026-08-15",
+        }),
+        row({
+          task: "Impossible day",
+          end: "2026-04-31",
+        }),
+        row({
+          task: "Same day",
+          progress: 100,
+          actualStart: "2026-08-04",
+          actualEnd: "2026-08-04",
+        }),
+      ]),
+      existing: [],
+      today: TODAY,
+    });
+    const messages = plan.errors.map((error) => error.message).join("\n");
+    assert.equal(plan.rows.length, 1);
+    assert.equal(plan.rows[0]?.title, "Same day");
+    assert.match(messages, /Actual start cannot be in the future/);
+    assert.match(messages, /Actual end cannot be in the future/);
+    assert.match(messages, /Actual end cannot be earlier than the actual start/);
+    assert.match(messages, /Initial end cannot be before the initial start/);
+    assert.match(messages, /Updated finish cannot be before the updated start/);
+    assert.match(messages, /Actual start must be a real date from 2000 to 2100/);
+    assert.match(messages, /Initial start must be a real date from 2000 to 2100/);
+    assert.match(messages, /Initial end is not a valid date/);
+  });
+
   it("warns when the workbook project name differs, and still plans the rows", () => {
     const plan = planTaskImport({
       matrix: sheet([row({})], "Other programme"),

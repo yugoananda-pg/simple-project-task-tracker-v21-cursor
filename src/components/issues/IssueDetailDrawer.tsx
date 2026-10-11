@@ -420,18 +420,23 @@ export default function IssueDetailDrawer({
                 id: `${detail.id}-drawer`,
                 assigneeId: detail.picId,
                 assigneeName: detail.picName,
+                assignees:
+                  detail.picId || detail.picName
+                    ? [{ userId: detail.picId, name: detail.picName }]
+                    : [],
               }}
               members={memberUsers}
               suggestions={customAssigneeNames}
               disabled={!canEditCore || isPending}
               label="PIC"
+              single
               labelClassName={labelClassName}
               fieldClassName={fieldClassName}
               onCommit={(next) =>
                 patch({
                   id: detail.id,
-                  picId: next.assigneeId,
-                  picName: next.assigneeName,
+                  picId: next.assigneeId ?? null,
+                  picName: next.assigneeName ?? "",
                 })
               }
             />

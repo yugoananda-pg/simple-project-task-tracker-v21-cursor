@@ -6,8 +6,8 @@
 **IDE / workspace:** Cursor (Agent + IDE browser automation for UAT)  
 **Companion documents:** [`dev_plan.md`](./dev_plan.md) · [`dev_req.md`](./dev_req.md) · [`dev_ref.md`](./dev_ref.md) · [`dev_uat.md`](./dev_uat.md) · [`dev_spec.md`](./dev_spec.md) · [`supabase-security.md`](./supabase-security.md)  
 **Repository:** `https://github.com/yugoananda-pg/simple-project-task-tracker-v21-cursor.git`  
-**Edition scope:** Project bootstrap through **Wave 4B UAT PASSED**; **pre–Wave 4C UX polish** as-built; **Wave 4C-1** high-density List as-built; **Wave 4C-1b** Excel import as-built; **Wave 4C-2a** per-project Analytics as-built 8 Oct 2026 (UAT not yet accepted); **Wave 4C-2b** dashboard access as-built 9 Oct 2026 (UAT not yet accepted); **Wave 4C-3** portfolio, macro timeline and About as-built 9 Oct 2026 (UAT not yet accepted)  
-**Last updated:** 9 October 2026  
+**Edition scope:** Project bootstrap through **Wave 4B UAT PASSED**; **pre–Wave 4C UX polish** as-built; **Wave 4C-1** high-density List as-built; **Wave 4C-1b** Excel import as-built; **Wave 4C-2a** per-project Analytics as-built 8 Oct 2026 (UAT not yet accepted); **Wave 4C-2b** dashboard access as-built 9 Oct 2026 (UAT not yet accepted); **Wave 4C-3** portfolio, macro timeline and About as-built 9 Oct 2026 (UAT not yet accepted); **Wave 4C-3a** feedback package (release 2.1.28) as-built 9 Oct 2026 (UAT not yet accepted); **date fields** (release 2.1.29) as-built 9 Oct 2026; **stored-date errors and import integrity** (release 2.1.30) as-built 9 Oct 2026; **score, milestones and date-message timing** (release 2.1.31) as-built 10 Oct 2026; **task-update spinner** (release 2.1.32) as-built 10 Oct 2026; **completed punctuality** (release 2.1.33) as-built 10 Oct 2026; **punctuality hover** (release 2.1.35) as-built 10 Oct 2026; **milestone lines on the process-group timeline** (release 2.1.36) as-built 10 Oct 2026; **executive PDF and PowerPoint** (release 2.1.37) as-built 10 Oct 2026; **report notes** (release 2.1.38) as-built 10 Oct 2026; **portfolio toolbar** (release 2.1.39) as-built 10 Oct 2026; **report note placement, milestone key and equal note width** (release 2.1.40) as-built 11 Oct 2026; **instant task-name tip** (release 2.1.41) as-built 11 Oct 2026; **List task drawer** (release 2.1.42) as-built 11 Oct 2026; **Gantt bar tip** (release 2.1.43) as-built 11 Oct 2026; **several PICs on a task** (release 2.1.44) as-built 11 Oct 2026; **task drawer draft save** (release 2.1.45) as-built 11 Oct 2026; **drawer selective restore** (release 2.1.46) as-built 11 Oct 2026  
+**Last updated:** 11 October 2026  
 
 ### Programme delivery status (as-built)
 
@@ -21,7 +21,25 @@
 | **4C-2a — Per-project Analytics** | Shipped | Not yet accepted | §12.9–§12.11 |
 | **4C-2b — Dashboard access** | Shipped | Not yet accepted | §12.12 |
 | **4C-3 — Portfolio / macro timeline / About** | Shipped | Not yet accepted | §12.13 |
-| **4C-4 onward — PDF / close-out** | **Not in current build** | Deferred | Next package is 4C-4 (PDF export) |
+| **4C-3a — Feedback package (2.1.28)** | Shipped | Not yet accepted | §12.14 |
+| **Date fields (2.1.29)** | Shipped | Developer check | §12.15 |
+| **Stored dates and import integrity (2.1.30)** | Shipped | Developer check | §12.16 |
+| **Score, milestone lines, date-message timing (2.1.31)** | Shipped | Developer check | §12.17 |
+| **Task-update spinner (2.1.32)** | Shipped | Developer check | §12.18 |
+| **Completed punctuality (2.1.33)** | Shipped | Developer check | §12.19 |
+| **Punctuality hover (2.1.35)** | Shipped | Developer check | §12.20 |
+| **Milestone lines on the process-group timeline (2.1.36)** | Shipped | Developer check | §12.22 |
+| **Executive PDF and PowerPoint (2.1.37)** | Shipped | Developer check | §12.23 |
+| **Report notes (2.1.38)** | Shipped | Developer check | §12.24 |
+| **Portfolio toolbar (2.1.39)** | Shipped | Developer check | §12.25 |
+| **Report layout (2.1.40)** | Shipped | Developer check | §12.26 |
+| **Task name tip (2.1.41)** | Shipped | Developer check | §12.27 |
+| **List task drawer (2.1.42)** | Shipped | Developer check | §12.28 |
+| **Gantt bar tip (2.1.43)** | Shipped | Developer check | §12.29 |
+| **Several PICs (2.1.44)** | Shipped | Developer check | §12.30 |
+| **Drawer draft save (2.1.45)** | Shipped | Developer check | §12.31 |
+| **Drawer selective restore (2.1.46)** | Shipped | Developer check | §12.32 |
+| **4C-U — close-out** | **Not in current build** | Deferred | UAT pack plus UAT-R |
 
 **Note on `dev_spec.md`:** Still reflects the Wave 3 / v2.0 baseline by stakeholder decision. Refresh after Wave 4C closes; do not treat its version banner as the as-built 2.1 stack.
 
@@ -455,7 +473,7 @@ User approval queue (email-confirm gated via `/auth/confirm` + `/auth/callback`)
    - Hub header — when `customProjectId` is non-blank, show it between title and description (smaller monospace).  
    - `ProjectMilestonesPanel` — compact stage-gate strip; Add/Edit modal (name, description, updated target, achieved date, delete); chips fill up to two rows; View all only when more chips would not fit.  
    - Fourth hub tab **Issue Log** (Analytics is fifth): `ProjectIssueLogView` register + `IssueDetailDrawer` (comments, activity trail, close/resolve). Register inline edit covers title, severity, status, PIC, progress, and updated dates (title and PIC: owning PM / Super PM).  
-   - `ProjectGanttView` — dashed vertical milestone markers anchored on `actualAchieved ?? updatedTarget` (amber pending / emerald achieved); Gantt legend lists both **Milestone (pending)** and **Milestone (achieved)** when any milestones exist; dates included in timeline bounds. Scrollport height ≈ `100vh − 200px`. Today and milestone lines use task/group body height (end on the last row). Same-day milestones offset 4px left of Today with tip/legend disclosure.
+   - `ProjectGanttView` — dashed vertical milestone markers anchored on `actualAchieved ?? updatedTarget` (amber pending / emerald achieved); Gantt legend lists both **Milestone (pending)** and **Milestone (achieved)** when any milestones exist; dates included in timeline bounds. Scrollport height ≈ `100vh − 200px` (superseded in 2.1.28, §12.14). Today and milestone lines use task/group body height (end on the last row). Same-day milestones offset 4px left of Today with tip/legend disclosure.
    - **FR-DAT-01:** `actualAchieved` (milestones), task/issue actual dates reject future local calendar days via `assertActualDateNotFuture`; planned targets remain free to be future.  
    - `app/projects/[id]/page.tsx` loads project, tasks, issues, milestones, and holidays in parallel.
 
@@ -607,10 +625,109 @@ Browser document title (`app/layout.tsx` metadata) and header brand (`AppHeader`
 
 ### 12.6 Explicitly not started
 
-- Wave 4C-4: PDF export (next package).
 - Wave 4C-U: UAT pack and UAT-R regression.
 - Wave 4C-3 (`/portfolio`, macro timeline, About, portfolio notes) is now as-built; see §12.13. Notes use the in-house editor, not Tiptap.
+- Wave 4C-4 (PDF and PowerPoint) is now as-built; see §12.23.
 - `dev_spec.md` full rewrite to 2.1 (stakeholder-deferred until programme close).
+
+### 12.14 Wave 4C-3a — Feedback package: views, score format, Analytics layout (9 Oct 2026, release 2.1.28)
+
+**Why.** After 4C-3 the operator reported seven problems: the Gantt showed too little of the chart and its rows were tall; the Kanban showed about three cards per column; people read the Punctuality Score as progress; a score is not a ratio, so `89.3%` misled; the Project Punctuality card did not say what PS is; the Status flag badge and sentence were small; and Analytics had no schedule picture. The operator asked for recommendations, and for the layout to change where that helped. This package ran before 4C-4 (PDF), so the PDF reuses the final layout.
+
+| Item | Detail |
+|------|--------|
+| Score format | PS is still computed and stored on the 0–100 scale (so every threshold, status flag rule and test is unchanged). `formatScore3(ps)` in `weighted-progress.ts` turns `89.3` into `0.893` for display only. It is used on the List banner and **PS** column, `TaskListView`, Analytics headline, takeaway sentences (`insights.ts`, `portfolio.ts`), Issue Intelligence labels (`issue-intelligence.ts`) and `PmComparison`. Status flag thresholds are shown as 0.850, 0.950 and 1.050. `StatusFlagDefinition` gained a one-sentence `meaning` for SF-01 to SF-11, shown beside the badge. Actual, Target and the difference remain percentages. |
+| Headline cards | New `src/components/analytics/ScheduleHeadline.tsx`, shared by the project Analytics tab and `/portfolio`. Left card, half width: **Actual minus target** as a 48 px signed figure in points, plus two labelled bars (Actual, Target) with large percentages. Middle card: score (48 px), the line *Score. 1.000 is on schedule.*, a gauge, and a hover or focus explainer (`role="tooltip"`, wired with `aria-describedby`, `tabIndex=0` so keyboards get it). Right card: Status flag badge (`text-lg`, `rounded-xl`) with a 15 px sentence. |
+| Process-group timeline | `buildProcessGroupRows` in `portfolio.ts` returns the five groups (Initiating to Closing) with the earliest and latest date for the Initial, Updated and Actual pairs, task count, overdue count and group score. The macro timeline was refactored into a generic `TimelineGrid` (rows, axis, name cell, row height are parameters); `MacroTimeline` and the new `ProcessGroupTimeline.tsx` both use it, so the two charts share one geometry, one legend (`MacroLegend`) and one tooltip. The name column is 9 rem on phones and 14 rem from 640 px. |
+| Analytics order | Heading, headline cards, **Schedule by process group**, then **Key takeaways** (two thirds) beside **Project note** (one third), then the existing S-curve, burn-down, composition, overdue and milestones, then Issue Intelligence. The timeline sits right after the cards because it answers "where is the project against its plan" before any chart. Takeaways takes `lg:col-span-2` of a three-column grid (measured 912 px against 448 px at 1440 px) and the two cards share a height. `Takeaways.tsx` is new and holds the takeaway list. |
+| Gantt | `ProjectGanttView.tsx` has two densities from a spec table: **Comfortable** (row 60 px, group 30 px, bars 8 px) and **Compact** (row 44 px, group 26 px, bars 6 px). The old row was 96 px (group header 36 px), so rows are 37% and 54% shorter. The chart height was `100vh − 200px`; it is now `calc(100dvh − 14.5rem)` (or `− 6rem` expanded). A `ResizeObserver` measures the scroller and scales the column widths so a short timeline fills the card (never shrinks below the natural width). Each process group header collapses its tasks; **Collapse all groups** and **Expand all groups** are in the toolbar. Today and milestone lines are sized to the visible rows. |
+| Kanban | `KanbanBoard`, `KanbanColumn` and `TaskCard` support **Compact** (default) and **Comfortable**. Compact clamps the title to two lines, puts the status flag and the Actual and Target badges on one row, drops the divider and uses a smaller avatar. `ProgressPairBadges` gained a `size` prop. Columns are `calc(100dvh − 9rem)` tall, scroll on their own and keep their header in view, so nothing at the bottom of the page is cut. `@hello-pangea/dnd` wiring (`droppableProps`, `draggableProps`, `dragHandleProps`, `placeholder`) is unchanged. |
+| Expanded view | `ExpandViewButton.tsx`. In `ProjectDetailView`, `expandedRequested` is page state, and `isExpanded` is true only while on Kanban or Gantt. Expanded hides the hero, the milestone strip and the read-only notice, and uses a slim header; the Kanban column height becomes `calc(100dvh − 15rem)`. It is not stored. |
+| Preferences | `src/lib/ui/use-stored-choice.ts` (`useSyncExternalStore` over `localStorage`, server snapshot is the default so there is no hydration mismatch). Keys: `sptt.gantt.density`, `sptt.kanban.density`. Values are validated against a list, so a stale or edited value falls back to the default. `SegmentedControl.tsx` is the shared toggle. |
+| Tests | `weighted-progress.test.ts` (`formatScore3`), `portfolio.test.ts` (process-group rows: five groups in order, empty groups, earliest start to latest end, per-group score and overdue count, shared axis; takeaway wording), `insights.test.ts` (0.xxx wording). `npm run test:unit`: 62 passing. |
+| Gates | `npx tsc --noEmit` clean. ESLint reports the same 17 `react-hooks/set-state-in-effect` errors as before (existing debt) and no new error or warning from this package. |
+| Browser check (9 Oct 2026, UAT PM, E-Commerce project) | Dark, 1440 × 900: Kanban compact cards and column height; Gantt rows measured at 60 and 44 px, fit-to-width and expanded fit; Analytics headline cards, process-group timeline, score hover explainer (focus), takeaways width 912 against note 448 and equal height; List banner and **PS** column read `0.315` and `0.xxx`. Light, 384 px wide: headline cards stack and read well, process-group timeline scrolls inside its card with the name column visible, Kanban compact cards and **Exit expanded view**. A first pass showed the process-group name column too wide on a phone (only about 100 px of chart visible); the column is now narrower on phones and its sub-line wraps instead of truncating. |
+| Not done here | Kanban drag and drop was not exercised against live data (a drop would change the UAT project's tasks); the code path is unchanged and UAT-431 step 4 covers it. Collapse-all on the Gantt and `localStorage` persistence across a reload were checked by code review, not live, and are UAT-430 steps 1 and 3. Portfolio By PM headline cards were not re-captured after the change; the component is the one shown on the project tab. |
+
+### 12.15 Date fields — clickable parts and a fixed calendar (9 Oct 2026, release 2.1.29)
+
+**Why.** Two E-Commerce tasks were stored with years 0227 and 1902. The operator could not correct them. The calendar had no year control, so reaching 2027 meant stepping a month at a time. The year in the field could not be clicked; the keyboard reached it only with the right arrow. The first digit was treated as a finished date and immediately failed with “Actual finish date cannot be earlier than the actual start date.” Months with more week rows resized the calendar, so the previous and next arrows moved under the pointer. The same control is used by every calendar in the product.
+
+| Item | Detail |
+|------|--------|
+| Control | `src/components/ui/DateField.tsx`, shared by List, the task drawer, Issue Log, the issue drawer, the milestone dialog and the holiday form. The stored value stays `yyyy-mm-dd`. The field shows day / month / year. |
+| Parts | Clicking Day, Month or Year selects that part. The first keystroke replaces it. Day 4–9 and month 2–9 pad and move on; day waits for a second digit when the first is 0–3, and month waits when the first is 0 or 1. The year takes exactly four digits, then the date is written if the day and month are a real date. Backspace, arrow keys and `/`, `-` or `.` move between parts. An unfinished year is not written and is not checked. Leaving the field restores the previous date and shows no error. Arrow up and down step a complete date, clamped to the field’s minimum and maximum. |
+| Calendar | The button at the right opens a picker of fixed height (`h-[13.75rem]`, always six week rows). Previous and next only move the view: a month on the day grid, a year on the month grid, a page of years on the year list. The month name and the year in the header are buttons. The month button opens the twelve months. The year button opens 2000–2100. Choosing a year or a month returns to the day grid and does not write the date. Choosing a day writes it and closes the picker. A stored year outside 2000–2100 opens the year list, scrolled to the current year. |
+| Logic | `src/lib/date-segments.ts` and `date-segments.test.ts`. The first digit of a year is not a date. `monthCells` is always 42 cells. `yearsInRange` excludes 1902 and includes 2027. |
+| Tests | `npm run test:unit`: 74 passing, including the 12 date-segment tests. `tsc --noEmit` clean. ESLint clean on the date-field files. |
+| Browser check (9 Oct 2026, UAT PM, temporary project) | Clicking Year and typing `2` showed `2` in the year and did not raise the actual-date error; `2027` then saved. Stepping October through April kept the calendar at 286 px and the arrows at the same position. Choosing 2025, then June, then the 15th wrote `2025-06-15`; browsing the year list did not. An unfinished year restored `2026` on clicking away, with no date error. A field showing 1902 opened the year list, which starts at 2000. |
+| Not done here | The two E-Commerce rows (years 0227 and 1902) were not edited. The operator corrects those. Two temporary projects named “Date field check” were used for the check. |
+
+### 12.16 Stored actual dates and import integrity (9 Oct 2026, release 2.1.30)
+
+**Why.** Opening **E-Commerce Mobile App Redesign** showed “Actual finish date cannot be earlier than the actual start date” before any edit. Dismissing one copy revealed two more of the same message. The Doing task **Build redesigned cart and checkout flow** had actual start 2026-08-25 and actual finish 1902-12-12. Every date field on the page treated a click as leaving an edit, so both actual-date fields checked that stored pair and each raised the error, and the banner repeated it.
+
+| Item | Detail |
+|------|--------|
+| Data | Actual finish cleared on that Doing task. Status stays Doing, progress stays 1%, actual start stays 2026-08-25. |
+| Page | A date field reports a range error only when the value being saved differs from the stored value. A click elsewhere does not check fields that are not being edited. |
+| Save | `updateTaskFields` rejects an initial due before the initial start, and an updated due before the updated start, when that pair is part of the save. |
+| Import | `planTaskImport` already blocked a future actual date and an end before its start. It now also says so for a date outside 2000–2100, and for an actual end with no actual start. A date that cannot exist (such as 31 April) is still rejected. Covered by `task-import-rows.test.ts`. |
+| Still stored | **Stakeholder read-out deck for peak readiness** (To Do) still has actual start 0227-12-12. It does not raise the finish-before-start error. The operator can clear it. |
+
+### 12.17 Score format, milestone lines, and when a date error appears (10 Oct 2026, release 2.1.31)
+
+**Why.** The Punctuality Score was shown to three decimals (`0.893`), which is finer than the operator reads it. The Project Punctuality note always opened below the card, so scrolling the card to the bottom of the window hid most of the note. The two upper bands were both green. The per-project schedule charts did not mark milestones. A date that broke a rule reported the error as soon as the year was complete, while the person was still in the field.
+
+| Item | Detail |
+|------|--------|
+| Score | `formatScore2` in `weighted-progress.ts` shows the stored 0–100 score divided by 100, with two decimals (`89.3` → `0.89`, `100` → `1.00`, `105` → `1.05`, `83` → `0.83`). Thresholds and storage are unchanged. List banner, PS column, headline, takeaways, Issue Intelligence labels, process-group labels and Comparison by PM all use it. |
+| Explainer | `ScheduleHeadline.tsx` portals the note to the document and places it with the card’s position: below when the window has room, above when the card is near the bottom, and shifted so the note is not cut off by the side. It fades in (`sptt-tip-in`). Bands: PS ≥ 1.05 (indigo), 0.95 ≤ PS < 1.05 (emerald), 0.85 ≤ PS < 0.95 (amber), PS < 0.85 (rose). The same card is used on `/portfolio`. |
+| Milestones | `TrendChart` accepts milestone markers. The per-project S-curve and task burn-down draw a dashed vertical line. Pending is amber (`--sptt-milestone-pending`), achieved is emerald (`--sptt-milestone-achieved`), the same idea as the Gantt. The legend names only the kinds present. The line’s day is the achieved date when set, otherwise the updated target. `buildScheduleSeries` keeps that day on the axis. |
+| Dates | A finished date is checked when the picker closes, or when day, month and year are no longer active. Typing a complete year does not check it yet. If the finished value breaks a rule, the field returns to the previous acceptable value and the message is shown then. List and the task drawer both wait for that moment. |
+| Import and owner | A workbook with errors shows each message and a line that nothing is imported until the file is fixed and chosen again. Create stays off. This was already the rule; the consequence is now stated in the preview. Creating a project, including from Excel, remains limited to the signed-in PM or Super PM (`canCreateProject`). That person is the owner. Viewer and Member are not offered **+ New Project**, and the server refuses the create. |
+| Tests | `formatScore2`, takeaway wording `0.88`, portfolio `0.xx`, and a milestone day kept on a long schedule series. |
+
+### 12.18 Task-update spinner (10 Oct 2026, release 2.1.32)
+
+**Why.** After Enter on an actual finish that is earlier than the actual start, the message was correct, then the page paused. The only sign was the small Next.js Dev Tools “Rendering…” badge at the bottom left. The same pause happens while a task save refreshes the page. Portfolio scope already shows a spinner pill for its own refresh (FR-UI-01). The project page did not.
+
+| Item | Detail |
+|------|--------|
+| Cue | A light wash and a centred pill: spinner plus “Updating the task…” while a finished date is checked or a task field is saved, and “Creating task…” while a task is created. The wash covers the page, including the task drawer, and blocks clicks. The error toast stays above it. |
+| Why it can paint first | The pill is not state on the project view. That view mounts Kanban, Gantt, List, Issue Log and Analytics together, so a pending flag there cannot appear until the slow redraw finishes. The pill updates on its own, then the date message or save is drawn underneath it. |
+| Unchanged | A refused date still returns to the previous acceptable value and shows the message only after the edit finishes (2.1.31). |
+
+### 12.19 Completed punctuality (10 Oct 2026, release 2.1.33)
+
+**Why.** A finished task was scored as planned working days divided by the working days from the planned start through the actual finish. Starting early lengthened that span. A plan of 1 Jul 2026 to 31 Aug 2026 (44 working days), started on 10 Jun and handed over on 25 Aug (before the 31 Aug due date), scored about 0.80 and was flagged Completed Severely Late.
+
+| Item | Detail |
+|------|--------|
+| Finished task | Compare the actual finish with the planned due date (updated due, otherwise initial). Before that date the score is at least 1.05 and the flag is Completed Ahead of Schedule. On that date the score is 1.00 and the flag is Completed On Time. After that date the score is planned days divided by planned days plus the working days overdue, and the flag is Completed Late at 0.85 or above, otherwise Completed Severely Late. Status Done uses this rule even when progress is below 100%. |
+| Finished project | When every task is complete, the same comparison uses the earliest planned start, the latest planned due, and the latest actual finish. |
+| Unfinished | Not started and in progress keep the existing actual-versus-target formulas, including the 100% cap on target progress. |
+| Engine | `scoreCompletedAgainstDue` in `weighted-progress.ts`. `workingDaysAfter` counts working days strictly after the anchor day. Tests cover the 1 Jul–31 Aug example, an on-time finish, a short overrun, a late project handover, and a project that still has unfinished work. |
+
+### 12.20 Punctuality hover (10 Oct 2026, release 2.1.35)
+
+**Why.** The score note read like a paragraph, and the List heading still used a slow native tooltip that only mentioned progress divided by target.
+
+| Item | Detail |
+|------|--------|
+| Card | `PunctualityScoreTip.tsx`, used by the project Analytics tab, `/portfolio`, the List project score and PS heading, and the portfolio Punctuality column. Opens at once on hover and on keyboard focus. No native `title` delay. |
+| Words | Title Punctuality Score (PS). 1.00 is right on schedule; above is ahead; below is slipping. In progress: actual progress against elapsed working days. Completed: planned duration against the actual finish. Bands: PS ≥ 1.05 Ahead / Completed early, 0.95 ≤ PS < 1.05 On track / Completed on time, 0.85 ≤ PS < 0.95 Slipping / Completed late, PS < 0.85 Critically delayed / Completed severely late. Note: planned working days only, weekends and public holidays excluded, early handovers never penalised, issue work left out. No formula. |
+| Placement | Portalled, `z-50`, dark card. Opens below when the window has room, above when the anchor is near the bottom, and shifts so it is not cut off. |
+
+### 12.22 Milestone lines on the process-group timeline (10 Oct 2026, release 2.1.36)
+
+**Why.** The dashed milestone lines sat on the Schedule S-Curve and the task burn-down. They belong on the five-row process-group timeline, which is the schedule picture.
+
+| Item | Detail |
+|------|--------|
+| Removed | `TrendChart` no longer draws milestone lines. The per-project S-curve and burn-down do not pass milestone days into the series. |
+| Timeline | `ProcessGroupTimeline` draws one dashed line per milestone across all five rows. The day is the achieved date when set, otherwise the updated target. Pending is amber, achieved is emerald. The line has no name on it. Hover or focus names the milestone and the date. The legend lists only the kinds that appear. |
+| Axis | `buildMacroAxis` takes those days as extra dates, so a milestone after the last task stays on the chart. Portfolio diamonds are unchanged. |
 
 ### 12.13 Wave 4C-3 — Portfolio, macro timeline, About (9 Oct 2026)
 
@@ -670,7 +787,7 @@ Browser document title (`app/layout.tsx` metadata) and header brand (`AppHeader`
 
 | Item | Detail |
 |------|--------|
-| Calendar | `DateField` opens an in-page month grid. Previous / next month do not write the date; choosing a day does. Typing in the field still works. |
+| Calendar | `DateField` opened an in-page month grid. Previous / next month did not write the date; choosing a day did. Superseded in 2.1.29 (§12.15): clickable day, month and year, and a fixed-height calendar. |
 | Issue Log | Register inline edit for title, PIC, and updated start / due, under the same rights as the drawer. |
 | Tabs | Analytics is the last hub tab, after Issue Log. |
 
@@ -683,11 +800,11 @@ Browser document title (`app/layout.tsx` metadata) and header brand (`AppHeader`
 | Columns | No., Task, Status, Actual %, Target %, Initial start/due/WD, Updated start/due/WD, Actual start/finish/WD, PS, Status flag |
 | WD | Inclusive working days via `plannedWorkingDuration` (= $\max(1,$ inclusive WD$)$); same-day = 1; holidays/weekends excluded from the raw count |
 | Freeze | Sticky column header + process-group headers (label only, in freeze-width rail); sticky drag/No./Task with opaque fills; scroll-aware Task freeze edge (not on group/Add-row rows); one **Add row** per group; hover thickens the row’s **own** bottom grid line + **+** (no spacer row; z below sticky group headers); empty projects keep the five-group table; inline delete + confirm; uncontrolled list date inputs; titles wrap; actual date range rules + dismissible toast/banner (~7s) |
-| Edit | Inline title / status / actual % / dates; each date field has a calendar button on the right that opens the in-page month grid (month arrows do not write the date); actual finish when not Done/100% → confirm Mark as Done; PS, Status flag, Target %, WD read-only; WD columns centre-aligned; Project PS strip above table (live from `computeProjectScheduleHealth`) |
+| Edit | Inline title / status / actual % / dates; each date field uses the shared calendar (2.1.29, §12.15); actual finish when not Done/100% → confirm Mark as Done; PS, Status flag, Target %, WD read-only; WD columns centre-aligned; Project PS strip above table (live from `computeProjectScheduleHealth`) |
 | Order | `Task.listSortOrder` + `reorderTasksInList`; DnD within/across groups |
 | Create | Draft row first → `createTask({ bucket, listIndex, title, initialStartDate, initialDueDate })` on complete blur; gap-hover **+** / **Add row** open drafts |
 | Delete | Hover trash on row → confirm → `deleteTask` (same RBAC as drawer) |
-| Details | Optional **Details** opens drawer for PIC / priority / checklist / comments |
+| Details | **Details** button beside the task name opens the same drawer as Kanban (2.1.42) |
 | Migration | `20261006080000_task_list_sort_order` |
 
 ### 12.7 As-built programme summary (through Wave 4C-3)
@@ -701,8 +818,151 @@ Browser document title (`app/layout.tsx` metadata) and header brand (`AppHeader`
 | **Wave 4C-1** | High-density process-group task table | Shipped 6 Oct 2026 |
 | **Wave 4C-2a / 2b** | Per-project Analytics; dashboard access | Shipped 8–9 Oct 2026; UAT not yet accepted |
 | **Wave 4C-3** | `/portfolio`, macro timeline, portfolio notes, About | Shipped 9 Oct 2026; UAT not yet accepted |
-| **Wave 4C-4** | PDF export | **Not started** |
+| **Wave 4C-3a** | Feedback package: score as 0.000, headline cards, process-group timeline, Gantt and Kanban density, Expanded view | Shipped 9 Oct 2026; UAT not yet accepted |
+| **Date fields** | Clickable day, month and year; fixed-height calendar (2.1.29) | Shipped 9 Oct 2026; developer check §12.15 |
+| **Stored dates / import** | No error on open; import and save date integrity (2.1.30) | Shipped 9 Oct 2026; §12.16 |
+| **Score and charts (2.1.31)** | Two-decimal PS, floating explainer, milestone lines, date message after the edit | Shipped 10 Oct 2026; §12.17 |
+| **Task-update spinner (2.1.32)** | “Updating the task…” / “Creating task…” pill while a date check or task save is drawn | Shipped 10 Oct 2026; §12.18 |
+| **Completed punctuality (2.1.33)** | Finished work is scored against the planned due date | Shipped 10 Oct 2026; §12.19 |
+| **Punctuality hover (2.1.35)** | Instant dark score card on Analytics, List, and portfolio comparison | Shipped 10 Oct 2026; §12.20 |
+| **Milestone lines (2.1.36)** | Dashed lines on the five process-group rows, not on the S-curve or burn-down | Shipped 10 Oct 2026; §12.22 |
+| **Executive report (2.1.37)** | Client-side 16:9 PDF and PowerPoint of Analytics and `/portfolio` | Shipped 10 Oct 2026; §12.23 |
+| **Report notes (2.1.38)** | Written note on the slide after the summary, when it has text | Shipped 10 Oct 2026; §12.24 |
+| **Portfolio toolbar (2.1.39)** | One control bar; dropdown chevron inset | Shipped 10 Oct 2026; §12.25 |
+| **Report layout (2.1.40)** | Short note under takeaways; long note on the next slide; dates with milestone titles; equal note width | Shipped 11 Oct 2026; §12.26 |
+| **Task name tip (2.1.41)** | Full task title on hover, at once, in List and Gantt | Shipped 11 Oct 2026; §12.27 |
+| **List task drawer (2.1.42)** | Details button on each List row opens the Kanban task drawer | Shipped 11 Oct 2026; §12.28 |
+| **Gantt bar tip (2.1.43)** | Timeline-bar hover names the task, then that bar’s start and end | Shipped 11 Oct 2026; §12.29 |
+| **Several PICs (2.1.44)** | A task may have several people; cards stay compact | Shipped 11 Oct 2026; §12.30 |
+| **Drawer draft save (2.1.45)** | Task drawer fields write once on close | Shipped 11 Oct 2026; §12.31 |
+| **Drawer selective restore (2.1.46)** | Broken values return to the previous saved values; other edits save | Shipped 11 Oct 2026; §12.32 |
+| **Wave 4C-U** | UAT pack and UAT-R | **Not started** |
+
+### 12.23 Executive PDF and PowerPoint (10 Oct 2026, release 2.1.37)
+
+**Why.** The operator asked for a downloadable executive report in both PDF and PowerPoint, using the attached brief as a floor, not a ceiling. Print routes and a server PDF were dropped: the same figures already sit in the browser, and a second calculation would drift.
+
+| Item | Detail |
+|------|--------|
+| Trigger | One **Export report** button on the project Analytics tab and on `/portfolio`. Menu: PDF or PowerPoint. Spinner and `aria-live` while the file is built. Escape closes the menu. |
+| Who | Anyone who can open the screen. The footer names the signed-in user. |
+| Shape | 16:9 slides (1920 × 1080 units). PDF page 960 × 540 pt. PowerPoint 13.333 × 7.5 in. Not A4. |
+| Theme | Light off-white (`#f8fafc`), white cards, teal rule. Arial in PowerPoint, Helvetica in the PDF (same metrics). |
+| Maths | No new scores. `weighted-progress.ts`, `schedule-series.ts`, `schedule-composition.ts`, `insights.ts`, `issue-intelligence.ts`, `portfolio.ts`. Issue work stays off the schedule slides. |
+| Milestones | Numbered markers and a key (name, date, status). Portfolio key also names the project. |
+| Footer | Report name, scope, exported by, Australian date and time, page n of N. |
+| Engine | `src/lib/export/executive-deck-generator.ts`. One slide list, two renderers (`jspdf`, `pptxgenjs`). Text is wrapped once. Libraries load only on click. |
+| UAT | UAT-432. Not accepted. UAT-R stays the close-out gate. |
+
+Section 12.21 is unused.
+
+### 12.24 Written note in the executive report (10 Oct 2026, release 2.1.38)
+
+**Why.** The project note and the portfolio notes are the commentary an executive is meant to read with the figures. The first export left them on the screen. Where the note sits was revised in §12.26.
+
+| Item | Detail |
+|------|--------|
+| When | A Note slide is added only when the note has text. An empty note does not add a slide. Superseded for placement by §12.26. |
+| Where | Immediately after the summary, before the schedule or the macro timeline. Superseded by §12.26: a short note stays on the summary. |
+| Which note | Project Analytics uses the project note. By PM uses that PM’s portfolio note. All projects uses the All projects note, including when fewer projects are ticked. |
+| Shape | One card. Headings stay headings. Lists stay lists. A teal rule sits inside the card. The foot of the card says who updated it and the Australian date. |
+| Length | Two slides at most. The last line then reads *The rest of this note is on the screen.* |
+| UAT | UAT-432, step 7. Not accepted. |
+
+### 12.25 Portfolio toolbar (10 Oct 2026, release 2.1.39)
+
+**Why.** The scope toggle, the project filter and Export report sat on different rows, and the browser’s dropdown arrow touched the right edge of every select.
+
+| Item | Detail |
+|------|--------|
+| Bar | Under the Portfolio title: scope, Project Manager or project filter, Include Completed projects, then Export report at the right. |
+| Hint | The “tick fewer projects” line sits under that bar. |
+| Arrows | Every native `<select>` draws a chevron 12px in from the right edge, the same inset as Export report. The account menu uses the same gap. |
+
+### 12.26 Report notes, milestone key and note width (11 Oct 2026, release 2.1.40)
+
+**Why.** A short commentary was being given a slide of its own, milestone dates sat at the far side of the key, and on screen the takeaways card was twice the width of the note.
+
+| Item | Detail |
+|------|--------|
+| Empty note | No note card and no note slide, for a project, a PM portfolio, or All projects. |
+| Short note | A card on the first slide, under Key takeaways (under What stands out on a portfolio). Short means the card is at most 240px tall and the takeaways can still show every point in full. |
+| Long note | The next slide, one slide only. The last line then says the rest is on the screen. |
+| Milestone key | The date sits immediately after the name. A long name wraps, and the date follows the last line, or the next line when it does not fit beside it. |
+| Screen | On Analytics and on `/portfolio`, Key takeaways and the note are the same width and the same height from 1024 px. Below that they stack, takeaways first. |
+| UAT | UAT-429 step 5, UAT-409 step 7, UAT-432 steps 4 and 7. Not accepted. |
+
+### 12.27 Instant task name on List and Gantt (11 Oct 2026, release 2.1.41)
+
+**Why.** A long task title is trimmed in the Task column, and the browser’s own tooltip waits before it shows the rest.
+
+| Item | Detail |
+|------|--------|
+| Where | List View Task column, and the Gantt Task column. |
+| What | The complete title, wrapping so a long name is not cut off. |
+| When | The moment the pointer is over the name. Keyboard focus on a Gantt row does the same. |
+| UAT | UAT-430 step 6. Not accepted. |
+
+### 12.28 List task drawer (11 Oct 2026, release 2.1.42)
+
+**Why.** The List row’s way into the task drawer was a 10px link under the title, and the task-name tip sat on top of it, so the drawer looked missing.
+
+| Item | Detail |
+|------|--------|
+| Control | A **Details** button beside the task name on every List row. |
+| Drawer | The same task drawer as a Kanban card. Description, priority, assignee, checklist and comments are editable when that user may edit the task. |
+| Read-only row | Choosing the task name opens the drawer as well. |
+| Tip | The complete-name tip stays on the title and does not cover the button. |
+| UAT | Changelog 1.40. Not accepted. |
+
+### 12.29 Gantt bar tip (11 Oct 2026, release 2.1.43)
+
+**Why.** Hovering a timeline bar repeated the project title, which is already in the page heading. The person needs the task.
+
+| Item | Detail |
+|------|--------|
+| Where | Each Initial, Updated and Actual bar on the project Gantt. |
+| Card | Task name, then that bar’s start date and end date. A long name wraps. |
+| UAT | UAT-430 step 4. Not accepted. |
+
+### 12.30 Several PICs on a task (11 Oct 2026, release 2.1.44)
+
+**Why.** Operational practice puts more than one person on a task. One name was not enough, and listing every name in full would crowd the card.
+
+| Item | Detail |
+|------|--------|
+| Store | `TaskAssignee` join. The first person is also kept on `Task.assigneeId` / `assigneeName`. |
+| Drawer | Chips. Add from the roster or a custom name. Remove with the cross. Issues stay one PIC. |
+| Cards | Stacked initials, then the first name, then +N. Hover lists every name. |
+| Workload | An open task counts once for each person on it, with the full planned days. |
+| UAT | Changelog 1.42. Not accepted. |
+
+### 12.31 Task drawer draft save (11 Oct 2026, release 2.1.45)
+
+**Why.** Saving every field as it left focus stopped people mid-edit and treated a half-finished date pair as invalid.
+
+| Item | Detail |
+|------|--------|
+| Draft | Title, description, process group, priority, status, progress, PICs and dates stay in the panel. |
+| Write | One save when the panel closes or another task is opened. |
+| Dates | Start and end are checked together on that write. From 2.1.46, a value that breaks a rule returns to the previous saved value and the other edits are saved (§12.32). |
+| Instant | Checklist items and comments still save as they are added. List schedule cells stay instant. |
+| UAT | Changelog 1.43. Not accepted. |
 
 ---
 
-*Wave 4B UAT accepted 5 October 2026. Pre–Wave 4C UX polish, Custom Project ID, and Wave 4C-1 List table recorded through 6 October 2026. Waves 4C-1b to 4C-3 recorded through 9 October 2026.*
+### 12.32 Drawer selective restore (11 Oct 2026, release 2.1.46)
+
+**Why.** Closing the drawer with one broken date was holding back every other edit in that session.
+
+| Item | Detail |
+|------|--------|
+| Restore | Each value that breaks a rule returns to the previous saved value. |
+| Keep | Priority, title, PICs and any date that still meets the rules are saved on that same close. |
+| Pair | When either changed end would still make a valid pair on its own, both changed ends of that pair are restored. |
+| Message | A toast names the restored fields and says the other changes were saved. |
+| UAT | Changelog 1.44. Not accepted. |
+
+---
+
+*Wave 4B UAT accepted 5 October 2026. Pre–Wave 4C UX polish, Custom Project ID, and Wave 4C-1 List table recorded through 6 October 2026. Waves 4C-1b to 4C-4, including the 2.1.46 drawer selective restore, recorded through 11 October 2026.*

@@ -205,14 +205,21 @@ export default function TaskImportDialog({
             ) : null}
 
             {preview.errors.length > 0 ? (
-              <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
-                {preview.errors.map((error, index) => (
-                  <li key={`${error.rowNumber}-${index}`}>
-                    {error.rowNumber > 0 ? `Row ${error.rowNumber}: ` : ""}
-                    {error.message}
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
+                <p>
+                  This workbook is not imported. Fix every item below, then
+                  choose the file again. Create project stays off until the
+                  workbook is clean.
+                </p>
+                <ul className="max-h-40 space-y-1 overflow-y-auto">
+                  {preview.errors.map((error, index) => (
+                    <li key={`${error.rowNumber}-${index}`}>
+                      {error.rowNumber > 0 ? `Row ${error.rowNumber}: ` : ""}
+                      {error.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
 
             {preview.rows.length > 0 ? (

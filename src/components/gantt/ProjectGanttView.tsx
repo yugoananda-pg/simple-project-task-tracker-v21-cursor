@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FocusEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type MouseEvent,
+} from "react";
 import { createPortal } from "react-dom";
-import { Check } from "lucide-react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
+
+import TaskNameTip from "@/src/components/ui/TaskNameTip";
 import { differenceInCalendarDays, startOfDay } from "date-fns";
 
 import {
-  getTaskPicDisplayName,
-  getTaskPicKey,
+  getTaskPicKeys,
+  listTaskPics,
+  picLabel,
 } from "@/src/lib/assignee-display";
 import {
   buildTimelineColumns,
@@ -30,14 +40,19 @@ import type { TaskScheduleMetrics } from "@/src/lib/analytics/weighted-progress"
 import PicLabel from "@/src/components/tasks/PicLabel";
 import ProgressPairBadges from "@/src/components/schedule/ProgressPairBadges";
 import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
+import ExpandViewButton from "@/src/components/ui/ExpandViewButton";
+import SegmentedControl from "@/src/components/ui/SegmentedControl";
+import { useStoredChoice } from "@/src/lib/ui/use-stored-choice";
 
 export type ProjectGanttViewProps = {
   tasks: Task[];
   milestones?: Milestone[];
-  projectName?: string;
   metricsById?: ReadonlyMap<string, TaskScheduleMetrics>;
   onTaskClick: (task: Task) => void;
   readOnly?: boolean;
+  /** Expanded view: the page hides the project header so the chart can be taller. */
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
 };
 
 /** Task list groups by process group; Assignee / PIC groups by PIC. */
@@ -84,12 +99,34 @@ const PROCESS_GROUP_LABELS: Record<TaskBucket, string> = {
 const WEEK_COLUMN_WIDTH = 72;
 const MONTH_COLUMN_WIDTH = 88;
 const HEADER_HEIGHT_PX = 48;
-/** Must match left label + progress + right track: Tailwind `h-24`. */
-const TASK_ROW_HEIGHT_PX = 96;
-const GROUP_HEADER_HEIGHT_PX = 36;
+
+/**
+ * Row sizes. The three bars (Initial, Updated, Actual) are centred in the row,
+ * `step` pixels apart. Comfortable shows the full task label; Compact fits
+ * roughly a third more rows on screen.
+ */
+export type GanttDensity = "comfortable" | "compact";
+type DensitySpec = {
+  row: number;
+  group: number;
+  bar: number;
+  step: number;
+  /** Top of the Initial bar. Updated and Actual follow at `step` intervals. */
+  top: number;
+  node: string;
+  check: string;
+};
+const DENSITY: Record<GanttDensity, DensitySpec> = {
+  comfortable: { row: 60, group: 30, bar: 8, step: 15, top: 11, node: "size-3.5", check: "size-2.5" },
+  compact: { row: 44, group: 26, bar: 6, step: 11, top: 8, node: "size-3", check: "size-2" },
+};
+const DENSITY_OPTIONS: ReadonlyArray<{ id: GanttDensity; label: string; title: string }> = [
+  { id: "comfortable", label: "Comfortable", title: "Taller rows with the full task label" },
+  { id: "compact", label: "Compact", title: "Shorter rows so more tasks fit on screen" },
+];
+const DENSITY_IDS: ReadonlyArray<GanttDensity> = ["comfortable", "compact"];
 /** Horizontal offset (px) when a milestone lands on Today so both lines stay readable. */
 const MILESTONE_TODAY_OFFSET_PX = 4;
-const BAR_HEIGHT = 7;
 /** Only the Task column stays frozen while the chart scrolls sideways. */
 const TASK_PANE_WIDTH_CLASS = "w-[17rem] sm:w-[20rem]";
 const PROGRESS_PANE_WIDTH_CLASS = "w-[6.75rem]";
@@ -116,21 +153,28 @@ const paneBgClass = "bg-white dark:bg-zinc-900";
 const gridColBorder = "border-r border-zinc-200 dark:border-zinc-700/60";
 const gridRowBorder = "border-b border-zinc-200 dark:border-zinc-800";
 const processGroupHeaderClass =
-  "border-y border-zinc-300 bg-zinc-200/90 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/90 dark:text-zinc-200";
-
-function assigneeGroupLabel(tasks: Task[]): string {
-  if (tasks.length === 0) return "Unassigned";
-  return getTaskPicDisplayName(tasks[0]!);
-}
+  "border-y border-zinc-300 bg-zinc-200/90 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/90 dark:text-zinc-200";
 
 function buildGroups(tasks: Task[], mode: GanttGroupMode): GanttGroup[] {
   if (mode === "assignee") {
-    const buckets = new Map<string, Task[]>();
+    const buckets = new Map<string, { label: string; tasks: Task[] }>();
     for (const task of tasks) {
-      const key = getTaskPicKey(task);
-      const list = buckets.get(key) ?? [];
-      list.push(task);
-      buckets.set(key, list);
+      const pics = listTaskPics(task);
+      const keys = getTaskPicKeys(task);
+      for (const key of keys) {
+        const pic = pics.find((item) => {
+          if (key === "__unassigned__") return false;
+          return (
+            (item.userId && key === `user:${item.userId}`) ||
+            key === `custom:${item.name.toLowerCase()}`
+          );
+        });
+        const label =
+          key === "__unassigned__" ? "Unassigned" : pic ? picLabel(pic) : key;
+        const bucket = buckets.get(key) ?? { label, tasks: [] };
+        bucket.tasks.push(task);
+        buckets.set(key, bucket);
+      }
     }
 
     return [...buckets.entries()]
@@ -139,13 +183,10 @@ function buildGroups(tasks: Task[], mode: GanttGroupMode): GanttGroup[] {
         if (b === "__unassigned__") return -1;
         return a.localeCompare(b);
       })
-      .map(([key, groupTasks]) => ({
+      .map(([key, group]) => ({
         id: key,
-        label:
-          key === "__unassigned__"
-            ? "Unassigned"
-            : assigneeGroupLabel(groupTasks),
-        tasks: [...groupTasks].sort((a, b) => a.title.localeCompare(b.title)),
+        label: group.label,
+        tasks: [...group.tasks].sort((a, b) => a.title.localeCompare(b.title)),
       }));
   }
 
@@ -204,21 +245,18 @@ function collectTimelineDates(
   return dates;
 }
 
-function buildBarTooltip(
-  kind: TimelineBarKind,
-  projectName: string,
-  task: Task,
-): string {
+function buildBarTooltip(kind: TimelineBarKind, task: Task): string {
+  const name = task.title.trim();
   if (kind === "initial") {
     return [
-      projectName,
+      name,
       `Initial Start Date: ${formatAuDate(task.initialStartDate)}`,
       `Initial Due Date: ${formatAuDate(task.initialDueDate)}`,
     ].join("\n");
   }
   if (kind === "updated") {
     return [
-      projectName,
+      name,
       `Updated Start Date: ${formatAuDate(task.updatedStartDate)}`,
       `Updated Due Date: ${formatAuDate(task.updatedDueDate)}`,
     ].join("\n");
@@ -228,7 +266,7 @@ function buildBarTooltip(
       ? formatAuDate(task.actualCompletionDate)
       : "In Progress";
   return [
-    projectName,
+    name,
     `Actual Start Date: ${formatAuDate(task.actualStartDate)}`,
     `Actual Completion Date: ${completion}`,
   ].join("\n");
@@ -245,7 +283,7 @@ function FloatingTooltipPortal({ tip }: { tip: FloatingTip | null }) {
   return createPortal(
     <div
       role="tooltip"
-      className="pointer-events-none fixed z-50 w-max max-w-[18rem] -translate-x-1/2 -translate-y-full whitespace-pre-line rounded-md bg-zinc-900 px-2.5 py-1.5 text-left text-[11px] font-medium leading-snug text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900"
+      className="pointer-events-none fixed z-50 w-max max-w-[18rem] -translate-x-1/2 -translate-y-full whitespace-pre-line break-words rounded-md bg-zinc-900 px-2.5 py-1.5 text-left text-[11px] font-medium leading-snug text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900"
       style={{ left: tip.x, top: tip.y }}
     >
       {tip.label}
@@ -256,12 +294,12 @@ function FloatingTooltipPortal({ tip }: { tip: FloatingTip | null }) {
 
 type TimelineBarProps = {
   task: Task;
-  projectName: string;
   kind: TimelineBarKind;
   range: GanttDateRange | null;
   columns: GanttTimelineColumn[];
   columnWidths: number[];
-  topClassName: string;
+  topPx: number;
+  spec: DensitySpec;
   barClassName: string;
   onTaskClick: (task: Task) => void;
   onTipChange: (tip: FloatingTip | null) => void;
@@ -270,12 +308,12 @@ type TimelineBarProps = {
 
 function TimelineBar({
   task,
-  projectName,
   kind,
   range,
   columns,
   columnWidths,
-  topClassName,
+  topPx,
+  spec,
   barClassName,
   onTaskClick,
   onTipChange,
@@ -295,7 +333,7 @@ function TimelineBar({
     },
   );
 
-  const tooltip = buildBarTooltip(kind, projectName, task);
+  const tooltip = buildBarTooltip(kind, task);
   const showNode = isActual;
   const showCheck = showNode && task.status === "done";
 
@@ -320,24 +358,24 @@ function TimelineBar({
       onMouseLeave={() => onTipChange(null)}
       onFocus={showTip}
       onBlur={() => onTipChange(null)}
-      aria-label={`${task.title}. ${tooltip.replaceAll("\n", ". ")}${readOnly ? " (read-only)" : ""}`}
+      aria-label={`${tooltip.replaceAll("\n", ". ")}${readOnly ? " (read-only)" : ""}`}
       className={[
         "absolute z-0 overflow-visible rounded-sm transition hover:z-[5] hover:brightness-110 focus-visible:z-[5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-zinc-900 dark:focus-visible:outline-zinc-100",
         isActual && isSingleDay ? "min-w-0" : "min-w-[8px]",
-        topClassName,
         barClassName,
       ].join(" ")}
       style={{
         left: leftPx,
         width: widthPx,
-        height: BAR_HEIGHT,
+        height: spec.bar,
+        top: topPx,
       }}
     >
       {showNode ? (
         <span
           className={[
             // Done and in-progress: node sits on the bar’s right end (same X as line end).
-            "absolute right-0 top-1/2 flex size-3.5 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-sm",
+            `absolute right-0 top-1/2 flex ${spec.node} translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-sm`,
             showCheck
               ? "border-2 border-emerald-950 bg-emerald-400 dark:border-emerald-950 dark:bg-emerald-300"
               : "border-2 border-white bg-emerald-500 dark:border-zinc-950 dark:bg-emerald-400",
@@ -345,7 +383,7 @@ function TimelineBar({
         >
           {showCheck ? (
             <Check
-              className="size-2.5 text-emerald-950"
+              className={`${spec.check} text-emerald-950`}
               strokeWidth={3.5}
               aria-hidden
             />
@@ -358,10 +396,10 @@ function TimelineBar({
 
 type GanttTaskRowProps = {
   task: Task;
-  projectName: string;
   columns: GanttTimelineColumn[];
   columnWidths: number[];
   timelineWidth: number;
+  spec: DensitySpec;
   onTaskClick: (task: Task) => void;
   onTipChange: (tip: FloatingTip | null) => void;
   readOnly?: boolean;
@@ -369,10 +407,10 @@ type GanttTaskRowProps = {
 
 function GanttTaskRow({
   task,
-  projectName,
   columns,
   columnWidths,
   timelineWidth,
+  spec,
   onTaskClick,
   onTipChange,
   readOnly = false,
@@ -388,23 +426,23 @@ function GanttTaskRow({
 
   return (
     <div
-      className={`relative z-0 h-24 overflow-visible bg-white dark:bg-zinc-950 ${gridRowBorder}`}
-      style={{ width: timelineWidth }}
+      className={`relative z-0 overflow-visible bg-white dark:bg-zinc-950 ${gridRowBorder}`}
+      style={{ width: timelineWidth, height: spec.row }}
     >
       {!hasAny ? (
-        <div className="absolute inset-0 flex h-24 items-center px-3">
+        <div className="absolute inset-0 flex items-center px-3">
           <span className="text-[11px] text-zinc-400">No dates set</span>
         </div>
       ) : (
         <>
           <TimelineBar
             task={task}
-            projectName={projectName}
             kind="initial"
             range={initial}
             columns={columns}
             columnWidths={columnWidths}
-            topClassName="top-[24px]"
+            topPx={spec.top}
+            spec={spec}
             barClassName="bg-zinc-600 dark:bg-zinc-500"
             onTaskClick={onTaskClick}
             onTipChange={onTipChange}
@@ -412,12 +450,12 @@ function GanttTaskRow({
           />
           <TimelineBar
             task={task}
-            projectName={projectName}
             kind="updated"
             range={updated}
             columns={columns}
             columnWidths={columnWidths}
-            topClassName="top-[44px]"
+            topPx={spec.top + spec.step}
+            spec={spec}
             barClassName="bg-sky-500 dark:bg-sky-400"
             onTaskClick={onTaskClick}
             onTipChange={onTipChange}
@@ -425,12 +463,12 @@ function GanttTaskRow({
           />
           <TimelineBar
             task={task}
-            projectName={projectName}
             kind="actual"
             range={actual}
             columns={columns}
             columnWidths={columnWidths}
-            topClassName="top-[64px]"
+            topPx={spec.top + spec.step * 2}
+            spec={spec}
             barClassName="bg-emerald-500 dark:bg-emerald-400"
             onTaskClick={onTaskClick}
             onTipChange={onTipChange}
@@ -586,60 +624,48 @@ function MilestoneMarkers({
   );
 }
 
-function ToolbarTabs<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: ReadonlyArray<{ id: T; label: string }>;
-  value: T;
-  onChange: (next: T) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label={label}
-      className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-700 dark:bg-zinc-900"
-    >
-      {options.map((option) => {
-        const isActive = value === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(option.id)}
-            className={[
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition",
-              isActive
-                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
-            ].join(" ")}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function ProjectGanttView({
   tasks,
   milestones = [],
-  projectName = "Project",
   metricsById,
   onTaskClick,
   readOnly = false,
+  expanded = false,
+  onToggleExpanded,
 }: ProjectGanttViewProps) {
   const [groupMode, setGroupMode] = useState<GanttGroupMode>("task");
   const [scaleOverride, setScaleOverride] = useState<GanttTimelineScale | null>(
     null,
   );
+  const [density, setDensity] = useStoredChoice<GanttDensity>(
+    "sptt.gantt.density",
+    DENSITY_IDS,
+    "comfortable",
+  );
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [floatingTip, setFloatingTip] = useState<FloatingTip | null>(null);
+  const spec = DENSITY[density];
+
+  // Width left for the timeline once the frozen Task and Progress columns are
+  // placed. A short schedule stretches to fill it instead of leaving blank space.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const taskPaneRef = useRef<HTMLDivElement>(null);
+  const progressPaneRef = useRef<HTMLDivElement>(null);
+  const [availablePx, setAvailablePx] = useState(0);
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const measure = () => {
+      const used =
+        (taskPaneRef.current?.offsetWidth ?? 0) +
+        (progressPaneRef.current?.offsetWidth ?? 0);
+      setAvailablePx(Math.max(0, scroller.clientWidth - used - 2));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [tasks.length]);
 
   const groups = useMemo(() => buildGroups(tasks, groupMode), [tasks, groupMode]);
   const timelineDates = useMemo(
@@ -676,18 +702,33 @@ export default function ProjectGanttView({
     return Math.max(days * pxPerDay, pxPerDay * 4);
   });
   const rawTimelineWidth = rawColumnWidths.reduce((sum, width) => sum + width, 0);
-  const timelineWidth = Math.max(rawTimelineWidth, 480);
+  const timelineWidth = Math.max(rawTimelineWidth, 480, availablePx);
   const widthScale =
     rawTimelineWidth > 0 ? timelineWidth / rawTimelineWidth : 1;
   const columnWidths = rawColumnWidths.map((width) => width * widthScale);
   const today = startOfDay(new Date());
+
+  // A collapsed group keeps its header row and hides its tasks.
+  const visibleTasks = (group: GanttGroup): Task[] =>
+    group.label && collapsed.has(group.id) ? [] : group.tasks;
   const bodyHeightPx = groups.reduce((sum, group) => {
     return (
       sum +
-      (group.label ? GROUP_HEADER_HEIGHT_PX : 0) +
-      group.tasks.length * TASK_ROW_HEIGHT_PX
+      (group.label ? spec.group : 0) +
+      visibleTasks(group).length * spec.row
     );
   }, 0);
+  const collapsibleIds = groups.filter((g) => g.label).map((g) => g.id);
+  const allCollapsed =
+    collapsibleIds.length > 0 && collapsibleIds.every((id) => collapsed.has(id));
+  function toggleGroup(id: string) {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   const colocatedMilestoneNames = milestones
     .filter((milestone) => {
       const anchor = parseTaskDate(
@@ -712,24 +753,46 @@ export default function ProjectGanttView({
     );
   }
 
+  const compact = density === "compact";
+
   return (
-    <div className="space-y-4 border-t-2 border-zinc-200 pt-4 dark:border-zinc-700">
+    <div className="space-y-3 border-t-2 border-zinc-200 pt-3 dark:border-zinc-700">
       <FloatingTooltipPortal tip={floatingTip} />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <ToolbarTabs
+          <SegmentedControl
             label="Gantt grouping"
             options={GROUP_OPTIONS}
             value={groupMode}
             onChange={setGroupMode}
           />
-          <ToolbarTabs
+          <SegmentedControl
             label="Timeline scale"
             options={SCALE_OPTIONS}
             value={scale}
             onChange={setScaleOverride}
           />
+          <SegmentedControl
+            label="Row height"
+            options={DENSITY_OPTIONS}
+            value={density}
+            onChange={setDensity}
+          />
+          {collapsibleIds.length > 0 ? (
+            <button
+              type="button"
+              onClick={() =>
+                setCollapsed(allCollapsed ? new Set() : new Set(collapsibleIds))
+              }
+              className="inline-flex items-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              {allCollapsed ? "Expand all groups" : "Collapse all groups"}
+            </button>
+          ) : null}
+          {onToggleExpanded ? (
+            <ExpandViewButton expanded={expanded} onToggle={onToggleExpanded} />
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-600 dark:text-zinc-300">
@@ -766,109 +829,140 @@ export default function ProjectGanttView({
       </div>
 
       <div
-        className={`max-h-[calc(100vh-200px)] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-700 ${paneBgClass}`}
+        ref={scrollerRef}
+        className={`overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-700 ${paneBgClass} ${
+          expanded
+            ? "max-h-[calc(100dvh-14.5rem)]"
+            : "max-h-[calc(100dvh-6rem)]"
+        }`}
       >
         <div className="flex min-w-max">
           {/* Frozen Task column. Progress scrolls with the timeline. */}
+          <div
+            ref={taskPaneRef}
+            className={`sticky left-0 z-40 flex shrink-0 flex-col border-r border-zinc-200 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:shadow-[2px_0_6px_rgba(0,0,0,0.35)] ${TASK_PANE_WIDTH_CLASS} ${paneBgClass}`}
+          >
             <div
-              className={`sticky left-0 z-40 flex shrink-0 flex-col border-r border-zinc-200 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:shadow-[2px_0_6px_rgba(0,0,0,0.35)] ${TASK_PANE_WIDTH_CLASS} ${paneBgClass}`}
+              className={`sticky top-0 left-0 z-50 flex h-12 items-center border-b border-r border-zinc-200 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 ${paneBgClass}`}
             >
-              <div
-                className={`sticky top-0 left-0 z-50 flex h-12 items-center border-b border-r border-zinc-200 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 ${paneBgClass}`}
-              >
-                Task
-              </div>
-              {groups.map((group) => (
-                <div key={`task-${group.id}`}>
-                  {group.label ? (
-                    <div
-                      className={`flex items-center border-r border-zinc-300 dark:border-zinc-700 ${processGroupHeaderClass}`}
-                      style={{ height: GROUP_HEADER_HEIGHT_PX }}
+              Task
+            </div>
+            {groups.map((group) => (
+              <div key={`task-${group.id}`}>
+                {group.label ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    aria-expanded={!collapsed.has(group.id)}
+                    title={
+                      collapsed.has(group.id)
+                        ? `Show ${group.tasks.length} tasks`
+                        : "Hide these tasks"
+                    }
+                    className={`flex w-full items-center gap-1.5 border-r border-zinc-300 text-left transition hover:bg-zinc-300/60 dark:border-zinc-700 dark:hover:bg-zinc-700/70 ${processGroupHeaderClass}`}
+                    style={{ height: spec.group }}
+                  >
+                    {collapsed.has(group.id) ? (
+                      <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+                    ) : (
+                      <ChevronDown className="size-3.5 shrink-0" aria-hidden />
+                    )}
+                    <span className="min-w-0 flex-1 truncate leading-snug">
+                      {group.label}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-white/70 px-1.5 text-[10px] font-semibold tabular-nums dark:bg-zinc-950/50">
+                      {group.tasks.length}
+                    </span>
+                  </button>
+                ) : null}
+                {visibleTasks(group).map((task) => {
+                  const metrics = metricsById?.get(task.id);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => onTaskClick(task)}
+                      style={{ height: spec.row }}
+                      className={`flex w-full flex-col justify-center border-r border-zinc-200 px-3 text-left transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/80 ${compact ? "gap-0.5" : "gap-1"} ${gridRowBorder} ${paneBgClass}`}
                     >
-                      <span className="break-words leading-snug">
-                        {group.label}
-                      </span>
-                    </div>
-                  ) : null}
-                  {group.tasks.map((task) => {
-                    const metrics = metricsById?.get(task.id);
-                    return (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => onTaskClick(task)}
-                        className={`flex h-24 w-full flex-col justify-center gap-1 border-r border-zinc-200 px-3 py-1.5 text-left transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/80 ${gridRowBorder} ${paneBgClass}`}
-                      >
+                      <TaskNameTip name={task.title}>
                         <span
-                          className="line-clamp-3 break-words text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50"
-                          title={task.title}
+                          className={`line-clamp-1 break-words font-semibold text-zinc-900 dark:text-zinc-50 ${compact ? "text-[13px] leading-4" : "text-sm leading-5"}`}
                         >
                           {task.title}
                         </span>
-                        <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          {metrics ? (
-                            <StatusFlagBadge flag={metrics.statusFlag} />
-                          ) : null}
-                          <span className="min-w-0 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                            {STATUS_LABELS[task.status]} ·{" "}
-                            <PicLabel
-                              task={task}
-                              className="inline-flex"
-                              showCustomTag={false}
-                            />
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            <div
-              className={`flex shrink-0 flex-col ${PROGRESS_PANE_WIDTH_CLASS}`}
-            >
-              <div
-                className={`sticky top-0 z-20 flex h-12 items-center justify-center border-b border-zinc-200 px-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 sm:text-xs ${paneBgClass}`}
-              >
-                Progress
-              </div>
-              {groups.map((group) => (
-                <div key={`progress-${group.id}`}>
-                  {group.label ? (
-                    <div
-                      className={processGroupHeaderClass}
-                      style={{ height: GROUP_HEADER_HEIGHT_PX }}
-                      aria-hidden
-                    />
-                  ) : null}
-                  {group.tasks.map((task) => {
-                    const metrics = metricsById?.get(task.id);
-                    return (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => onTaskClick(task)}
-                        className={`flex h-24 w-full flex-col items-stretch justify-center px-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/80 ${gridRowBorder} ${paneBgClass}`}
-                        aria-label={`Progress for ${task.title}`}
-                      >
+                      </TaskNameTip>
+                      <span className="flex min-w-0 items-center gap-1.5">
                         {metrics ? (
-                          <ProgressPairBadges
-                            actual={metrics.pActual}
-                            target={metrics.pTarget}
-                            layout="stack"
+                          <StatusFlagBadge
+                            flag={metrics.statusFlag}
+                            className={`shrink-0 ${compact ? "py-0 text-[9px] leading-4" : ""}`}
                           />
-                        ) : (
-                          <span className="text-center text-[10px] text-zinc-400">
-                            —
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+                        ) : null}
+                        <span className="min-w-0 truncate text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                          {STATUS_LABELS[task.status]} ·{" "}
+                          <PicLabel
+                            task={task}
+                            className="inline-flex"
+                            showCustomTag={false}
+                            visibleNames={1}
+                          />
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          <div
+            ref={progressPaneRef}
+            className={`flex shrink-0 flex-col ${PROGRESS_PANE_WIDTH_CLASS}`}
+          >
+            <div
+              className={`sticky top-0 z-20 flex h-12 items-center justify-center border-b border-zinc-200 px-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 sm:text-xs ${paneBgClass}`}
+            >
+              Progress
             </div>
+            {groups.map((group) => (
+              <div key={`progress-${group.id}`}>
+                {group.label ? (
+                  <div
+                    className={processGroupHeaderClass}
+                    style={{ height: spec.group }}
+                    aria-hidden
+                  />
+                ) : null}
+                {visibleTasks(group).map((task) => {
+                  const metrics = metricsById?.get(task.id);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => onTaskClick(task)}
+                      style={{ height: spec.row }}
+                      className={`flex w-full flex-col items-stretch justify-center px-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/80 ${gridRowBorder} ${paneBgClass}`}
+                      aria-label={`Progress for ${task.title}`}
+                    >
+                      {metrics ? (
+                        <ProgressPairBadges
+                          actual={metrics.pActual}
+                          target={metrics.pTarget}
+                          layout="stack"
+                          size={compact ? "sm" : "md"}
+                        />
+                      ) : (
+                        <span className="text-center text-[10px] text-zinc-400">
+                          —
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
 
           <div className="relative z-0 overflow-visible" style={{ width: timelineWidth }}>
             {/* Sticky top date scale — above bars, below left-rail Progress header */}
@@ -917,19 +1011,19 @@ export default function ProjectGanttView({
                     <div
                       className={processGroupHeaderClass}
                       style={{
-                        height: GROUP_HEADER_HEIGHT_PX,
+                        height: spec.group,
                         width: timelineWidth,
                       }}
                     />
                   ) : null}
-                  {group.tasks.map((task) => (
+                  {visibleTasks(group).map((task) => (
                     <GanttTaskRow
                       key={task.id}
                       task={task}
-                      projectName={projectName}
                       columns={columns}
                       columnWidths={columnWidths}
                       timelineWidth={timelineWidth}
+                      spec={spec}
                       onTaskClick={onTaskClick}
                       onTipChange={setFloatingTip}
                       readOnly={readOnly}

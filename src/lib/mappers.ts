@@ -1,4 +1,5 @@
 import { resolveActorDisplayName } from "@/src/lib/audit-display";
+import { cacheAssigneeFromPics, listTaskPics } from "@/src/lib/assignee-display";
 import type {
   ApprovalStatus,
   GlobalRole,
@@ -6,6 +7,7 @@ import type {
   Subtask,
   Task,
   TaskComment,
+  TaskPic,
   User,
 } from "@/src/lib/types";
 import type {
@@ -91,13 +93,36 @@ export function mapComment(comment: PrismaTaskComment): TaskComment {
   };
 }
 
+function mapAssignees(
+  task: PrismaTask & {
+    assignees?: Array<{ userId: string | null; assigneeName: string; sortOrder: number }>;
+  },
+): TaskPic[] {
+  if (task.assignees && task.assignees.length > 0) {
+    return [...task.assignees]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((row) => ({
+        userId: row.userId,
+        name: row.assigneeName.trim(),
+      }))
+      .filter((pic) => pic.userId || pic.name);
+  }
+  return listTaskPics({
+    assigneeId: task.assigneeId,
+    assigneeName: task.assigneeName,
+  });
+}
+
 export function mapTask(
   task: PrismaTask & {
     subtasks?: PrismaSubtask[];
     comments?: PrismaTaskComment[];
+    assignees?: Array<{ userId: string | null; assigneeName: string; sortOrder: number }>;
   },
   actorNamesById?: ReadonlyMap<string, string>,
 ): Task {
+  const assignees = mapAssignees(task);
+  const cache = cacheAssigneeFromPics(assignees);
   return {
     id: task.id,
     projectId: task.projectId,
@@ -106,8 +131,9 @@ export function mapTask(
     status: task.status,
     priority: task.priority,
     bucket: task.bucket,
-    assigneeId: task.assigneeId,
-    assigneeName: task.assigneeName,
+    assigneeId: cache.assigneeId,
+    assigneeName: cache.assigneeName,
+    assignees,
     initialStartDate: toDateString(task.initialStartDate),
     initialDueDate: toDateString(task.initialDueDate),
     updatedStartDate: toDateString(task.updatedStartDate),

@@ -204,6 +204,10 @@ export async function getPortfolioSummary(
               bucket: true,
               assigneeId: true,
               assigneeName: true,
+              assignees: {
+                orderBy: { sortOrder: "asc" },
+                select: { userId: true, assigneeName: true },
+              },
               progress: true,
               initialStartDate: true,
               initialDueDate: true,
@@ -367,6 +371,10 @@ export async function getPortfolioSummary(
         bucket: row.bucket as TaskBucket,
         assigneeId: row.assigneeId,
         assigneeName: row.assigneeName,
+        assignees: row.assignees.map((pic) => ({
+          userId: pic.userId,
+          name: pic.assigneeName,
+        })),
         progress: row.progress,
         initialStartDate: date(row.initialStartDate),
         initialDueDate: date(row.initialDueDate),

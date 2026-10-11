@@ -18,8 +18,9 @@ import { ActionError } from "@/src/lib/actions/errors";
 import { SYSTEM_ACTOR_ID } from "@/src/lib/audit-display";
 import { auditCreate } from "@/src/lib/audit";
 import { normaliseEmail } from "@/src/lib/email";
-import { prisma } from "@/src/lib/prisma";
+import { prisma, retryOnceIfUnreachable } from "@/src/lib/prisma";
 import { isPrismaUniqueViolation } from "@/src/lib/prisma-errors";
+import { taskHasUserPic } from "@/src/lib/assignee-display";
 import { PROJECT_LIST_SCOPE_ALL } from "@/src/lib/project-list-scope";
 import { createClient } from "@/src/lib/supabase/server";
 
@@ -235,7 +236,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   if (!user?.email) return null;
 
-  const profile = await prisma.user.findUnique({ where: { id: user.id } });
+  const profile = await retryOnceIfUnreachable(() =>
+    prisma.user.findUnique({ where: { id: user.id } }),
+  );
   if (profile) {
     return toSessionUser(profile);
   }
@@ -357,7 +360,11 @@ export function getProjectAccess(
 export function canMutateTask(
   user: SessionUser,
   project: ProjectWithMembers,
-  task: { assigneeId: string | null },
+  task: {
+    assigneeId: string | null;
+    assigneeName?: string;
+    assignees?: Array<{ userId: string | null; name?: string; assigneeName?: string }>;
+  },
 ): boolean {
   if (project.deletedAt || project.lifecycleStatus === "COMPLETED") {
     return false;
@@ -365,7 +372,17 @@ export function canMutateTask(
   const access = getProjectAccess(user, project);
   if (access === "admin") return true;
   if (access === "none") return false;
-  if (task.assigneeId === user.id) return true;
+  const pics = task.assignees?.map((pic) => ({
+    userId: pic.userId,
+    name: pic.name ?? pic.assigneeName ?? "",
+  }));
+  if (taskHasUserPic({
+    assigneeId: task.assigneeId,
+    assigneeName: task.assigneeName ?? "",
+    assignees: pics,
+  }, user.id)) {
+    return true;
+  }
   // Retained for any future role that still carries project-level write.
   return access === "write";
 }
@@ -389,7 +406,11 @@ export function canCreateProject(user: SessionUser): boolean {
 export function canDeleteTask(
   user: SessionUser,
   project: ProjectWithMembers,
-  task: { assigneeId: string | null },
+  task: {
+    assigneeId: string | null;
+    assigneeName?: string;
+    assignees?: Array<{ userId: string | null; name?: string; assigneeName?: string }>;
+  },
 ): boolean {
   return canMutateTask(user, project, task);
 }
@@ -544,7 +565,16 @@ export function projectsVisibilityFilter(
       ...lifecycle,
       OR: [
         { ownerId: user.id },
-        { tasks: { some: { assigneeId: user.id } } },
+        {
+          tasks: {
+            some: {
+              OR: [
+                { assigneeId: user.id },
+                { assignees: { some: { userId: user.id } } },
+              ],
+            },
+          },
+        },
       ],
     };
   }

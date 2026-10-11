@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CalendarClock,
   CalendarRange,
   ChevronDown,
-  Lightbulb,
   Users,
 } from "lucide-react";
 
 import {
   ChartCard,
   Panel,
-  ProgressTrack,
   SectionHeading,
   TABLE_HEAD,
   TABLE_ROW,
@@ -25,8 +24,12 @@ import {
 import IssueIntelligencePane from "@/src/components/analytics/IssueIntelligencePane";
 import ReportNote from "@/src/components/analytics/ReportNote";
 import ScheduleComposition from "@/src/components/analytics/ScheduleComposition";
+import ScheduleHeadline from "@/src/components/analytics/ScheduleHeadline";
+import Takeaways from "@/src/components/analytics/Takeaways";
 import MacroTimeline, { MacroLegend } from "@/src/components/portfolio/MacroTimeline";
 import PmComparison from "@/src/components/portfolio/PmComparison";
+import ExportReportButton from "@/src/components/export/ExportReportButton";
+import type { ExportFormat } from "@/src/lib/export/executive-deck-generator";
 import { buildIssueIntelligence } from "@/src/lib/analytics/issue-intelligence";
 import {
   buildMacroAxis,
@@ -42,7 +45,6 @@ import {
   computeProjectScheduleHealth,
   formatPercent1,
 } from "@/src/lib/analytics/weighted-progress";
-import StatusFlagBadge from "@/src/components/schedule/StatusFlagBadge";
 import { formatAuDate } from "@/src/lib/gantt/date-utils";
 import { savePortfolioNote, type PortfolioDto } from "@/src/lib/actions/portfolio";
 import { toLocalDateString } from "@/src/lib/task-defaults";
@@ -200,7 +202,13 @@ function ProjectFilter({
   );
 }
 
-export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
+export default function PortfolioView({
+  dto,
+  exportedBy,
+}: {
+  dto: PortfolioDto;
+  exportedBy: string;
+}) {
   const today = toLocalDateString();
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(dto.projects.map((project) => project.id)),
@@ -331,14 +339,81 @@ export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
   const completedCount = projects.filter(
     (project) => project.lifecycleStatus === "COMPLETED",
   ).length;
-  const deltaTone =
-    health.delta >= 0
-      ? "text-emerald-600 dark:text-emerald-400"
-      : "text-rose-600 dark:text-rose-400";
+
+  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
+  const [exportSlot, setExportSlot] = useState<HTMLElement | null>(null);
+  const [hintSlot, setHintSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setFilterSlot(document.getElementById("portfolio-project-filter"));
+    setExportSlot(document.getElementById("portfolio-export"));
+    setHintSlot(document.getElementById("portfolio-filter-hint"));
+  }, [dto.scope]);
+
+  const exportButton = (
+    <ExportReportButton
+      onExport={async (format: ExportFormat) => {
+        const { downloadGeneratedReport, generatePortfolioDeck } = await import(
+          "@/src/lib/export/executive-deck-generator"
+        );
+        const file = await generatePortfolioDeck(
+          {
+            scope: dto.scope,
+            scopeLabel,
+            includeCompleted: dto.includeCompleted,
+            projects,
+            tasks,
+            milestones,
+            issues,
+            activities,
+            events: dto.events,
+            holidayDateKeys: dto.holidayDateKeys,
+            today,
+            exportedBy,
+            exportedAt: new Date(),
+            note: {
+              html: dto.note.html,
+              updatedAt: dto.note.updatedAt,
+              updatedByName: dto.note.updatedByName,
+            },
+          },
+          format,
+        );
+        downloadGeneratedReport(file);
+      }}
+    />
+  );
+
+  const toolbar = (
+    <>
+      {filterSlot && dto.scope === "all" && dto.projects.length > 1
+        ? createPortal(
+            <ProjectFilter
+              projects={dto.projects}
+              selected={selected}
+              onChange={setSelected}
+            />,
+            filterSlot,
+          )
+        : null}
+      {hintSlot && dto.scope === "all" && dto.projects.length > 1
+        ? createPortal(
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              {filtered
+                ? "Every figure below uses only the ticked projects. The note stays with the whole scope."
+                : "Tick fewer projects to compare them side by side."}
+            </p>,
+            hintSlot,
+          )
+        : null}
+      {exportSlot ? createPortal(exportButton, exportSlot) : null}
+    </>
+  );
 
   if (dto.projects.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
+      <>
+        {toolbar}
+        <div className="rounded-2xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
         <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
           {dto.scope === "pm" && dto.pm
             ? `${dto.pm.name} has no projects you can see in this view.`
@@ -350,26 +425,14 @@ export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
             ? " Turn on Include Completed projects above to add finished work."
             : ""}
         </p>
-      </div>
+        </div>
+      </>
     );
   }
 
   return (
     <div className="space-y-12">
-      {dto.scope === "all" && dto.projects.length > 1 ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <ProjectFilter
-            projects={dto.projects}
-            selected={selected}
-            onChange={setSelected}
-          />
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {filtered
-              ? "Every figure below uses only the ticked projects. The note stays with the whole scope."
-              : "Tick fewer projects to compare them side by side."}
-          </p>
-        </div>
-      ) : null}
+      {toolbar}
 
       <section aria-labelledby="portfolio-overview-heading" className="space-y-5">
         <SectionHeading
@@ -379,7 +442,17 @@ export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
           description="Three bars for each project: the initial plan, the current plan, and the work actually done. Diamonds are milestones. Hover or focus any bar or diamond for dates."
         />
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <ScheduleHeadline
+          subject="portfolio"
+          ps={health.projectPs}
+          pActual={health.pActualProject}
+          pTarget={health.pTargetProject}
+          delta={health.delta}
+          statusFlag={health.statusFlag}
+          taskCount={tasks.length}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-3">
           <Kpi
             label="Projects"
             value={String(projects.length)}
@@ -389,44 +462,6 @@ export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
                 : "All Active"
             }
           />
-          <Kpi
-            label="Portfolio punctuality"
-            value={formatPercent1(health.projectPs)}
-            hint="Actual progress as a share of target"
-          />
-          <Kpi
-            label="Actual minus target"
-            value={formatPercent1(health.delta)}
-            tone={deltaTone}
-          >
-            <div className="mt-2 space-y-1">
-              <ProgressTrack
-                label="Actual"
-                value={health.pActualProject}
-                colour={PALETTE.actual}
-              />
-              <ProgressTrack
-                label="Target"
-                value={health.pTargetProject}
-                colour={PALETTE.reference}
-              />
-            </div>
-          </Kpi>
-          <div className="sptt-card sptt-card-lift px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Status flag
-            </p>
-            <div className="mt-3">
-              <StatusFlagBadge
-                flag={health.statusFlag}
-                className="px-2.5 py-1 text-xs"
-              />
-            </div>
-            <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-              {tasks.length === 1 ? "1 task" : `${tasks.length} tasks`} weighted
-              by planned working days
-            </p>
-          </div>
           <Kpi
             label="Overdue tasks"
             value={String(overdueTotal)}
@@ -489,10 +524,10 @@ export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
           description="Every task in this scope, weighted by planned working days. Issue work is reported in the pane below and does not move these figures."
         />
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid items-stretch gap-4 lg:grid-cols-2">
+          <Takeaways insights={insights} className="h-full" />
           <ReportNote
             key={dto.scope === "all" ? "all" : (dto.pm?.id ?? "pm")}
-            className="lg:col-span-2"
             title={
               dto.scope === "all"
                 ? "All projects note"
@@ -512,6 +547,7 @@ export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
             updatedAt={dto.note.updatedAt}
             updatedByName={dto.note.updatedByName}
             canEdit={dto.canEditNote}
+            className="h-full"
             save={(html) =>
               savePortfolioNote(
                 dto.scope === "all"
@@ -521,22 +557,6 @@ export default function PortfolioView({ dto }: { dto: PortfolioDto }) {
               )
             }
           />
-          <Panel title="Key takeaways">
-            <ul className="space-y-3 px-5 py-4">
-              {insights.map((insight) => (
-                <li
-                  key={insight.id}
-                  className="flex gap-2.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-200"
-                >
-                  <Lightbulb
-                    className="mt-0.5 size-4 shrink-0 text-amber-500"
-                    aria-hidden
-                  />
-                  <span>{insight.text}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">

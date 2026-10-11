@@ -161,7 +161,11 @@ function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-function ymd(year: number, month: number, day: number): string | null {
+function ymd(
+  year: number,
+  month: number,
+  day: number,
+): string | null | "out-of-range" {
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   const probe = new Date(Date.UTC(year, month - 1, day));
   if (
@@ -172,10 +176,10 @@ function ymd(year: number, month: number, day: number): string | null {
     return null;
   }
   const result = `${year}-${pad2(month)}-${pad2(day)}`;
-  return isPlausibleLocalDate(result) ? result : null;
+  return isPlausibleLocalDate(result) ? result : "out-of-range";
 }
 
-function dateFromJsDate(value: Date): string | null {
+function dateFromJsDate(value: Date): string | null | "out-of-range" {
   if (Number.isNaN(value.getTime())) return null;
   const useUtc = value.getUTCHours() === 0 && value.getUTCMinutes() === 0;
   const year = useUtc ? value.getUTCFullYear() : value.getFullYear();
@@ -184,21 +188,30 @@ function dateFromJsDate(value: Date): string | null {
   return ymd(year, month, day);
 }
 
-export function parseImportDate(value: unknown): string | null | "invalid" {
+function asImportDate(
+  parsed: string | null | "out-of-range",
+): string | null | "invalid" | "out-of-range" {
+  if (parsed === "out-of-range") return "out-of-range";
+  return parsed ?? "invalid";
+}
+
+export function parseImportDate(
+  value: unknown,
+): string | null | "invalid" | "out-of-range" {
   if (value == null) return null;
   if (typeof value === "string" && value.trim() === "") return null;
-  if (value instanceof Date) return dateFromJsDate(value) ?? "invalid";
+  if (value instanceof Date) return asImportDate(dateFromJsDate(value));
   if (typeof value === "number" && Number.isFinite(value)) {
     if (value <= 0) return "invalid";
     const utc = new Date(Math.round((value - 25569) * 86400 * 1000));
-    return dateFromJsDate(utc) ?? "invalid";
+    return asImportDate(dateFromJsDate(utc));
   }
   if (typeof value === "string") {
     const text = value.trim();
     const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
-    if (iso) return ymd(Number(iso[1]), Number(iso[2]), Number(iso[3])) ?? "invalid";
+    if (iso) return asImportDate(ymd(Number(iso[1]), Number(iso[2]), Number(iso[3])));
     const au = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/.exec(text);
-    if (au) return ymd(Number(au[3]), Number(au[2]), Number(au[1])) ?? "invalid";
+    if (au) return asImportDate(ymd(Number(au[3]), Number(au[2]), Number(au[1])));
   }
   return "invalid";
 }
@@ -301,6 +314,10 @@ function readDate(
   required: boolean,
 ): string | null {
   const parsed = parseImportDate(cell?.value);
+  if (parsed === "out-of-range") {
+    errors.push(`${label} must be a real date from 2000 to 2100.`);
+    return null;
+  }
   if (parsed === "invalid") {
     errors.push(`${label} is not a valid date. Use a date cell, YYYY-MM-DD, or D/M/YYYY.`);
     return null;
@@ -425,6 +442,9 @@ export function planTaskImport(input: {
     }
     if (actualFinish && actualFinish > input.today) {
       rowErrors.push("Actual end cannot be in the future.");
+    }
+    if (actualFinish && !actualStart) {
+      rowErrors.push("Actual end cannot be entered without an actual start.");
     }
     if (actualFinish && actualStart && actualFinish < actualStart) {
       rowErrors.push("Actual end cannot be earlier than the actual start.");

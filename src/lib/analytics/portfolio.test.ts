@@ -7,6 +7,7 @@ import {
   buildMacroRows,
   buildPmComparison,
   buildPortfolioInsights,
+  buildProcessGroupRows,
   classifyMilestone,
   compactProgressEvents,
   dayNumber,
@@ -390,6 +391,27 @@ describe("macro axis", () => {
       assert.ok(axis.ticks[i].pct > axis.ticks[i - 1].pct);
     }
   });
+
+  it("stretches to an extra date that is not on a bar", () => {
+    const rows = buildMacroRows({
+      projects: [project("a", "pm1", "Ann")],
+      tasks: [
+        task("t1", "a", {
+          initialStartDate: "2026-02-10",
+          initialDueDate: "2026-06-20",
+        }),
+      ],
+      milestones: [],
+      issues: [],
+      holidayKeys: [],
+      today: TODAY,
+    });
+    const without = buildMacroAxis(rows, TODAY)!;
+    const withExtra = buildMacroAxis(rows, TODAY, ["2027-03-15"])!;
+    assert.ok(withExtra.endDay > without.endDay);
+    const pct = withExtra.pct("2027-03-15");
+    assert.ok(pct > 0 && pct < 100);
+  });
 });
 
 describe("roll-ups", () => {
@@ -505,12 +527,12 @@ describe("portfolio takeaways", () => {
       today: TODAY,
     });
     const text = insights.map((item) => item.text).join("\n");
-    assert.match(text, /Portfolio punctuality is/);
-    assert.match(text, /Lowest punctuality: Project a/);
+    assert.match(text, /Portfolio punctuality score is 0\.\d{2}/);
+    assert.match(text, /Lowest punctuality: Project a \(0\.\d{2}\)/);
     assert.match(text, /1 task is past the due date/);
     assert.match(text, /1 milestone is past target/);
     assert.match(text, /1 critical issue is still active/);
-    assert.match(text, /Punctuality by PM runs from/);
+    assert.match(text, /Punctuality score by PM runs from 0\.\d{2}/);
     assert.ok(insights.length <= 6);
   });
 
@@ -563,5 +585,98 @@ describe("dayNumber with implausible dates", () => {
     assert.equal(dayNumber("0227-12-12"), null);
     assert.equal(dayNumber("2101-01-01"), null);
     assert.notEqual(dayNumber("2026-10-09"), null);
+  });
+});
+
+describe("process group rows", () => {
+  const rows = (tasks: PortfolioTask[]) =>
+    buildProcessGroupRows({
+      tasks,
+      lifecycleStatus: "ACTIVE",
+      holidayKeys: [],
+      today: TODAY,
+    });
+
+  it("always returns the five groups in order", () => {
+    const result = rows([task("t1", "a", { bucket: "planning" })]);
+    assert.deepEqual(
+      result.map((row) => row.bucket),
+      ["initiating", "planning", "executing", "monitoring", "closing"],
+    );
+    assert.deepEqual(
+      result.map((row) => row.taskCount),
+      [0, 1, 0, 0, 0],
+    );
+  });
+
+  it("leaves an empty group without bars, score or flag", () => {
+    const [initiating] = rows([task("t1", "a", { bucket: "planning" })]);
+    assert.equal(initiating.initial, null);
+    assert.equal(initiating.updated, null);
+    assert.equal(initiating.actual, null);
+    assert.equal(initiating.ps, null);
+    assert.equal(initiating.statusFlag, null);
+  });
+
+  it("spans the earliest start to the latest end of the group's tasks", () => {
+    const result = rows([
+      task("t1", "a", {
+        bucket: "executing",
+        initialStartDate: "2026-09-05",
+        initialDueDate: "2026-09-10",
+        updatedStartDate: "2026-09-08",
+        updatedDueDate: "2026-09-20",
+      }),
+      task("t2", "a", {
+        bucket: "executing",
+        initialStartDate: "2026-09-01",
+        initialDueDate: "2026-09-30",
+        updatedStartDate: "2026-09-02",
+        updatedDueDate: "2026-09-12",
+        actualStartDate: "2026-09-03",
+        progress: 50,
+        status: "in_progress",
+      }),
+      task("t3", "a", {
+        bucket: "closing",
+        initialStartDate: "2026-12-01",
+        initialDueDate: "2026-12-31",
+      }),
+    ]);
+    const executing = result.find((row) => row.bucket === "executing")!;
+    assert.deepEqual(executing.initial, { start: "2026-09-01", end: "2026-09-30" });
+    assert.deepEqual(executing.updated, { start: "2026-09-02", end: "2026-09-20" });
+    // Started, unfinished and active: the actual bar runs on to today.
+    assert.equal(executing.actual?.start, "2026-09-03");
+    assert.equal(executing.actual?.toToday, true);
+    const closing = result.find((row) => row.bucket === "closing")!;
+    assert.deepEqual(closing.initial, { start: "2026-12-01", end: "2026-12-31" });
+    assert.equal(closing.actual, null);
+  });
+
+  it("scores each group on its own tasks and counts overdue ones", () => {
+    const result = rows([
+      task("late", "a", { bucket: "planning", progress: 0, status: "todo" }),
+      task("done", "a", {
+        bucket: "monitoring",
+        progress: 100,
+        status: "done",
+        actualStartDate: "2026-09-01",
+        actualCompletionDate: "2026-09-29",
+      }),
+    ]);
+    const planning = result.find((row) => row.bucket === "planning")!;
+    const monitoring = result.find((row) => row.bucket === "monitoring")!;
+    assert.equal(planning.overdueTasks, 1);
+    assert.equal(monitoring.overdueTasks, 0);
+    assert.ok((planning.ps ?? 0) < (monitoring.ps ?? 0));
+    assert.equal(monitoring.pActual, 100);
+  });
+
+  it("feeds the shared axis", () => {
+    const axis = buildMacroAxis(rows([task("t1", "a")]), TODAY);
+    assert.ok(axis);
+    // No dated task in any group means there is nothing to draw.
+    assert.equal(buildMacroAxis(rows([]), TODAY), null);
   });
 });

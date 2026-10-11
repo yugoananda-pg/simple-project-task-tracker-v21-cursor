@@ -7,6 +7,8 @@ type ProgressPairBadgesProps = {
   target: number;
   /** `inline` (default) side-by-side; `stack` for compact Gantt Progress column. */
   layout?: "inline" | "stack";
+  /** `sm` trims the stacked badges so they fit a compact Gantt row. */
+  size?: "md" | "sm";
   className?: string;
 };
 
@@ -19,15 +21,20 @@ export default function ProgressPairBadges({
   actual,
   target,
   layout = "inline",
+  size = "md",
   className = "",
 }: ProgressPairBadgesProps) {
-  const badgeBase =
-    "inline-flex w-full items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide tabular-nums";
+  const badgeBase = `inline-flex w-full items-center justify-center rounded-md px-1.5 text-[10px] font-semibold tracking-wide tabular-nums ${
+    size === "sm" ? "py-0 leading-4" : "py-0.5"
+  }`;
 
   if (layout === "stack") {
     return (
       <span
-        className={["inline-flex w-full flex-col gap-1", className]
+        className={[
+          `inline-flex w-full flex-col ${size === "sm" ? "gap-0.5" : "gap-1"}`,
+          className,
+        ]
           .filter(Boolean)
           .join(" ")}
       >

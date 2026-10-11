@@ -2,7 +2,7 @@
  * Rule-based analytics takeaways. No model call. Each line cites the figure it used.
  */
 
-import { formatPercent1, STATUS_FLAGS, type StatusFlagId } from "@/src/lib/analytics/weighted-progress";
+import { formatPercent1, formatScore2, STATUS_FLAGS, type StatusFlagId } from "@/src/lib/analytics/weighted-progress";
 import type { IssueIntelligence } from "@/src/lib/analytics/issue-intelligence";
 
 export type Insight = {
@@ -33,7 +33,7 @@ export function buildProjectInsights(input: {
       id: "ps",
       tone:
         input.projectPs >= 95 ? "good" : input.projectPs >= 85 ? "watch" : "urgent",
-      text: `Project punctuality is ${formatPercent1(input.projectPs)} (${flag}). Actual progress is ${formatPercent1(input.pActual)} against a target of ${formatPercent1(input.pTarget)} (difference ${formatPercent1(input.delta)}).`,
+      text: `Project punctuality score is ${formatScore2(input.projectPs)} (${flag}). Actual progress is ${formatPercent1(input.pActual)} against a target of ${formatPercent1(input.pTarget)} (difference ${formatPercent1(input.delta)}).`,
     });
   }
 
